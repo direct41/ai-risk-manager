@@ -10,44 +10,53 @@
 - дает приоритизированные рекомендации по тестированию и качеству;
 - умеет анализировать как текущее состояние репозитория, так и PR/MR-изменения.
 
-## 2) MVP Scope (без overengineering)
+## 2) MVP Decisions (locked)
+
+Чтобы убрать блокеры и ускорить запуск, для MVP фиксируем:
+- первый целевой стек: `Python + FastAPI`;
+- первая CI-платформа: `GitHub Actions` (GitLab после MVP);
+- режим CI в MVP: `non-blocking` (только report/comment, без fail build);
+- терминология: компонент построения графа везде называется `GraphBuilder`;
+- архитектура взаимодействия агентов: только JSON-контракты, без agent-to-agent чата.
+
+## 3) MVP Scope (без overengineering)
 
 В MVP делаем только необходимый минимум:
 - CLI-инструмент для локального запуска и CI;
-- анализ монорепозитория/репозитория целиком;
-- анализ PR/MR diff;
+- анализ full-repo и PR diff;
 - 3 последовательных агента с фиксированными JSON-контрактами;
 - Markdown + JSON отчеты;
-- интеграция через GitHub Action (как первый target).
+- интеграция через GitHub Action.
 
 Не делаем в MVP:
 - микросервисную архитектуру;
 - message broker/event bus;
 - отдельный веб-интерфейс;
-- поддержку множества языков сразу.
+- multi-language поддержку.
 
-## 3) Proposed Architecture (MVP)
+## 4) Proposed Architecture (MVP)
 
 Pipeline:
 1. Collector
-2. Graph Builder
+2. GraphBuilder
 3. Rule Engine
 4. Risk Agent (LLM)
 5. QA Strategy Agent (LLM)
 6. Report Generator
 
-### 3.1 Components
+### 4.1 Components
 
 - Collector
   - Вход: путь к репозиторию, режим (`full` | `pr`), diff.
-  - Выход: нормализованный набор артефактов (код, тесты, API-спеки, миграции, docs).
+  - Шаг `pre-flight check`: проверяем, что репозиторий соответствует допущениям MVP (FastAPI/pytest/routers).
+  - Выход: нормализованные артефакты только для целевого стека (FastAPI/Pydantic/pytest/миграции) + warning при несоответствии допущениям.
 
-- Graph Builder
-  - Строит единый граф доменных/технических связей.
+- GraphBuilder
+  - Строит единый граф доменных, инфраструктурных и QA-связей.
   - Формат: `graph.json`.
 
 - Rule Engine (deterministic)
-  - Запускает набор явных правил на графе.
+  - Запускает явные правила на графе.
   - Формат: `findings.raw.json`.
 
 - Risk Agent
@@ -62,22 +71,57 @@ Pipeline:
   - Собирает человеко-читаемый отчет и машинные артефакты.
   - Форматы: `report.md`, `findings.json`, `test_plan.json`.
 
-## 4) Agent Contracts (обязательно)
+## 5) Contracts (обязательно)
 
-Агенты общаются только через JSON-файлы, без свободного "чата".
+LLM-агенты общаются только через JSON-файлы, без свободного "чата".
 
-- MapperAgent -> `graph.json`
 - RiskAgent -> `findings.json`
 - QAStrategyAgent -> `test_plan.json`
+
+Pipeline outputs:
+- GraphBuilder -> `graph.json`
+- Rule Engine -> `findings.raw.json`
 
 Плюсы:
 - воспроизводимость;
 - тестируемость;
 - меньше флейков и prompt-drift.
 
-## 5) Minimal Data Model
+## 6) De-risking Strategy: Collector + GraphBuilder
 
-### 5.1 Node types
+Главный риск MVP — извлечение корректных связей из кода. Поэтому начинаем с узкого vertical slice.
+
+### 6.1 Vertical Slice v1 (P0)
+
+В первой итерации поддерживаем только:
+- FastAPI endpoints (`@router.get/post/...`);
+- Pydantic request/response models;
+- явные domain states из `Enum` и проверок статусов;
+- pytest-тесты, связанные с endpoint/service.
+
+Не пытаемся сразу полноценно покрывать:
+- произвольный plain Python;
+- сложную динамику через reflection/metaprogramming;
+- все варианты ORM и внешних интеграций.
+
+### 6.2 GraphBuilder Strategy (MVP)
+
+Используем гибридный, но простой подход:
+- deterministic extraction по паттернам/конвенциям (основной путь);
+- ограниченное LLM-assisted обогащение только для неоднозначных связей;
+- каждая извлеченная связь содержит `confidence` (`high|medium|low`) и `evidence`.
+
+## 7) Minimal Data Model
+
+### 7.1 Node schema
+
+Каждая нода содержит:
+- `id`, `type`, `name`;
+- `layer`: `domain | infrastructure | qa`;
+- `source_ref` (файл/строка);
+- `confidence`.
+
+### 7.2 Node types
 - `Entity`
 - `State`
 - `Transition`
@@ -86,7 +130,7 @@ Pipeline:
 - `ExternalSystem`
 - `TestCase`
 
-### 5.2 Edge types
+### 7.3 Edge types
 - `reads`
 - `writes`
 - `transitions_to`
@@ -94,8 +138,29 @@ Pipeline:
 - `validated_by`
 - `covered_by`
 
-## 6) Initial Risk Rules
+### 7.4 Edge schema
 
+Каждое ребро содержит:
+- `id`
+- `source_node_id`
+- `target_node_id`
+- `type`
+- `source_ref` (файл/строка)
+- `evidence`
+- `confidence`
+
+## 8) Initial Risk Rules
+
+Определение `critical path` в MVP:
+- любой путь, содержащий `API` с write-операцией (`POST|PUT|PATCH|DELETE`) или `Transition`.
+
+Каждое срабатывание правила содержит:
+- `severity`: `critical | high | medium | low`;
+- `confidence`;
+- `evidence`;
+- `suppression_key`.
+
+Стартовый набор правил:
 1. `orphan_entity`
 - Сущность не участвует в критических сценариях.
 
@@ -111,16 +176,40 @@ Pipeline:
 5. `critical_path_no_tests`
 - Критичный путь без тестового покрытия.
 
-## 7) PR/MR Analysis (MVP)
+Suppress в MVP:
+- файл `.airiskignore` с `suppression_key` и короткой причиной.
+- минимальный формат:
+  - `key: "<suppression_key>"`, `reason: "<text>"`
+  - или `rule: "<rule_id>"`, `file: "<path>"`, `reason: "<text>"`
 
-- Берем baseline граф из `main` (или пересобираем при первом запуске).
-- Строим impacted subgraph по diff.
-- Гоняем правила только на затронутых участках.
-- Публикуем:
+## 9) LLM Reliability and Token Budget
+
+Для MVP фиксируем простую стратегию:
+- строгая валидация JSON-ответов по схемам;
+- retry до 2 раз при невалидном ответе;
+- при повторном сбое: graceful degradation (частичный результат + `confidence=low`);
+- chunking: единица чанка = модуль (верхнеуровневая директория), если модуль > 80K токенов, дробим по файлам;
+- в PR-режиме в LLM передается только impacted subgraph, не весь репозиторий.
+
+## 10) PR Analysis and Baseline Cache
+
+- baseline `graph.json` для `main` храним как CI artifact последнего merge/run.
+- если baseline отсутствует или устарел, выполняем full rebuild.
+- impacted subgraph строим из changed files + ближайших зависимостей.
+- fallback: если затронута слишком большая часть графа, запускаем full rules scan.
+- публикуем:
   - короткий summary в комментарий PR;
   - полный отчет как CI artifact.
 
-## 8) Tech Stack (draft)
+## 11) Assumptions (MVP)
+
+- анализируемый репозиторий использует FastAPI и pytest;
+- маршруты/API объявлены через стандартные паттерны FastAPI;
+- хотя бы часть доменной логики выражена явно (enum/status checks);
+- проект можно анализировать статически без выполнения кода;
+- пользователи готовы сначала получать рекомендации, а не CI-блокировки.
+
+## 12) Tech Stack (draft)
 
 - Python 3.12
 - Typer (CLI)
@@ -130,7 +219,7 @@ Pipeline:
 - LiteLLM (адаптер к Codex/Claude)
 - GitHub Actions
 
-## 9) Repository Layout (proposed)
+## 13) Repository Layout (proposed)
 
 ```text
 ai-risk-manager/
@@ -147,56 +236,71 @@ ai-risk-manager/
     reports/
     schemas/
   tests/
+  eval/
+    repos/
   .github/workflows/
     risk-analysis.yml
 ```
 
-## 10) Implementation Milestones
+## 14) Implementation Milestones
+
+### Milestone 0 — Decisions + Contracts
+- Зафиксировать стек (`Python + FastAPI`) и границы MVP.
+- Утвердить JSON-схемы `graph/findings/test_plan`.
+- Добавить `.airiskignore` формат.
 
 ### Milestone 1 — Skeleton
 - CLI-команда `riskmap analyze`.
 - Пустой pipeline с логированием этапов.
-- JSON-схемы `graph/findings/test_plan`.
+- Базовые тесты на схемы.
+- Прототип extraction: найти FastAPI write-endpoints (`@router.post/put/patch/delete`).
+- Создать 1 минимальный eval-репозиторий с заранее известным риском.
 
-### Milestone 2 — Graph + Rules
-- Базовый Graph Builder (1 язык, 1 экосистема).
-- 5 deterministic rules.
-- Генерация `findings.raw.json`.
+### Milestone 2 — Vertical Slice (Collector + GraphBuilder + Rules)
+- Реализовать FastAPI/Pydantic/pytest extraction.
+- Построить граф для vertical slice.
+- Реализовать минимум 2 правила end-to-end.
+- Валидировать результат на eval-репозитории из Milestone 1.
 
 ### Milestone 3 — LLM Agents
 - RiskAgent и QAStrategyAgent на стабильных контрактах.
-- Контроль формата и валидация выходов.
+- Retry/validation/degrade flow.
 
-### Milestone 4 — CI Integration
+### Milestone 4 — CI + PR Mode
 - GitHub Action для PR.
+- Baseline cache для `main`.
 - Комментарий summary + upload artifacts.
 
-## 11) Definition of Done (для MVP)
+### Milestone 5 — Evaluation Expansion (post-MVP hardening)
+- Расширить набор до 3-5 эталонных репозиториев с заранее известными рисками.
+- Регулярный прогон для контроля качества находок на новых кейсах.
+
+## 15) Definition of Done (для MVP)
 
 MVP готов, если:
 - запускается локально одной командой;
 - анализирует full repo и PR diff;
-- стабильно выдает три артефакта (`report.md`, `findings.json`, `test_plan.json`);
-- в CI публикует summary в PR;
-- есть минимальные автотесты на схемы и rules.
+- стабильно выдает `report.md`, `findings.json`, `test_plan.json`;
+- в CI публикует summary в PR без блокировки пайплайна;
+- поддерживает suppress через `.airiskignore`;
+- проходит базовый eval-прогон на эталонных репозиториях.
 
-## 12) Open Questions
+## 16) Open Questions (non-blocking)
 
-1. Какой первый язык/стек поддерживаем в MVP (TypeScript или Python)?
-2. Что считаем "critical path" по умолчанию?
-3. Нужен ли fail CI по threshold рисков в MVP?
-4. Нужна ли поддержка GitLab MR в MVP или после GitHub?
+1. Как расширять extractor после FastAPI: Django или TypeScript?
+2. Когда включать optional CI-fail режим (после каких метрик качества)?
+3. Нужен ли UI после MVP или достаточно CLI + PR comments?
 
-## 13) Next Iteration Backlog
+## 17) Next Iteration Backlog
 
-- [ ] Зафиксировать язык MVP.
-- [ ] Утвердить JSON-схемы для 3 контрактов.
-- [ ] Создать скелет проекта и первую CLI-команду.
-- [ ] Реализовать 1-2 правила end-to-end как vertical slice.
+- [ ] Описать JSON schema для `suppression_key` и `.airiskignore`.
+- [ ] Реализовать vertical slice extraction для FastAPI/Pydantic/pytest.
+- [ ] Реализовать 2 правила (`missing_transition_handler`, `critical_path_no_tests`).
+- [ ] Подготовить 3 eval-репозитория с ожидаемыми findings.
 - [ ] Подключить GitHub Action на тестовом репозитории.
 
 ---
 
 Owner: @andry  
-Status: Draft v0.1  
+Status: Draft v0.3  
 Last updated: 2026-02-17
