@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -75,6 +76,10 @@ def test_pipeline_writes_artifacts(tmp_path: Path) -> None:
     assert (out_dir / "findings.json").exists()
     assert (out_dir / "test_plan.json").exists()
     assert (out_dir / "report.md").exists()
+    graph = json.loads((out_dir / "graph.json").read_text(encoding="utf-8"))
+    assert all(not node["source_ref"].startswith("/") for node in graph["nodes"])
+    report = (out_dir / "report.md").read_text(encoding="utf-8")
+    assert "Graph Statistics:" in report
 
 
 def test_full_mode_sets_full_analysis_scope(tmp_path: Path) -> None:
@@ -127,3 +132,50 @@ def test_cli_entrypoint_parsing_and_exit_code(tmp_path: Path) -> None:
         assert code == 2
         ctx = mock_run.call_args[0][0]
         assert ctx == expected_ctx
+
+
+def test_collector_supports_chained_router_access(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "class App:\n"
+        "    router = APIRouter()\n"
+        "app = App()\n\n"
+        "@app.router.post('/orders')\n"
+        "def create_order():\n"
+        "    return {'ok': True}\n",
+    )
+    _write(tmp_path / "tests" / "test_orders.py", "import pytest\n\ndef test_create_order():\n    assert True\n")
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+    result, code, _ = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    assert any(node.name == "create_order" for node in result.graph.nodes if node.type == "API")
+
+
+def test_explicit_provider_unavailable_returns_exit_1(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    _write(tmp_path / "tests" / "test_orders.py", "import pytest\n\ndef test_create_order():\n    assert True\n")
+
+    with patch("ai_risk_manager.agents.provider._has_api_credentials", return_value=False):
+        with patch("ai_risk_manager.agents.provider._has_cli_backend", return_value=False):
+            code = main(
+                [
+                    "analyze",
+                    str(tmp_path),
+                    "--provider",
+                    "api",
+                ]
+            )
+    assert code == 1

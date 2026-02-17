@@ -58,11 +58,19 @@ def _is_router_decorator(decorator: ast.AST) -> tuple[bool, str]:
         node = node.func
     if not isinstance(node, ast.Attribute):
         return False, ""
-    if not isinstance(node.value, ast.Name):
-        return False, ""
     method = node.attr.lower()
-    is_router = node.value.id.lower().endswith("router")
+    is_router = _has_router_anchor(node.value)
     return is_router and method in ROUTE_METHODS, method
+
+
+def _has_router_anchor(node: ast.AST) -> bool:
+    if isinstance(node, ast.Name):
+        return node.id.lower().endswith("router")
+    if isinstance(node, ast.Attribute):
+        if node.attr.lower().endswith("router"):
+            return True
+        return _has_router_anchor(node.value)
+    return False
 
 
 def _extract_write_endpoints(tree: ast.AST) -> list[str]:
@@ -130,18 +138,27 @@ def collect_artifacts(repo_path: Path) -> ArtifactBundle:
     bundle = ArtifactBundle()
     bundle.all_files = _iter_files(repo_path)
     bundle.python_files = [p for p in bundle.all_files if p.suffix == ".py"]
-    bundle.test_files = [p for p in bundle.python_files if "tests" in p.parts or p.name.startswith("test_")]
+    bundle.test_files = [
+        p
+        for p in bundle.python_files
+        if (
+            (("tests" in p.parts) and p.name != "conftest.py" and (p.name.startswith("test_") or p.name.endswith("_test.py")))
+            or p.name.startswith("test_")
+            or p.name.endswith("_test.py")
+        )
+    ]
 
     for path in bundle.python_files:
         tree = _parse_ast(path)
         if tree is None:
             continue
 
+        relative = path.relative_to(repo_path)
         for endpoint in _extract_write_endpoints(tree):
-            bundle.write_endpoints.append((str(path), endpoint))
+            bundle.write_endpoints.append((str(relative), endpoint))
 
         if path in bundle.test_files:
             for case in _extract_test_cases(tree):
-                bundle.test_cases.append((str(path), case))
+                bundle.test_cases.append((str(relative), case))
 
     return bundle

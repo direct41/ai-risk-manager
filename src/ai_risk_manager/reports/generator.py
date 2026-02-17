@@ -38,6 +38,7 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
             lines.append(f"- Pre-flight note: {reason}")
     lines.append(f"- analysis_scope: `{result.analysis_scope}`")
     lines.append(f"- Data Quality (low-confidence ratio): `{result.data_quality_low_confidence_ratio:.2%}`")
+    lines.append(f"- Graph Statistics: `{len(result.graph.nodes)} nodes`, `{len(result.graph.edges)} edges`")
     for note in notes:
         lines.append(f"- Provider note: {note}")
 

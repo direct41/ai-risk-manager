@@ -51,6 +51,8 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
     ci = bool(os.getenv("CI") or os.getenv("GITHUB_ACTIONS"))
     provider_resolution = resolve_provider(ctx.provider, no_llm=ctx.no_llm, ci=ci)
     notes.extend(provider_resolution.notes)
+    if not ctx.no_llm and ctx.provider in {"api", "cli"} and provider_resolution.provider == "none":
+        return None, 1, notes
 
     t = _progress(5, total_steps, "Risk agent")
     findings = generate_findings(

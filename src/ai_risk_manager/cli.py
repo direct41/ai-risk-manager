@@ -36,6 +36,12 @@ def _run_analyze(args: argparse.Namespace) -> int:
     )
 
     result, exit_code, notes = run_pipeline(ctx)
+    if result is None and exit_code == 1:
+        print("Provider configuration error: selected provider is unavailable.")
+        for note in notes:
+            print(f"- {note}")
+        return 1
+
     if result is None and exit_code == 2:
         print("Pre-flight FAIL: repository is unsupported for MVP (expected FastAPI patterns).")
         for note in notes:
