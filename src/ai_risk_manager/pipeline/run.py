@@ -170,7 +170,9 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
     )
 
     ctx.output_dir.mkdir(parents=True, exist_ok=True)
-    write_json(ctx.output_dir / "graph.json", to_dict(graph))
+    write_json(ctx.output_dir / "graph.json", to_dict(analysis_graph))
+    if analysis_scope != "full":
+        notes.append("graph.json contains analysis graph for current scope (not full repository graph).")
     write_json(ctx.output_dir / "findings.raw.json", to_dict(findings_raw))
     write_json(ctx.output_dir / "findings.json", to_dict(findings))
     write_json(ctx.output_dir / "test_plan.json", to_dict(test_plan))

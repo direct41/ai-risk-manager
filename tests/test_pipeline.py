@@ -137,7 +137,7 @@ def test_pr_mode_with_baseline_uses_impacted_scope(tmp_path: Path) -> None:
     )
     _write(tmp_path / "tests" / "test_api.py", "import pytest\n\ndef test_create_order():\n    assert True\n")
     baseline = tmp_path / ".riskmap" / "baseline" / "graph.json"
-    _write(baseline, "{}")
+    _write(baseline, '{"nodes": []}')
 
     out_dir = tmp_path / ".riskmap"
     ctx = RunContext(

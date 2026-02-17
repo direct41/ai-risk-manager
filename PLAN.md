@@ -311,10 +311,12 @@ ai-risk-manager/
 - Реализован runtime для `api|cli` провайдеров с JSON extraction и retry.
 - Добавлены unit-тесты на runtime/agents (запуск полного `pytest` требует сетевого окружения для установки dev deps).
 
-### Milestone 4 — CI + PR Mode
+### Milestone 4 — CI + PR Mode (completed)
 - GitHub Action для PR.
 - Baseline cache для `main`.
 - Комментарий summary (top-5 findings: severity, source_ref, next action) + upload artifacts.
+- Реализован реальный impacted subgraph filtering для PR режима.
+- Добавлен upsert PR-comment с маркером `<!-- ai-risk-manager -->`.
 
 ### Milestone 5 — Evaluation Expansion (post-MVP hardening)
 - Расширить набор до 3-5 эталонных репозиториев с заранее известными рисками.
