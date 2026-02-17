@@ -301,31 +301,35 @@ def collect_artifacts(repo_path: Path) -> ArtifactBundle:
         )
     ]
 
+    parsed: list[tuple[Path, ast.AST, str]] = []
     for path in bundle.python_files:
         tree = _parse_ast(path)
         if tree is None:
             continue
+        relative = str(path.relative_to(repo_path))
+        parsed.append((path, tree, relative))
 
-        relative = path.relative_to(repo_path)
-        model_names = _extract_pydantic_models(tree)
-        for model_name in model_names:
-            bundle.pydantic_models.append((str(relative), model_name))
+    for _, tree, relative in parsed:
+        for model_name in _extract_pydantic_models(tree):
+            bundle.pydantic_models.append((relative, model_name))
 
+    known_models = {name for _, name in bundle.pydantic_models}
+
+    for path, tree, relative in parsed:
         for endpoint in _extract_write_endpoints(tree):
-            bundle.write_endpoints.append((str(relative), endpoint))
+            bundle.write_endpoints.append((relative, endpoint))
 
-        known_models = {name for _, name in bundle.pydantic_models}
         for endpoint_name, model_name in _extract_endpoint_models(tree, known_models):
-            bundle.endpoint_models.append((str(relative), endpoint_name, model_name))
+            bundle.endpoint_models.append((relative, endpoint_name, model_name))
 
         for machine, src, dst in _extract_declared_transitions(tree):
-            bundle.declared_transitions.append((str(relative), machine, src, dst))
+            bundle.declared_transitions.append((relative, machine, src, dst))
 
         for machine, src, dst in _extract_handled_transitions(tree):
-            bundle.handled_transitions.append((str(relative), machine, src, dst))
+            bundle.handled_transitions.append((relative, machine, src, dst))
 
         if path in bundle.test_files:
             for case in _extract_test_cases(tree):
-                bundle.test_cases.append((str(relative), case))
+                bundle.test_cases.append((relative, case))
 
     return bundle
