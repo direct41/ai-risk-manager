@@ -130,7 +130,7 @@ def test_pr_mode_without_baseline_uses_full_fallback(tmp_path: Path) -> None:
     assert any("Baseline graph not found" in note for note in notes)
 
 
-def test_pr_mode_with_baseline_uses_full_until_impacted_filtering_exists(tmp_path: Path) -> None:
+def test_pr_mode_with_baseline_uses_impacted_scope(tmp_path: Path) -> None:
     _write(
         tmp_path / "app" / "api.py",
         "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
@@ -150,11 +150,39 @@ def test_pr_mode_with_baseline_uses_full_until_impacted_filtering_exists(tmp_pat
         baseline_graph=baseline,
     )
 
+    with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"app/api.py"}):
+        result, code, notes = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    assert result.analysis_scope == "impacted"
+    assert any("Impacted subgraph selected" in note for note in notes)
+
+
+def test_pr_mode_with_invalid_baseline_uses_full_fallback(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    _write(tmp_path / "tests" / "test_api.py", "import pytest\n\ndef test_create_order():\n    assert True\n")
+    baseline = tmp_path / ".riskmap" / "baseline" / "graph.json"
+    _write(baseline, "not-json")
+
+    out_dir = tmp_path / ".riskmap"
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=out_dir,
+        provider="auto",
+        no_llm=True,
+        baseline_graph=baseline,
+    )
+
     result, code, notes = run_pipeline(ctx)
     assert code == 0
     assert result is not None
-    assert result.analysis_scope == "full"
-    assert any("impacted filtering is not implemented yet" in note for note in notes)
+    assert result.analysis_scope == "full_fallback"
+    assert any("Baseline graph not found or invalid" in note for note in notes)
 
 
 def test_cli_entrypoint_parsing_and_exit_code(tmp_path: Path) -> None:
