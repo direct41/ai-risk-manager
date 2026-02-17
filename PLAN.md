@@ -27,6 +27,7 @@
 - 3 последовательных агента с фиксированными JSON-контрактами;
 - Markdown + JSON отчеты;
 - интеграция через GitHub Action.
+- режим `--no-llm` (deterministic-only: Collector -> GraphBuilder -> Rule Engine -> Report).
 
 Не делаем в MVP:
 - микросервисную архитектуру;
@@ -48,8 +49,9 @@ Pipeline:
 
 - Collector
   - Вход: путь к репозиторию, режим (`full` | `pr`), diff.
-  - Шаг `pre-flight check`: проверяем, что репозиторий соответствует допущениям MVP (FastAPI/pytest/routers).
-  - Выход: нормализованные артефакты только для целевого стека (FastAPI/Pydantic/pytest/миграции) + warning при несоответствии допущениям.
+  - Шаг `pre-flight check`: проверяем, что репозиторий соответствует допущениям MVP (FastAPI/pytest/routers), статус `PASS|WARN|FAIL`.
+  - При `FAIL`: анализ пропускается с exit code `2` (unsupported project), с явным сообщением причины.
+  - Выход: нормализованные артефакты только для целевого стека (FastAPI/Pydantic/pytest/миграции) + warning при частичном несоответствии допущениям.
 
 - GraphBuilder
   - Строит единый граф доменных, инфраструктурных и QA-связей.
@@ -69,14 +71,37 @@ Pipeline:
 
 - Report Generator
   - Собирает человеко-читаемый отчет и машинные артефакты.
+  - Добавляет `Data Quality` (доля low-confidence связей) и `analysis_scope` (`impacted` или `full_fallback`).
   - Форматы: `report.md`, `findings.json`, `test_plan.json`.
+
+### 4.2 CLI and Output Contract (MVP)
+
+Команды:
+- `riskmap analyze [PATH]` (по умолчанию `PATH="."`, режим `full`)
+- `riskmap analyze --mode pr --base main [PATH]`
+- `riskmap analyze --no-llm [PATH]`
+- `riskmap analyze --output-dir ./.riskmap [PATH]`
+
+Output:
+- директория по умолчанию: `.riskmap/`
+- артефакты: `.riskmap/report.md`, `.riskmap/findings.json`, `.riskmap/test_plan.json`, `.riskmap/graph.json`, `.riskmap/findings.raw.json`
+- рекомендуем добавить `.riskmap/` в `.gitignore`
+
+LLM configuration:
+- провайдер и ключ через environment variables (через LiteLLM-совместимые переменные)
+- если LLM не сконфигурирован, пользователь получает явную подсказку использовать `--no-llm`
 
 ## 5) Contracts (обязательно)
 
 LLM-агенты общаются только через JSON-файлы, без свободного "чата".
 
-- RiskAgent -> `findings.json`
-- QAStrategyAgent -> `test_plan.json`
+RiskAgent:
+- input: `findings.raw.json` + релевантный subgraph из `graph.json` + `source_ref`
+- output: `findings.json`
+
+QAStrategyAgent:
+- input: `findings.json` + `TestCase`-ноды и `covered_by` связи из `graph.json`
+- output: `test_plan.json`
 
 Pipeline outputs:
 - GraphBuilder -> `graph.json`
@@ -159,6 +184,7 @@ Pipeline outputs:
 - `confidence`;
 - `evidence`;
 - `suppression_key`.
+- `recommendation` (конкретное действие для инженера).
 
 Стартовый набор правил:
 1. `orphan_entity`
@@ -181,6 +207,7 @@ Suppress в MVP:
 - минимальный формат:
   - `key: "<suppression_key>"`, `reason: "<text>"`
   - или `rule: "<rule_id>"`, `file: "<path>"`, `reason: "<text>"`
+- формат файла: YAML (`.airiskignore`).
 
 ## 9) LLM Reliability and Token Budget
 
@@ -190,6 +217,7 @@ Suppress в MVP:
 - при повторном сбое: graceful degradation (частичный результат + `confidence=low`);
 - chunking: единица чанка = модуль (верхнеуровневая директория), если модуль > 80K токенов, дробим по файлам;
 - в PR-режиме в LLM передается только impacted subgraph, не весь репозиторий.
+- если запущено без LLM (`--no-llm`), `findings.json` и `test_plan.json` формируются в deterministic-режиме с пометкой `generated_without_llm=true`.
 
 ## 10) PR Analysis and Baseline Cache
 
@@ -200,6 +228,8 @@ Suppress в MVP:
 - публикуем:
   - короткий summary в комментарий PR;
   - полный отчет как CI artifact.
+- формат комментария: один upsert-комментарий с маркером `<!-- ai-risk-manager -->`, top-5 findings (severity, source_ref, next action), ссылка на artifact.
+- для fork PR по умолчанию используем `--no-llm` (без секретов).
 
 ## 11) Assumptions (MVP)
 
@@ -248,10 +278,11 @@ ai-risk-manager/
 - Зафиксировать стек (`Python + FastAPI`) и границы MVP.
 - Утвердить JSON-схемы `graph/findings/test_plan`.
 - Добавить `.airiskignore` формат.
+- Зафиксировать CLI API, output-dir и exit codes.
 
 ### Milestone 1 — Skeleton
 - CLI-команда `riskmap analyze`.
-- Пустой pipeline с логированием этапов.
+- Пустой pipeline с user-facing прогрессом этапов (`[1/6] ... done (Xs)`).
 - Базовые тесты на схемы.
 - Прототип extraction: найти FastAPI write-endpoints (`@router.post/put/patch/delete`).
 - Создать 1 минимальный eval-репозиторий с заранее известным риском.
@@ -269,7 +300,7 @@ ai-risk-manager/
 ### Milestone 4 — CI + PR Mode
 - GitHub Action для PR.
 - Baseline cache для `main`.
-- Комментарий summary + upload artifacts.
+- Комментарий summary (top-5 findings: severity, source_ref, next action) + upload artifacts.
 
 ### Milestone 5 — Evaluation Expansion (post-MVP hardening)
 - Расширить набор до 3-5 эталонных репозиториев с заранее известными рисками.
@@ -298,9 +329,13 @@ MVP готов, если:
 - [ ] Реализовать 2 правила (`missing_transition_handler`, `critical_path_no_tests`).
 - [ ] Подготовить 3 eval-репозитория с ожидаемыми findings.
 - [ ] Подключить GitHub Action на тестовом репозитории.
+- [ ] Добавить в `.airiskignore` опциональное поле `expires_at` и отчет по активным suppressions.
+- [ ] Добавить валидацию LLM-выхода: рекомендация без `finding_id/source_ref` отбрасывается.
+- [ ] Зафиксировать шаблон `report.md` (Summary, Top Risks, Findings, Test Strategy, Data Quality).
+- [ ] Сделать вывод `suppression_key` в `report.md` copy-paste friendly.
 
 ---
 
 Owner: @andry  
-Status: Draft v0.3  
+Status: Draft v0.4  
 Last updated: 2026-02-17
