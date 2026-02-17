@@ -28,25 +28,40 @@ jobs:
 
       - name: Analyze main
         run: |
+          set +e
           riskmap analyze --mode full --provider auto --output-dir ./.riskmap
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
+            exit "$rc"
+          fi
+          if [ "$rc" -eq 2 ]; then
+            echo "Preflight unsupported for this repository; skipping baseline preparation."
+          fi
 
       - name: Prepare baseline
         run: |
-          mkdir -p ./.riskmap/baseline
-          cp ./.riskmap/graph.json ./.riskmap/baseline/graph.json
+          if [ -f ./.riskmap/graph.json ]; then
+            mkdir -p ./.riskmap/baseline
+            cp ./.riskmap/graph.json ./.riskmap/baseline/graph.json
+          else
+            echo "No graph.json generated; baseline not prepared."
+          fi
 
       - name: Save baseline cache
+        if: hashFiles('./.riskmap/baseline/graph.json') != ''
         uses: actions/cache/save@v4
         with:
           path: ./.riskmap/baseline
           key: baseline-${{ github.repository }}-${{ github.sha }}
 
       - name: Upload artifacts
+        if: hashFiles('./.riskmap/report.md') != ''
         uses: actions/upload-artifact@v4
         with:
           name: risk-analysis-main-${{ github.sha }}
           path: ./.riskmap/
-          if-no-files-found: error
+          if-no-files-found: ignore
 
   analyze-pr:
     if: github.event_name == 'pull_request'

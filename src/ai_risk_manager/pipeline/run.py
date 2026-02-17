@@ -73,9 +73,12 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
     _progress(6, total_steps, "QA strategy agent", t)
 
     if ctx.mode == "pr":
-        if ctx.baseline_graph and ctx.baseline_graph.exists():
-            analysis_scope: Literal["impacted", "full", "full_fallback"] = "impacted"
-            notes.append(f"Baseline graph loaded from {ctx.baseline_graph}.")
+        if ctx.baseline_graph and ctx.baseline_graph.is_file() and ctx.baseline_graph.stat().st_size > 0:
+            analysis_scope: Literal["impacted", "full", "full_fallback"] = "full"
+            notes.append(
+                f"Baseline graph found at {ctx.baseline_graph}, but impacted filtering is not implemented yet; "
+                "using full scan."
+            )
         else:
             analysis_scope = "full_fallback"
             notes.append("Baseline graph not found; using full_fallback scan.")

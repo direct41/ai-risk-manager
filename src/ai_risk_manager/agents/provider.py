@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+import shlex
 import shutil
 from typing import Literal
 
@@ -27,7 +28,11 @@ def _has_api_credentials() -> bool:
 def _has_cli_backend() -> bool:
     configured = os.getenv("AIRISK_CLI_COMMAND")
     if configured:
-        return shutil.which(configured) is not None
+        try:
+            executable = shlex.split(configured)[0]
+        except (ValueError, IndexError):
+            return False
+        return shutil.which(executable) is not None
     return shutil.which("codex") is not None or shutil.which("claude") is not None
 
 

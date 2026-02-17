@@ -130,7 +130,7 @@ def test_pr_mode_without_baseline_uses_full_fallback(tmp_path: Path) -> None:
     assert any("Baseline graph not found" in note for note in notes)
 
 
-def test_pr_mode_with_baseline_uses_impacted(tmp_path: Path) -> None:
+def test_pr_mode_with_baseline_uses_full_until_impacted_filtering_exists(tmp_path: Path) -> None:
     _write(
         tmp_path / "app" / "api.py",
         "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
@@ -153,8 +153,8 @@ def test_pr_mode_with_baseline_uses_impacted(tmp_path: Path) -> None:
     result, code, notes = run_pipeline(ctx)
     assert code == 0
     assert result is not None
-    assert result.analysis_scope == "impacted"
-    assert any("Baseline graph loaded" in note for note in notes)
+    assert result.analysis_scope == "full"
+    assert any("impacted filtering is not implemented yet" in note for note in notes)
 
 
 def test_cli_entrypoint_parsing_and_exit_code(tmp_path: Path) -> None:
