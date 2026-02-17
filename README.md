@@ -13,6 +13,7 @@ pip install -e .
 ```bash
 riskmap analyze
 riskmap analyze --mode pr --base main
+riskmap analyze --mode pr --base main --baseline-graph ./.riskmap/baseline/graph.json
 riskmap analyze --provider auto
 riskmap analyze --provider api
 riskmap analyze --provider cli
@@ -38,3 +39,4 @@ Artifacts are written to `.riskmap/` by default:
 - `findings.raw.json`
 - `findings.json`
 - `test_plan.json`
+- `pr_summary.md` (PR mode only)

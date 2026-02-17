@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from ai_risk_manager.agents.llm_runtime import LLMRuntimeError
 from ai_risk_manager.agents.qa_strategy_agent import generate_test_plan
 from ai_risk_manager.agents.risk_agent import generate_findings
 from ai_risk_manager.schemas.types import Edge, Finding, FindingsReport, Graph, Node
@@ -79,7 +80,7 @@ def test_risk_agent_degrades_to_deterministic_on_llm_failure() -> None:
     findings_raw = _sample_findings_raw()
     graph = _sample_graph()
 
-    with patch("ai_risk_manager.agents.risk_agent.call_llm_json", side_effect=RuntimeError("boom")):
+    with patch("ai_risk_manager.agents.risk_agent.call_llm_json", side_effect=LLMRuntimeError("boom")):
         report = generate_findings(findings_raw, graph, provider="api", generated_without_llm=False)
 
     assert report.generated_without_llm is True
@@ -90,7 +91,7 @@ def test_qa_agent_degrades_to_deterministic_on_llm_failure() -> None:
     findings = _sample_findings_raw()
     graph = _sample_graph()
 
-    with patch("ai_risk_manager.agents.qa_strategy_agent.call_llm_json", side_effect=RuntimeError("boom")):
+    with patch("ai_risk_manager.agents.qa_strategy_agent.call_llm_json", side_effect=LLMRuntimeError("boom")):
         plan = generate_test_plan(findings, graph, provider="api", generated_without_llm=False)
 
     assert plan.generated_without_llm is True

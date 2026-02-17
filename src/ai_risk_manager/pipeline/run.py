@@ -10,7 +10,7 @@ from ai_risk_manager.agents.qa_strategy_agent import generate_test_plan
 from ai_risk_manager.agents.risk_agent import generate_findings
 from ai_risk_manager.collectors.collector import collect_artifacts, preflight_check
 from ai_risk_manager.graph.builder import build_graph, low_confidence_ratio
-from ai_risk_manager.reports.generator import render_report_md, write_report
+from ai_risk_manager.reports.generator import render_pr_summary_md, render_report_md, write_report
 from ai_risk_manager.rules.engine import run_rules
 from ai_risk_manager.schemas.types import PipelineResult, RunContext, to_dict, write_json
 
@@ -72,7 +72,15 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
     )
     _progress(6, total_steps, "QA strategy agent", t)
 
-    analysis_scope: Literal["impacted", "full", "full_fallback"] = "impacted" if ctx.mode == "pr" else "full"
+    if ctx.mode == "pr":
+        if ctx.baseline_graph and ctx.baseline_graph.exists():
+            analysis_scope: Literal["impacted", "full", "full_fallback"] = "impacted"
+            notes.append(f"Baseline graph loaded from {ctx.baseline_graph}.")
+        else:
+            analysis_scope = "full_fallback"
+            notes.append("Baseline graph not found; using full_fallback scan.")
+    else:
+        analysis_scope = "full"
     result = PipelineResult(
         preflight=preflight,
         analysis_scope=analysis_scope,
@@ -91,5 +99,8 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
 
     report = render_report_md(result, notes)
     write_report(ctx.output_dir / "report.md", report)
+    if ctx.mode == "pr":
+        pr_summary = render_pr_summary_md(result, notes)
+        write_report(ctx.output_dir / "pr_summary.md", pr_summary)
 
     return result, 0, notes

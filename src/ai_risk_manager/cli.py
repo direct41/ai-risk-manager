@@ -17,6 +17,7 @@ def _build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--base", default="main", help="Base branch for pr mode")
     analyze.add_argument("--no-llm", action="store_true", help="Disable LLM stages")
     analyze.add_argument("--provider", choices=["auto", "api", "cli"], default="auto", help="LLM provider")
+    analyze.add_argument("--baseline-graph", default=None, help="Path to baseline graph.json for pr mode")
     analyze.add_argument("--output-dir", default=".riskmap", help="Output directory")
 
     return parser
@@ -25,6 +26,7 @@ def _build_parser() -> argparse.ArgumentParser:
 def _run_analyze(args: argparse.Namespace) -> int:
     repo_path = Path(args.path).resolve()
     output_dir = Path(args.output_dir).resolve()
+    baseline_graph = Path(args.baseline_graph).resolve() if args.baseline_graph else None
 
     ctx = RunContext(
         repo_path=repo_path,
@@ -33,6 +35,7 @@ def _run_analyze(args: argparse.Namespace) -> int:
         output_dir=output_dir,
         provider=args.provider,
         no_llm=args.no_llm,
+        baseline_graph=baseline_graph,
     )
 
     result, exit_code, notes = run_pipeline(ctx)

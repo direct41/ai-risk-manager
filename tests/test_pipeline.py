@@ -76,6 +76,7 @@ def test_pipeline_writes_artifacts(tmp_path: Path) -> None:
     assert (out_dir / "findings.json").exists()
     assert (out_dir / "test_plan.json").exists()
     assert (out_dir / "report.md").exists()
+    assert (out_dir / "pr_summary.md").exists()
     graph = json.loads((out_dir / "graph.json").read_text(encoding="utf-8"))
     assert all(not node["source_ref"].startswith("/") for node in graph["nodes"])
     report = (out_dir / "report.md").read_text(encoding="utf-8")
@@ -104,6 +105,58 @@ def test_full_mode_sets_full_analysis_scope(tmp_path: Path) -> None:
     assert result.analysis_scope == "full"
 
 
+def test_pr_mode_without_baseline_uses_full_fallback(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    _write(tmp_path / "tests" / "test_api.py", "import pytest\n\ndef test_create_order():\n    assert True\n")
+
+    out_dir = tmp_path / ".riskmap"
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=out_dir,
+        provider="auto",
+        no_llm=True,
+        baseline_graph=tmp_path / ".riskmap" / "baseline" / "graph.json",
+    )
+
+    result, code, notes = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    assert result.analysis_scope == "full_fallback"
+    assert any("Baseline graph not found" in note for note in notes)
+
+
+def test_pr_mode_with_baseline_uses_impacted(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    _write(tmp_path / "tests" / "test_api.py", "import pytest\n\ndef test_create_order():\n    assert True\n")
+    baseline = tmp_path / ".riskmap" / "baseline" / "graph.json"
+    _write(baseline, "{}")
+
+    out_dir = tmp_path / ".riskmap"
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=out_dir,
+        provider="auto",
+        no_llm=True,
+        baseline_graph=baseline,
+    )
+
+    result, code, notes = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    assert result.analysis_scope == "impacted"
+    assert any("Baseline graph loaded" in note for note in notes)
+
+
 def test_cli_entrypoint_parsing_and_exit_code(tmp_path: Path) -> None:
     fake_output_dir = tmp_path / ".riskmap"
     expected_ctx = RunContext(
@@ -113,6 +166,7 @@ def test_cli_entrypoint_parsing_and_exit_code(tmp_path: Path) -> None:
         output_dir=fake_output_dir.resolve(),
         provider="auto",
         no_llm=True,
+        baseline_graph=None,
     )
 
     with patch("ai_risk_manager.cli.run_pipeline", return_value=(None, 2, ["unsupported"])) as mock_run:

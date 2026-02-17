@@ -305,9 +305,11 @@ ai-risk-manager/
 - Реализовать минимум 2 правила end-to-end.
 - Валидировать результат на eval-репозитории из Milestone 1.
 
-### Milestone 3 — LLM Agents
+### Milestone 3 — LLM Agents (completed)
 - RiskAgent и QAStrategyAgent на стабильных контрактах.
 - Retry/validation/degrade flow.
+- Реализован runtime для `api|cli` провайдеров с JSON extraction и retry.
+- Добавлены unit-тесты на runtime/agents (запуск полного `pytest` требует сетевого окружения для установки dev deps).
 
 ### Milestone 4 — CI + PR Mode
 - GitHub Action для PR.

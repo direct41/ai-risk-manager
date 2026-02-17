@@ -37,7 +37,7 @@ def _invoke_provider(provider: str, prompt: str) -> str:
 
 
 def _invoke_api(prompt: str) -> str:
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("LITELLM_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("LITELLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         raise LLMRuntimeError("API key is missing for API provider")
 
@@ -88,9 +88,9 @@ def _invoke_cli(prompt: str) -> str:
     configured = os.getenv("AIRISK_CLI_COMMAND")
     if configured:
         cmd = shlex.split(configured)
-    elif os.getenv("PATH") and shutil_which("codex"):
+    elif shutil_which("codex"):
         cmd = ["codex", "--prompt"]
-    elif os.getenv("PATH") and shutil_which("claude"):
+    elif shutil_which("claude"):
         cmd = ["claude", "-p"]
     else:
         raise LLMRuntimeError("No supported AI CLI found for CLI provider")

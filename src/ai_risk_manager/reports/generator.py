@@ -5,6 +5,8 @@ from pathlib import Path
 
 from ai_risk_manager.schemas.types import FindingsReport, PipelineResult, TestPlan
 
+SEVERITY_ORDER = "critical high medium low".split()
+
 
 def _summary_counts(findings: FindingsReport) -> dict[str, int]:
     counts = Counter(f.severity for f in findings.findings)
@@ -50,7 +52,7 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
     else:
         top = sorted(
             result.findings.findings,
-            key=lambda f: ("critical high medium low".split().index(f.severity), f.rule_id),
+            key=lambda f: (SEVERITY_ORDER.index(f.severity), f.rule_id),
         )[:5]
         for finding in top:
             lines.append(f"### {finding.title}")
@@ -83,3 +85,31 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
 def write_report(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def render_pr_summary_md(result: PipelineResult, notes: list[str]) -> str:
+    marker = "<!-- ai-risk-manager -->"
+    lines = [marker, "## AI Risk Manager Summary", ""]
+    lines.append(f"- analysis_scope: `{result.analysis_scope}`")
+    lines.append(f"- findings: `{len(result.findings.findings)}`")
+    if notes:
+        lines.append(f"- notes: `{'; '.join(notes)}`")
+    lines.append("")
+
+    top = sorted(
+        result.findings.findings,
+        key=lambda f: (SEVERITY_ORDER.index(f.severity), f.rule_id),
+    )[:5]
+    if not top:
+        lines.append("No findings in current PR scope.")
+    else:
+        lines.append("### Top Findings")
+        lines.append("")
+        for finding in top:
+            lines.append(
+                f"- [{finding.severity}] `{finding.rule_id}` at `{finding.source_ref}`: "
+                f"{finding.title}. Action: {finding.recommendation}"
+            )
+    lines.append("")
+    lines.append("Full details: see workflow artifacts (`report.md`, `findings.json`, `test_plan.json`).")
+    return "\n".join(lines).strip() + "\n"

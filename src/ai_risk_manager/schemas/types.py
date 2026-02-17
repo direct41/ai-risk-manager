@@ -99,6 +99,7 @@ class RunContext:
     output_dir: Path
     provider: Literal["auto", "api", "cli"]
     no_llm: bool
+    baseline_graph: Path | None = None
 
 
 @dataclass
