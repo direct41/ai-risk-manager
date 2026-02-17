@@ -55,6 +55,7 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
     t = _progress(5, total_steps, "Risk agent")
     findings = generate_findings(
         findings_raw,
+        graph,
         provider=provider_resolution.provider,
         generated_without_llm=provider_resolution.generated_without_llm,
     )
@@ -63,12 +64,13 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
     t = _progress(6, total_steps, "QA strategy agent")
     test_plan = generate_test_plan(
         findings,
+        graph,
         provider=provider_resolution.provider,
         generated_without_llm=provider_resolution.generated_without_llm,
     )
     _progress(6, total_steps, "QA strategy agent", t)
 
-    analysis_scope: Literal["impacted", "full_fallback"] = "impacted" if ctx.mode == "pr" else "full_fallback"
+    analysis_scope: Literal["impacted", "full", "full_fallback"] = "impacted" if ctx.mode == "pr" else "full"
     result = PipelineResult(
         preflight=preflight,
         analysis_scope=analysis_scope,

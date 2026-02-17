@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from ai_risk_manager.schemas.types import FindingsReport, TestPlan, TestRecommendation
+from ai_risk_manager.schemas.types import FindingsReport, Graph, TestPlan, TestRecommendation
 
 
 def generate_test_plan(
     findings: FindingsReport,
+    graph: Graph,
     *,
     provider: str,
     generated_without_llm: bool,
 ) -> TestPlan:
+    _ = graph
     items: list[TestRecommendation] = []
     for finding in findings.findings:
         items.append(

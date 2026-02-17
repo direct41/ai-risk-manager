@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
-import re
 
 from ai_risk_manager.schemas.types import PreflightResult
 
 WRITE_METHODS = ("post", "put", "patch", "delete")
+ROUTE_METHODS = WRITE_METHODS + ("get",)
+EXCLUDED_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules", ".riskmap"}
 
 
 @dataclass
@@ -15,6 +18,7 @@ class ArtifactBundle:
     python_files: list[Path] = field(default_factory=list)
     write_endpoints: list[tuple[str, str]] = field(default_factory=list)  # (file, endpoint_name)
     test_files: list[Path] = field(default_factory=list)
+    test_cases: list[tuple[str, str]] = field(default_factory=list)  # (file, test_function_name)
 
 
 def _read_text(path: Path) -> str:
@@ -24,20 +28,91 @@ def _read_text(path: Path) -> str:
         return ""
 
 
+def _iter_files(repo_path: Path) -> list[Path]:
+    files: list[Path] = []
+    for root, dirs, filenames in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in EXCLUDED_DIRS]
+        root_path = Path(root)
+        for filename in filenames:
+            files.append(root_path / filename)
+    return files
+
+
+def _iter_python_files(repo_path: Path) -> list[Path]:
+    return [p for p in _iter_files(repo_path) if p.suffix == ".py"]
+
+
+def _parse_ast(path: Path) -> ast.AST | None:
+    text = _read_text(path)
+    if not text:
+        return None
+    try:
+        return ast.parse(text)
+    except SyntaxError:
+        return None
+
+
+def _is_router_decorator(decorator: ast.AST) -> tuple[bool, str]:
+    node = decorator
+    if isinstance(node, ast.Call):
+        node = node.func
+    if not isinstance(node, ast.Attribute):
+        return False, ""
+    if not isinstance(node.value, ast.Name):
+        return False, ""
+    method = node.attr.lower()
+    is_router = node.value.id.lower().endswith("router")
+    return is_router and method in ROUTE_METHODS, method
+
+
+def _extract_write_endpoints(tree: ast.AST) -> list[str]:
+    endpoints: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for decorator in node.decorator_list:
+            is_router, method = _is_router_decorator(decorator)
+            if is_router and method in WRITE_METHODS:
+                endpoints.append(node.name)
+                break
+    return endpoints
+
+
+def _extract_test_cases(tree: ast.AST) -> list[str]:
+    cases: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_"):
+            cases.append(node.name)
+    return cases
+
+
 def preflight_check(repo_path: Path) -> PreflightResult:
-    py_files = list(repo_path.rglob("*.py"))
+    py_files = _iter_python_files(repo_path)
     has_fastapi_import = False
     has_router = False
     has_pytest = False
 
     for path in py_files:
-        text = _read_text(path)
-        if not has_fastapi_import and re.search(r"\bfrom\s+fastapi\b|\bimport\s+fastapi\b", text):
-            has_fastapi_import = True
-        if not has_router and re.search(r"@\w*router\.(get|post|put|patch|delete)\(", text):
-            has_router = True
-        if not has_pytest and ("import pytest" in text or "from pytest" in text):
-            has_pytest = True
+        tree = _parse_ast(path)
+        if tree is None:
+            continue
+        for node in ast.walk(tree):
+            if not has_fastapi_import and isinstance(node, ast.ImportFrom) and (node.module or "").startswith("fastapi"):
+                has_fastapi_import = True
+            if not has_fastapi_import and isinstance(node, ast.Import):
+                has_fastapi_import = any(alias.name.startswith("fastapi") for alias in node.names)
+            if not has_pytest and isinstance(node, ast.ImportFrom) and (node.module or "").startswith("pytest"):
+                has_pytest = True
+            if not has_pytest and isinstance(node, ast.Import):
+                has_pytest = any(alias.name.startswith("pytest") for alias in node.names)
+            if not has_router and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for decorator in node.decorator_list:
+                    is_router, _ = _is_router_decorator(decorator)
+                    if is_router:
+                        has_router = True
+                        break
+            if has_fastapi_import and has_router and has_pytest:
+                break
 
     reasons: list[str] = []
     if not has_fastapi_import and not has_router:
@@ -53,18 +128,20 @@ def preflight_check(repo_path: Path) -> PreflightResult:
 
 def collect_artifacts(repo_path: Path) -> ArtifactBundle:
     bundle = ArtifactBundle()
-    bundle.all_files = [p for p in repo_path.rglob("*") if p.is_file()]
+    bundle.all_files = _iter_files(repo_path)
     bundle.python_files = [p for p in bundle.all_files if p.suffix == ".py"]
-    bundle.test_files = [p for p in bundle.python_files if "test" in p.name.lower() or "/tests/" in str(p)]
-
-    endpoint_regex = re.compile(r"@(\w*router)\.(post|put|patch|delete|get)\([^\n]*\)\s*\ndef\s+(\w+)\(", re.MULTILINE)
+    bundle.test_files = [p for p in bundle.python_files if "tests" in p.parts or p.name.startswith("test_")]
 
     for path in bundle.python_files:
-        text = _read_text(path)
-        for match in endpoint_regex.finditer(text):
-            method = match.group(2)
-            func_name = match.group(3)
-            if method in WRITE_METHODS:
-                bundle.write_endpoints.append((str(path), func_name))
+        tree = _parse_ast(path)
+        if tree is None:
+            continue
+
+        for endpoint in _extract_write_endpoints(tree):
+            bundle.write_endpoints.append((str(path), endpoint))
+
+        if path in bundle.test_files:
+            for case in _extract_test_cases(tree):
+                bundle.test_cases.append((str(path), case))
 
     return bundle

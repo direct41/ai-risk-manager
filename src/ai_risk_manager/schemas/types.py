@@ -94,7 +94,7 @@ class RunContext:
 @dataclass
 class PipelineResult:
     preflight: PreflightResult
-    analysis_scope: Literal["impacted", "full_fallback"]
+    analysis_scope: Literal["impacted", "full", "full_fallback"]
     data_quality_low_confidence_ratio: float
     graph: Graph
     findings_raw: FindingsReport
@@ -105,7 +105,7 @@ class PipelineResult:
 def write_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as fh:
-        json.dump(data, fh, ensure_ascii=True, indent=2)
+        json.dump(data, fh, ensure_ascii=False, indent=2)
 
 
 def to_dict(instance: Any) -> Any:
