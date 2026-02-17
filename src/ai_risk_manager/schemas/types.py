@@ -35,6 +35,16 @@ class Edge:
 class Graph:
     nodes: list[Node] = field(default_factory=list)
     edges: list[Edge] = field(default_factory=list)
+    declared_transitions: list["TransitionSpec"] = field(default_factory=list)
+    handled_transitions: list["TransitionSpec"] = field(default_factory=list)
+
+
+@dataclass
+class TransitionSpec:
+    machine: str
+    source: str
+    target: str
+    source_ref: str
 
 
 @dataclass

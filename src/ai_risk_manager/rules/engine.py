@@ -26,4 +26,25 @@ def run_rules(graph: Graph) -> FindingsReport:
                 )
             )
 
+    declared_pairs = {(t.source, t.target) for t in graph.declared_transitions}
+    handled_pairs = {(t.source, t.target) for t in graph.handled_transitions}
+    missing_pairs = declared_pairs - handled_pairs
+    for source, target in sorted(missing_pairs):
+        source_ref = next((t.source_ref for t in graph.declared_transitions if t.source == source and t.target == target), "unknown")
+        finding_id = f"missing_transition_handler:{source}->{target}"
+        findings.append(
+            Finding(
+                id=finding_id,
+                rule_id="missing_transition_handler",
+                title=f"Declared transition '{source} -> {target}' has no handler",
+                description="A declared transition exists but no matching status-change handler was found.",
+                severity="medium",
+                confidence="medium",
+                evidence=f"Declared transitions include {source}->{target}; handled transitions do not.",
+                source_ref=source_ref,
+                suppression_key=finding_id,
+                recommendation=f"Implement handler logic for transition '{source} -> {target}' or remove stale declaration.",
+            )
+        )
+
     return FindingsReport(findings=findings, generated_without_llm=True)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from ai_risk_manager.collectors.collector import ArtifactBundle
-from ai_risk_manager.schemas.types import Edge, Graph, Node
+from ai_risk_manager.schemas.types import Edge, Graph, Node, TransitionSpec
 
 
 def _safe_id(value: str) -> str:
@@ -16,6 +16,19 @@ def _tokens(value: str) -> set[str]:
 
 def build_graph(artifacts: ArtifactBundle) -> Graph:
     graph = Graph()
+
+    for file_path, model_name in artifacts.pydantic_models:
+        model_node_id = f"entity:{_safe_id(file_path)}:{model_name}"
+        graph.nodes.append(
+            Node(
+                id=model_node_id,
+                type="Entity",
+                name=model_name,
+                layer="domain",
+                source_ref=file_path,
+                confidence="high",
+            )
+        )
 
     for file_path, endpoint_name in artifacts.write_endpoints:
         api_node_id = f"api:{_safe_id(file_path)}:{endpoint_name}"
@@ -43,6 +56,25 @@ def build_graph(artifacts: ArtifactBundle) -> Graph:
             )
         )
 
+    model_node_ids = {n.name: n.id for n in graph.nodes if n.type == "Entity"}
+    api_node_ids = {n.name: n.id for n in graph.nodes if n.type == "API"}
+    for file_path, endpoint_name, model_name in artifacts.endpoint_models:
+        api_id = api_node_ids.get(endpoint_name)
+        model_id = model_node_ids.get(model_name)
+        if not api_id or not model_id:
+            continue
+        graph.edges.append(
+            Edge(
+                id=f"edge:{api_id}->{model_id}:validated_by",
+                source_node_id=api_id,
+                target_node_id=model_id,
+                type="validated_by",
+                source_ref=file_path,
+                evidence=f"endpoint '{endpoint_name}' uses pydantic model '{model_name}'",
+                confidence="high",
+            )
+        )
+
     # Coarse heuristic: connect tests to endpoints when names overlap.
     api_nodes = [n for n in graph.nodes if n.type == "API"]
     test_nodes = [n for n in graph.nodes if n.type == "TestCase"]
@@ -62,6 +94,52 @@ def build_graph(artifacts: ArtifactBundle) -> Graph:
                         confidence="medium",
                     )
                 )
+
+    seen_states: set[str] = set()
+    for file_path, machine, src, dst in artifacts.declared_transitions:
+        for state in (src, dst):
+            state_id = f"state:{machine}:{state}"
+            if state_id in seen_states:
+                continue
+            seen_states.add(state_id)
+            graph.nodes.append(
+                Node(
+                    id=state_id,
+                    type="State",
+                    name=state,
+                    layer="domain",
+                    source_ref=file_path,
+                    confidence="high",
+                )
+            )
+
+    for file_path, machine, src, dst in artifacts.declared_transitions:
+        graph.declared_transitions.append(TransitionSpec(machine=machine, source=src, target=dst, source_ref=file_path))
+        transition_node_id = f"transition:{machine}:{src}->{dst}:declared"
+        graph.nodes.append(
+            Node(
+                id=transition_node_id,
+                type="Transition",
+                name=f"{src}->{dst}",
+                layer="domain",
+                source_ref=file_path,
+                confidence="high",
+            )
+        )
+        graph.edges.append(
+            Edge(
+                id=f"edge:state:{machine}:{src}->state:{machine}:{dst}:declared",
+                source_node_id=f"state:{machine}:{src}",
+                target_node_id=f"state:{machine}:{dst}",
+                type="transitions_to",
+                source_ref=file_path,
+                evidence=f"declared transition in {machine}",
+                confidence="high",
+            )
+        )
+
+    for file_path, machine, src, dst in artifacts.handled_transitions:
+        graph.handled_transitions.append(TransitionSpec(machine=machine, source=src, target=dst, source_ref=file_path))
 
     return graph
 

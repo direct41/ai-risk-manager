@@ -17,6 +17,10 @@ class ArtifactBundle:
     all_files: list[Path] = field(default_factory=list)
     python_files: list[Path] = field(default_factory=list)
     write_endpoints: list[tuple[str, str]] = field(default_factory=list)  # (file, endpoint_name)
+    endpoint_models: list[tuple[str, str, str]] = field(default_factory=list)  # (file, endpoint_name, model_name)
+    pydantic_models: list[tuple[str, str]] = field(default_factory=list)  # (file, model_name)
+    declared_transitions: list[tuple[str, str, str, str]] = field(default_factory=list)  # (file, machine, src, dst)
+    handled_transitions: list[tuple[str, str, str, str]] = field(default_factory=list)  # (file, machine, src, dst)
     test_files: list[Path] = field(default_factory=list)
     test_cases: list[tuple[str, str]] = field(default_factory=list)  # (file, test_function_name)
 
@@ -84,6 +88,155 @@ def _extract_write_endpoints(tree: ast.AST) -> list[str]:
                 endpoints.append(node.name)
                 break
     return endpoints
+
+
+def _is_basemodel_subclass(node: ast.ClassDef) -> bool:
+    for base in node.bases:
+        if isinstance(base, ast.Name) and base.id == "BaseModel":
+            return True
+        if isinstance(base, ast.Attribute) and base.attr == "BaseModel":
+            return True
+    return False
+
+
+def _extract_pydantic_models(tree: ast.AST) -> list[str]:
+    models: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and _is_basemodel_subclass(node):
+            models.append(node.name)
+    return models
+
+
+def _annotation_name(annotation: ast.AST | None) -> str | None:
+    if annotation is None:
+        return None
+    if isinstance(annotation, ast.Name):
+        return annotation.id
+    if isinstance(annotation, ast.Attribute):
+        return annotation.attr
+    if isinstance(annotation, ast.Subscript):
+        return _annotation_name(annotation.value)
+    return None
+
+
+def _decorator_response_model(decorator: ast.AST) -> str | None:
+    node = decorator
+    if not isinstance(node, ast.Call):
+        return None
+    for kw in node.keywords:
+        if kw.arg == "response_model":
+            return _annotation_name(kw.value)
+    return None
+
+
+def _extract_endpoint_models(tree: ast.AST, known_models: set[str]) -> list[tuple[str, str]]:
+    endpoint_models: list[tuple[str, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+
+        is_endpoint = False
+        response_models: set[str] = set()
+        for decorator in node.decorator_list:
+            ok, _ = _is_router_decorator(decorator)
+            if ok:
+                is_endpoint = True
+                response_model = _decorator_response_model(decorator)
+                if response_model and response_model in known_models:
+                    response_models.add(response_model)
+
+        if not is_endpoint:
+            continue
+
+        for arg in node.args.args:
+            model_name = _annotation_name(arg.annotation)
+            if model_name and model_name in known_models:
+                endpoint_models.append((node.name, model_name))
+
+        for model_name in response_models:
+            endpoint_models.append((node.name, model_name))
+
+    return endpoint_models
+
+
+def _constant_str(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    return None
+
+
+def _extract_declared_transitions(tree: ast.AST) -> list[tuple[str, str, str]]:
+    declared: list[tuple[str, str, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        if not isinstance(node.value, ast.Dict):
+            continue
+        if not node.targets:
+            continue
+        target = node.targets[0]
+        if not isinstance(target, ast.Name):
+            continue
+        target_name = target.id.lower()
+        if "transition" not in target_name:
+            continue
+        machine = target.id
+
+        for key, value in zip(node.value.keys, node.value.values):
+            src = _constant_str(key)
+            if not src:
+                continue
+            if isinstance(value, (ast.List, ast.Tuple)):
+                for elt in value.elts:
+                    dst = _constant_str(elt)
+                    if dst:
+                        declared.append((machine, src, dst))
+            else:
+                dst = _constant_str(value)
+                if dst:
+                    declared.append((machine, src, dst))
+    return declared
+
+
+def _extract_handled_transitions(tree: ast.AST) -> list[tuple[str, str, str]]:
+    handled: list[tuple[str, str, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        fn_name = node.name
+        for child in ast.walk(node):
+            if not isinstance(child, ast.If):
+                continue
+            src_state: str | None = None
+            status_var_name: str | None = None
+            status_is_attr = False
+            test = child.test
+            if isinstance(test, ast.Compare) and len(test.ops) == 1 and isinstance(test.ops[0], ast.Eq):
+                left = test.left
+                if isinstance(left, ast.Attribute) and left.attr == "status":
+                    if test.comparators:
+                        src_state = _constant_str(test.comparators[0])
+                        status_is_attr = True
+                if isinstance(left, ast.Name) and left.id == "status":
+                    if test.comparators:
+                        src_state = _constant_str(test.comparators[0])
+                        status_var_name = left.id
+            if not src_state:
+                continue
+
+            for stmt in ast.walk(child):
+                if not isinstance(stmt, ast.Assign):
+                    continue
+                for target in stmt.targets:
+                    if status_is_attr and isinstance(target, ast.Attribute) and target.attr == "status":
+                        dst_state = _constant_str(stmt.value)
+                        if dst_state:
+                            handled.append((fn_name, src_state, dst_state))
+                    if status_var_name and isinstance(target, ast.Name) and target.id == status_var_name:
+                        dst_state = _constant_str(stmt.value)
+                        if dst_state:
+                            handled.append((fn_name, src_state, dst_state))
+    return handled
 
 
 def _extract_test_cases(tree: ast.AST) -> list[str]:
@@ -154,8 +307,22 @@ def collect_artifacts(repo_path: Path) -> ArtifactBundle:
             continue
 
         relative = path.relative_to(repo_path)
+        model_names = _extract_pydantic_models(tree)
+        for model_name in model_names:
+            bundle.pydantic_models.append((str(relative), model_name))
+
         for endpoint in _extract_write_endpoints(tree):
             bundle.write_endpoints.append((str(relative), endpoint))
+
+        known_models = {name for _, name in bundle.pydantic_models}
+        for endpoint_name, model_name in _extract_endpoint_models(tree, known_models):
+            bundle.endpoint_models.append((str(relative), endpoint_name, model_name))
+
+        for machine, src, dst in _extract_declared_transitions(tree):
+            bundle.declared_transitions.append((str(relative), machine, src, dst))
+
+        for machine, src, dst in _extract_handled_transitions(tree):
+            bundle.handled_transitions.append((str(relative), machine, src, dst))
 
         if path in bundle.test_files:
             for case in _extract_test_cases(tree):
