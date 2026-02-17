@@ -28,6 +28,7 @@
 - Markdown + JSON отчеты;
 - интеграция через GitHub Action.
 - режим `--no-llm` (deterministic-only: Collector -> GraphBuilder -> Rule Engine -> Report).
+- выбор LLM backend: `api` или `cli` (локально), с единым контрактом входов/выходов.
 
 Не делаем в MVP:
 - микросервисную архитектуру;
@@ -80,6 +81,7 @@ Pipeline:
 - `riskmap analyze [PATH]` (по умолчанию `PATH="."`, режим `full`)
 - `riskmap analyze --mode pr --base main [PATH]`
 - `riskmap analyze --no-llm [PATH]`
+- `riskmap analyze --provider auto|api|cli [PATH]`
 - `riskmap analyze --output-dir ./.riskmap [PATH]`
 
 Output:
@@ -88,8 +90,13 @@ Output:
 - рекомендуем добавить `.riskmap/` в `.gitignore`
 
 LLM configuration:
-- провайдер и ключ через environment variables (через LiteLLM-совместимые переменные)
-- если LLM не сконфигурирован, пользователь получает явную подсказку использовать `--no-llm`
+- default backend: `auto`
+- `auto` resolution:
+  - local run: `cli -> api -> no-llm`
+  - CI run: `api -> no-llm`
+- `--provider api`: провайдер и ключ через environment variables (через LiteLLM-совместимые переменные)
+- `--provider cli`: вызов установленного AI CLI-адаптера (локальный режим)
+- если выбранный backend не сконфигурирован, пользователь получает явную подсказку использовать другой backend или `--no-llm`
 
 ## 5) Contracts (обязательно)
 
@@ -218,6 +225,8 @@ Suppress в MVP:
 - chunking: единица чанка = модуль (верхнеуровневая директория), если модуль > 80K токенов, дробим по файлам;
 - в PR-режиме в LLM передается только impacted subgraph, не весь репозиторий.
 - если запущено без LLM (`--no-llm`), `findings.json` и `test_plan.json` формируются в deterministic-режиме с пометкой `generated_without_llm=true`.
+- backend `api|cli` не меняет контракты агентов и формат артефактов.
+- для `cli` backend: при невалидном stdout после 2 retry делаем fallback по цепочке `auto` (или предлагаем `--provider api` / `--no-llm`).
 
 ## 10) PR Analysis and Baseline Cache
 
@@ -230,6 +239,7 @@ Suppress в MVP:
   - полный отчет как CI artifact.
 - формат комментария: один upsert-комментарий с маркером `<!-- ai-risk-manager -->`, top-5 findings (severity, source_ref, next action), ссылка на artifact.
 - для fork PR по умолчанию используем `--no-llm` (без секретов).
+- в CI для стабильности используем только `--provider api` или `--no-llm`; `--provider cli` только для локального режима.
 
 ## 11) Assumptions (MVP)
 
@@ -279,6 +289,8 @@ ai-risk-manager/
 - Утвердить JSON-схемы `graph/findings/test_plan`.
 - Добавить `.airiskignore` формат.
 - Зафиксировать CLI API, output-dir и exit codes.
+- Зафиксировать LLM backend selection (`auto|api|cli`) и fallback-поведение.
+- Зафиксировать `provider=auto` (локально `cli -> api -> no-llm`, в CI `api -> no-llm`).
 
 ### Milestone 1 — Skeleton
 - CLI-команда `riskmap analyze`.
@@ -333,9 +345,10 @@ MVP готов, если:
 - [ ] Добавить валидацию LLM-выхода: рекомендация без `finding_id/source_ref` отбрасывается.
 - [ ] Зафиксировать шаблон `report.md` (Summary, Top Risks, Findings, Test Strategy, Data Quality).
 - [ ] Сделать вывод `suppression_key` в `report.md` copy-paste friendly.
+- [ ] Добавить CLI-adapter интерфейс для `--provider cli` (локально, без CI-зависимости) и fallback при невалидном stdout.
 
 ---
 
 Owner: @andry  
-Status: Draft v0.4  
+Status: Draft v0.5  
 Last updated: 2026-02-17
