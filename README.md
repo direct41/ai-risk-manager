@@ -40,3 +40,13 @@ Artifacts are written to `.riskmap/` by default:
 - `findings.json`
 - `test_plan.json`
 - `pr_summary.md` (PR mode only)
+
+## Evaluation Suite
+
+Run the eval suite locally:
+
+```bash
+python scripts/run_eval_suite.py
+```
+
+Results are written to `eval/results/summary.md` and `eval/results/summary.json`.

@@ -318,9 +318,10 @@ ai-risk-manager/
 - Реализован реальный impacted subgraph filtering для PR режима.
 - Добавлен upsert PR-comment с маркером `<!-- ai-risk-manager -->`.
 
-### Milestone 5 — Evaluation Expansion (post-MVP hardening)
-- Расширить набор до 3-5 эталонных репозиториев с заранее известными рисками.
-- Регулярный прогон для контроля качества находок на новых кейсах.
+### Milestone 5 — Evaluation Expansion (post-MVP hardening) (completed)
+- Расширен набор до 3 эталонных репозиториев с заранее известными рисками.
+- Добавлен `scripts/run_eval_suite.py` для прогонов и проверки ожидаемых правил.
+- Добавлен регулярный CI прогон (`.github/workflows/eval-suite.yml`) по расписанию и вручную.
 
 ## 15) Definition of Done (для MVP)
 
