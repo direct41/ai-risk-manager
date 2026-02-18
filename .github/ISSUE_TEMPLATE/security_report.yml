@@ -1,0 +1,31 @@
+name: Security report
+description: Report a potential vulnerability
+labels: [security]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Security issue summary
+    validations:
+      required: true
+  - type: textarea
+    id: affected
+    attributes:
+      label: Affected version/commit
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Potential impact
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: "Do not include secrets, tokens, or private production data."

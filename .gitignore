@@ -32,6 +32,7 @@ build/
 # Local env
 .env
 .env.*
+PLAN.md
 
 # AI Risk Manager artifacts
 .riskmap/

@@ -261,3 +261,118 @@ def test_explicit_provider_unavailable_returns_exit_1(tmp_path: Path) -> None:
                 ]
             )
     assert code == 1
+
+
+def test_pipeline_writes_metadata_to_json_artifacts(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    _write(tmp_path / "tests" / "test_orders.py", "import pytest\n\ndef test_create_order():\n    assert True\n")
+
+    out_dir = tmp_path / ".riskmap"
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=out_dir,
+        provider="auto",
+        no_llm=True,
+    )
+    _, code, _ = run_pipeline(ctx)
+    assert code == 0
+
+    payload = json.loads((out_dir / "findings.json").read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "1.0"
+    assert "generated_at" in payload
+    assert payload["tool_version"] == "0.1.0"
+
+
+def test_pipeline_applies_airiskignore_suppressions(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    _write(tmp_path / "tests" / "test_orders.py", "import pytest\n\ndef test_smoke():\n    assert True\n")
+    _write(
+        tmp_path / ".airiskignore",
+        "- rule: \"critical_path_no_tests\"\n  file: \"app/api.py\"\n",
+    )
+
+    out_dir = tmp_path / ".riskmap"
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=out_dir,
+        provider="auto",
+        no_llm=True,
+    )
+    result, code, _ = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    assert result.suppressed_count == 1
+    assert not result.findings.findings
+
+
+def test_format_md_only_skips_json_artifacts(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    _write(tmp_path / "tests" / "test_orders.py", "import pytest\n\ndef test_smoke():\n    assert True\n")
+
+    out_dir = tmp_path / ".riskmap"
+    code = main(["analyze", str(tmp_path), "--format", "md", "--no-llm", "--output-dir", str(out_dir)])
+    assert code == 0
+    assert (out_dir / "report.md").exists()
+    assert not (out_dir / "findings.json").exists()
+
+
+def test_fail_on_severity_returns_exit_3(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    _write(tmp_path / "tests" / "test_orders.py", "import pytest\n\ndef test_smoke():\n    assert True\n")
+
+    code = main(["analyze", str(tmp_path), "--no-llm", "--fail-on-severity", "high"])
+    assert code == 3
+
+
+def test_cli_parses_new_flags(tmp_path: Path) -> None:
+    fake_output_dir = tmp_path / ".riskmap"
+    suppress_file = tmp_path / ".airiskignore"
+    _write(suppress_file, "- key: \"k\"\n")
+    expected_ctx = RunContext(
+        repo_path=tmp_path.resolve(),
+        mode="full",
+        base=None,
+        output_dir=fake_output_dir.resolve(),
+        provider="auto",
+        no_llm=True,
+        output_format="json",
+        fail_on_severity="medium",
+        suppress_file=suppress_file.resolve(),
+        baseline_graph=None,
+    )
+
+    with patch("ai_risk_manager.cli.run_pipeline", return_value=(None, 2, ["unsupported"])) as mock_run:
+        code = main(
+            [
+                "analyze",
+                str(tmp_path),
+                "--no-llm",
+                "--format",
+                "json",
+                "--fail-on-severity",
+                "medium",
+                "--suppress-file",
+                str(suppress_file),
+                "--output-dir",
+                str(fake_output_dir),
+            ]
+        )
+        assert code == 2
+        ctx = mock_run.call_args[0][0]
+        assert ctx == expected_ctx

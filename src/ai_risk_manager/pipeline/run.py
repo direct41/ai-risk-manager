@@ -7,6 +7,7 @@ import subprocess
 import time
 from typing import Literal
 
+from ai_risk_manager import __version__
 from ai_risk_manager.agents.provider import resolve_provider
 from ai_risk_manager.agents.qa_strategy_agent import generate_test_plan
 from ai_risk_manager.agents.risk_agent import generate_findings
@@ -14,7 +15,10 @@ from ai_risk_manager.collectors.collector import collect_artifacts, preflight_ch
 from ai_risk_manager.graph.builder import build_graph, low_confidence_ratio
 from ai_risk_manager.reports.generator import render_pr_summary_md, render_report_md, write_report
 from ai_risk_manager.rules.engine import run_rules
+from ai_risk_manager.rules.suppressions import apply_suppressions, load_suppressions
 from ai_risk_manager.schemas.types import Graph, PipelineResult, RunContext, to_dict, write_json
+
+SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 
 
 def _progress(step: int, total: int, label: str, start_ts: float | None = None) -> float:
@@ -87,6 +91,21 @@ def _filter_graph_to_impacted(graph: Graph, changed_files: set[str]) -> Graph:
     return Graph(nodes=nodes, edges=edges, declared_transitions=declared, handled_transitions=handled)
 
 
+def _with_metadata(payload: dict, generated_at: str) -> dict:
+    return {
+        **payload,
+        "schema_version": "1.0",
+        "generated_at": generated_at,
+        "tool_version": __version__,
+    }
+
+
+def _max_severity(findings_count: list[str]) -> str | None:
+    if not findings_count:
+        return None
+    return max(findings_count, key=lambda severity: SEVERITY_RANK.get(severity, 0))
+
+
 def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]]:
     total_steps = 6
     notes: list[str] = []
@@ -135,6 +154,16 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
     findings_raw = run_rules(analysis_graph)
     _progress(4, total_steps, "Running rules", t)
 
+    suppress_path = ctx.suppress_file
+    if suppress_path is None:
+        default = ctx.repo_path / ".airiskignore"
+        suppress_path = default if default.is_file() else None
+    suppressions, suppression_notes = load_suppressions(suppress_path)
+    notes.extend(suppression_notes)
+    findings_raw, suppressed_count = apply_suppressions(findings_raw, suppressions)
+    if suppressed_count:
+        notes.append(f"Suppressed findings: {suppressed_count}.")
+
     ci = bool(os.getenv("CI") or os.getenv("GITHUB_ACTIONS"))
     provider_resolution = resolve_provider(ctx.provider, no_llm=ctx.no_llm, ci=ci)
     notes.extend(provider_resolution.notes)
@@ -163,6 +192,7 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
         preflight=preflight,
         analysis_scope=analysis_scope,
         data_quality_low_confidence_ratio=low_confidence_ratio(analysis_graph),
+        suppressed_count=suppressed_count,
         graph=analysis_graph,
         findings_raw=findings_raw,
         findings=findings,
@@ -170,17 +200,29 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
     )
 
     ctx.output_dir.mkdir(parents=True, exist_ok=True)
-    write_json(ctx.output_dir / "graph.json", to_dict(analysis_graph))
-    if analysis_scope != "full":
-        notes.append("graph.json contains analysis graph for current scope (not full repository graph).")
-    write_json(ctx.output_dir / "findings.raw.json", to_dict(findings_raw))
-    write_json(ctx.output_dir / "findings.json", to_dict(findings))
-    write_json(ctx.output_dir / "test_plan.json", to_dict(test_plan))
+    generated_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    if ctx.output_format in {"json", "both"}:
+        write_json(ctx.output_dir / "graph.json", _with_metadata(to_dict(analysis_graph), generated_at))
+        if analysis_scope != "full":
+            notes.append("graph.json contains analysis graph for current scope (not full repository graph).")
+        write_json(ctx.output_dir / "findings.raw.json", _with_metadata(to_dict(findings_raw), generated_at))
+        write_json(ctx.output_dir / "findings.json", _with_metadata(to_dict(findings), generated_at))
+        write_json(ctx.output_dir / "test_plan.json", _with_metadata(to_dict(test_plan), generated_at))
 
-    report = render_report_md(result, notes)
-    write_report(ctx.output_dir / "report.md", report)
-    if ctx.mode == "pr":
-        pr_summary = render_pr_summary_md(result, notes)
-        write_report(ctx.output_dir / "pr_summary.md", pr_summary)
+    if ctx.output_format in {"md", "both"}:
+        report = render_report_md(result, notes)
+        write_report(ctx.output_dir / "report.md", report)
+        if ctx.mode == "pr":
+            pr_summary = render_pr_summary_md(result, notes)
+            write_report(ctx.output_dir / "pr_summary.md", pr_summary)
 
-    return result, 0, notes
+    exit_code = 0
+    if ctx.fail_on_severity:
+        max_sev = _max_severity([finding.severity for finding in result.findings.findings])
+        if max_sev and SEVERITY_RANK[max_sev] >= SEVERITY_RANK[ctx.fail_on_severity]:
+            notes.append(
+                f"Fail-on-severity triggered: found '{max_sev}' which is >= threshold '{ctx.fail_on_severity}'."
+            )
+            exit_code = 3
+
+    return result, exit_code, notes

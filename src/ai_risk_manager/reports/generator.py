@@ -41,8 +41,32 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
     lines.append(f"- analysis_scope: `{result.analysis_scope}`")
     lines.append(f"- Data Quality (low-confidence ratio): `{result.data_quality_low_confidence_ratio:.2%}`")
     lines.append(f"- Graph Statistics: `{len(result.graph.nodes)} nodes`, `{len(result.graph.edges)} edges`")
+    lines.append(f"- Suppressed findings: `{result.suppressed_count}`")
     for note in notes:
         lines.append(f"- Provider note: {note}")
+
+    lines.append("")
+    lines.append("## Why This Matters for Release Risk")
+    lines.append("")
+    if not result.findings.findings:
+        lines.append("No high-signal release risks detected in current scope.")
+    else:
+        top_severity = sorted(result.findings.findings, key=lambda f: SEVERITY_ORDER.index(f.severity))[0].severity
+        lines.append(
+            f"Detected `{len(result.findings.findings)}` active risk(s). "
+            f"Highest severity is `{top_severity}`, which can impact release confidence if ignored."
+        )
+
+    lines.append("")
+    lines.append("## Top Actions for Next Sprint")
+    lines.append("")
+    if not result.findings.findings:
+        lines.append("No immediate actions required.")
+    else:
+        actions = sorted(result.findings.findings, key=lambda f: SEVERITY_ORDER.index(f.severity))[:5]
+        for finding in actions:
+            lines.append(f"- Action: {finding.recommendation}")
+            lines.append(f"  Expected impact: reduce `{finding.rule_id}` risk around `{finding.source_ref}`.")
 
     lines.append("")
     lines.append("## Top Risks")

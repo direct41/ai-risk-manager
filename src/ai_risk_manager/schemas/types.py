@@ -99,6 +99,9 @@ class RunContext:
     output_dir: Path
     provider: Literal["auto", "api", "cli"]
     no_llm: bool
+    output_format: Literal["md", "json", "both"] = "both"
+    fail_on_severity: Severity | None = None
+    suppress_file: Path | None = None
     baseline_graph: Path | None = None
 
 
@@ -107,6 +110,7 @@ class PipelineResult:
     preflight: PreflightResult
     analysis_scope: Literal["impacted", "full", "full_fallback"]
     data_quality_low_confidence_ratio: float
+    suppressed_count: int
     graph: Graph
     findings_raw: FindingsReport
     findings: FindingsReport

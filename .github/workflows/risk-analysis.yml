@@ -88,10 +88,15 @@ jobs:
 
       - name: Analyze PR
         run: |
+          if [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
+            provider_flags="--no-llm"
+          else
+            provider_flags="--provider auto"
+          fi
           riskmap analyze \
             --mode pr \
             --base "${{ github.base_ref }}" \
-            --provider auto \
+            ${provider_flags} \
             --output-dir ./.riskmap \
             --baseline-graph ./.riskmap/baseline/graph.json
 

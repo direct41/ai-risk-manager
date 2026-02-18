@@ -19,14 +19,39 @@ def _build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--provider", choices=["auto", "api", "cli"], default="auto", help="LLM provider")
     analyze.add_argument("--baseline-graph", default=None, help="Path to baseline graph.json for pr mode")
     analyze.add_argument("--output-dir", default=".riskmap", help="Output directory")
+    analyze.add_argument("--format", choices=["md", "json", "both"], default="both", help="Output artifact format")
+    analyze.add_argument(
+        "--fail-on-severity",
+        choices=["critical", "high", "medium", "low"],
+        default=None,
+        help="Return exit code 3 if finding severity at or above threshold exists",
+    )
+    analyze.add_argument("--suppress-file", default=None, help="Path to .airiskignore suppression file")
+    analyze.add_argument(
+        "--sample",
+        action="store_true",
+        help="Analyze bundled sample repo (eval/repos/milestone2_fastapi)",
+    )
 
     return parser
 
 
+def _resolve_sample_repo() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "eval" / "repos" / "milestone2_fastapi"
+        if candidate.is_dir():
+            return candidate
+    raise FileNotFoundError("Bundled sample repository not found")
+
+
 def _run_analyze(args: argparse.Namespace) -> int:
-    repo_path = Path(args.path).resolve()
+    if args.sample:
+        repo_path = _resolve_sample_repo().resolve()
+    else:
+        repo_path = Path(args.path).resolve()
     output_dir = Path(args.output_dir).resolve()
     baseline_graph = Path(args.baseline_graph).resolve() if args.baseline_graph else None
+    suppress_file = Path(args.suppress_file).resolve() if args.suppress_file else None
 
     ctx = RunContext(
         repo_path=repo_path,
@@ -35,6 +60,9 @@ def _run_analyze(args: argparse.Namespace) -> int:
         output_dir=output_dir,
         provider=args.provider,
         no_llm=args.no_llm,
+        output_format=args.format,
+        fail_on_severity=args.fail_on_severity,
+        suppress_file=suppress_file,
         baseline_graph=baseline_graph,
     )
 
@@ -50,6 +78,15 @@ def _run_analyze(args: argparse.Namespace) -> int:
         for note in notes:
             print(f"- {note}")
         return 2
+
+    if result is not None and exit_code == 3:
+        print("Analysis completed with fail-on-severity threshold reached.")
+        print(f"Artifacts written to: {output_dir}")
+        if notes:
+            print("Notes:")
+            for note in notes:
+                print(f"- {note}")
+        return 3
 
     print(f"Analysis completed. Artifacts written to: {output_dir}")
     if notes:

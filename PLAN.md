@@ -341,7 +341,7 @@ MVP готов, если:
 ## 17) Next Iteration Backlog
 
 - [ ] Реализовать `.airiskignore` в runtime (парсинг + применение suppressions).
-- [ ] Добавить в `.airiskignore` опциональное поле `expires_at` и отчет по активным suppressions.
+- [ ] Добавить в `.airiskignore` опциональное поле `expires_at` и отчет по активным/истекшим suppressions.
 - [ ] Добавить валидацию LLM-выхода: рекомендация без `finding_id/source_ref` отбрасывается.
 - [ ] Ввести optional CI-fail mode по порогам severity после калибровки качества.
 - [ ] Расширить extractor после FastAPI (Django или TypeScript по решению).
