@@ -249,14 +249,13 @@ Suppress в MVP:
 - проект можно анализировать статически без выполнения кода;
 - пользователи готовы сначала получать рекомендации, а не CI-блокировки.
 
-## 12) Tech Stack (draft)
+## 12) Tech Stack (current)
 
 - Python 3.12
-- Typer (CLI)
-- Pydantic (схемы)
-- NetworkX (граф)
-- Tree-sitter (парсинг)
-- LiteLLM (адаптер к Codex/Claude)
+- `argparse` (CLI)
+- `dataclasses` + JSON (схемы/контракты)
+- `ast` (парсинг Python)
+- `urllib` + `subprocess` (LLM runtime transport)
 - GitHub Actions
 
 ## 13) Repository Layout (proposed)
@@ -284,7 +283,7 @@ ai-risk-manager/
 
 ## 14) Implementation Milestones
 
-### Milestone 0 — Decisions + Contracts
+### Milestone 0 — Decisions + Contracts (completed)
 - Зафиксировать стек (`Python + FastAPI`) и границы MVP.
 - Утвердить JSON-схемы `graph/findings/test_plan`.
 - Добавить `.airiskignore` формат.
@@ -292,14 +291,14 @@ ai-risk-manager/
 - Зафиксировать LLM backend selection (`auto|api|cli`) и fallback-поведение.
 - Зафиксировать `provider=auto` (локально `cli -> api -> no-llm`, в CI `api -> no-llm`).
 
-### Milestone 1 — Skeleton
+### Milestone 1 — Skeleton (completed)
 - CLI-команда `riskmap analyze`.
 - Пустой pipeline с user-facing прогрессом этапов (`[1/6] ... done (Xs)`).
 - Базовые тесты на схемы.
 - Прототип extraction: найти FastAPI write-endpoints (`@router.post/put/patch/delete`).
 - Создать 1 минимальный eval-репозиторий с заранее известным риском.
 
-### Milestone 2 — Vertical Slice (Collector + GraphBuilder + Rules)
+### Milestone 2 — Vertical Slice (Collector + GraphBuilder + Rules) (completed)
 - Реализовать FastAPI/Pydantic/pytest extraction.
 - Построить граф для vertical slice.
 - Реализовать минимум 2 правила end-to-end.
@@ -309,7 +308,7 @@ ai-risk-manager/
 - RiskAgent и QAStrategyAgent на стабильных контрактах.
 - Retry/validation/degrade flow.
 - Реализован runtime для `api|cli` провайдеров с JSON extraction и retry.
-- Добавлены unit-тесты на runtime/agents (запуск полного `pytest` требует сетевого окружения для установки dev deps).
+- Добавлены unit-тесты на runtime/agents.
 
 ### Milestone 4 — CI + PR Mode (completed)
 - GitHub Action для PR.
@@ -341,19 +340,15 @@ MVP готов, если:
 
 ## 17) Next Iteration Backlog
 
-- [ ] Описать JSON schema для `suppression_key` и `.airiskignore`.
-- [ ] Реализовать vertical slice extraction для FastAPI/Pydantic/pytest.
-- [ ] Реализовать 2 правила (`missing_transition_handler`, `critical_path_no_tests`).
-- [ ] Подготовить 3 eval-репозитория с ожидаемыми findings.
-- [ ] Подключить GitHub Action на тестовом репозитории.
+- [ ] Реализовать `.airiskignore` в runtime (парсинг + применение suppressions).
 - [ ] Добавить в `.airiskignore` опциональное поле `expires_at` и отчет по активным suppressions.
 - [ ] Добавить валидацию LLM-выхода: рекомендация без `finding_id/source_ref` отбрасывается.
-- [ ] Зафиксировать шаблон `report.md` (Summary, Top Risks, Findings, Test Strategy, Data Quality).
-- [ ] Сделать вывод `suppression_key` в `report.md` copy-paste friendly.
-- [ ] Добавить CLI-adapter интерфейс для `--provider cli` (локально, без CI-зависимости) и fallback при невалидном stdout.
+- [ ] Ввести optional CI-fail mode по порогам severity после калибровки качества.
+- [ ] Расширить extractor после FastAPI (Django или TypeScript по решению).
+- [ ] Синхронизировать технический стек в плане при следующем архитектурном изменении (Pydantic/LiteLLM decision).
 
 ---
 
 Owner: @andry  
-Status: Draft v0.5  
-Last updated: 2026-02-17
+Status: Draft v0.6  
+Last updated: 2026-02-18
