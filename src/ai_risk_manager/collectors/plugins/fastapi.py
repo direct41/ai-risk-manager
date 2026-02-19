@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 
-from ai_risk_manager.collectors.plugins.base import ArtifactBundle
+from ai_risk_manager.collectors.plugins.base import ArtifactBundle, StackProbeResult
 from ai_risk_manager.schemas.types import PreflightResult
 
 WRITE_METHODS = ("post", "put", "patch", "delete")
@@ -277,21 +277,53 @@ def scan_fastapi_signals(repo_path: Path) -> FastAPISignals:
     )
 
 
+def _probe_reasons(signals: FastAPISignals) -> list[str]:
+    reasons: list[str] = []
+    if signals.has_fastapi_import:
+        reasons.append("Detected FastAPI import patterns.")
+    if signals.has_router:
+        reasons.append("Detected FastAPI router decorator patterns.")
+    if signals.has_pytest:
+        reasons.append("Detected pytest import patterns.")
+    return reasons
+
+
+def _preflight_from_signals(signals: FastAPISignals) -> PreflightResult:
+    reasons: list[str] = []
+    if not signals.has_fastapi_import and not signals.has_router:
+        reasons.append("FastAPI patterns were not found (imports/routes missing).")
+        return PreflightResult(status="FAIL", reasons=reasons)
+
+    if not signals.has_pytest:
+        reasons.append("pytest patterns were not found; test coverage recommendations may be noisy.")
+        return PreflightResult(status="WARN", reasons=reasons)
+
+    return PreflightResult(status="PASS", reasons=[])
+
+
 class FastAPICollectorPlugin:
     stack_id = "fastapi_pytest"
 
-    def preflight(self, repo_path: Path) -> PreflightResult:
+    def probe(self, repo_path: Path) -> StackProbeResult | None:
         signals = scan_fastapi_signals(repo_path)
-        reasons: list[str] = []
         if not signals.has_fastapi_import and not signals.has_router:
-            reasons.append("FastAPI patterns were not found (imports/routes missing).")
-            return PreflightResult(status="FAIL", reasons=reasons)
+            return None
 
+        confidence = "high" if signals.has_fastapi_import and signals.has_router else "medium"
+        reasons = _probe_reasons(signals)
         if not signals.has_pytest:
-            reasons.append("pytest patterns were not found; test coverage recommendations may be noisy.")
-            return PreflightResult(status="WARN", reasons=reasons)
+            reasons.append("pytest patterns were not detected.")
 
-        return PreflightResult(status="PASS", reasons=[])
+        return StackProbeResult(
+            stack_id=self.stack_id,
+            confidence=confidence,
+            reasons=reasons,
+            probe_data=signals,
+        )
+
+    def preflight(self, repo_path: Path, probe_data: object | None = None) -> PreflightResult:
+        signals = probe_data if isinstance(probe_data, FastAPISignals) else scan_fastapi_signals(repo_path)
+        return _preflight_from_signals(signals)
 
     def collect(self, repo_path: Path) -> ArtifactBundle:
         bundle = ArtifactBundle()

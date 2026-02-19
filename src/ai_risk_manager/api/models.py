@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ai_risk_manager.schemas.types import Severity
 
@@ -20,9 +20,7 @@ class AnalyzeRequest(BaseModel):
     suppress_file: str | None = None
     sample: bool = False
 
-    class Config:
-        allow_population_by_field_name = True
-        extra = "forbid"
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
 
 class AnalyzeResponse(BaseModel):

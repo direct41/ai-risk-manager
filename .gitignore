@@ -23,7 +23,6 @@ htmlcov/
 dist/
 build/
 *.egg-info/
-.riskmap/
 
 # IDE/editor
 .vscode/

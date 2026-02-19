@@ -19,3 +19,7 @@ def get_default_plugin() -> CollectorPlugin:
 
 def list_registered_stacks() -> tuple[StackId, ...]:
     return tuple(_PLUGINS.keys())
+
+
+def list_plugins() -> tuple[CollectorPlugin, ...]:
+    return tuple(_PLUGINS.values())

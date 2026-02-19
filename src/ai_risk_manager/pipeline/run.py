@@ -120,7 +120,7 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
         notes.extend(detection.reasons)
         notes.append(f"No collector plugin is registered for stack '{detection.stack_id}'.")
         return None, 2, notes
-    preflight = plugin.preflight(ctx.repo_path)
+    preflight = plugin.preflight(ctx.repo_path, probe_data=detection.probe_data)
     _progress(1, total_steps, "Stack detection and pre-flight", t)
 
     if preflight.status == "FAIL":

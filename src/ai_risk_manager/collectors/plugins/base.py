@@ -7,10 +7,25 @@ from typing import Literal, Protocol
 from ai_risk_manager.schemas.types import PreflightResult
 
 StackId = Literal["fastapi_pytest", "unknown"]
+DetectionConfidence = Literal["high", "medium", "low"]
+
+
+@dataclass
+class StackProbeResult:
+    stack_id: StackId
+    confidence: DetectionConfidence
+    reasons: list[str] = field(default_factory=list)
+    probe_data: object | None = None
 
 
 @dataclass
 class ArtifactBundle:
+    """Collector output consumed by graph/rule stages.
+
+    NOTE: some fields are FastAPI-oriented in v0.1.x and may be generalized
+    when additional stack plugins are introduced.
+    """
+
     all_files: list[Path] = field(default_factory=list)
     python_files: list[Path] = field(default_factory=list)
     write_endpoints: list[tuple[str, str]] = field(default_factory=list)  # (file, endpoint_name)
@@ -25,7 +40,10 @@ class ArtifactBundle:
 class CollectorPlugin(Protocol):
     stack_id: StackId
 
-    def preflight(self, repo_path: Path) -> PreflightResult:
+    def probe(self, repo_path: Path) -> StackProbeResult | None:
+        ...
+
+    def preflight(self, repo_path: Path, probe_data: object | None = None) -> PreflightResult:
         ...
 
     def collect(self, repo_path: Path) -> ArtifactBundle:

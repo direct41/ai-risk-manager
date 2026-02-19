@@ -403,3 +403,32 @@ def test_pipeline_returns_exit_2_when_no_plugin_for_detected_stack(tmp_path: Pat
     assert result is None
     assert code == 2
     assert any("No collector plugin is registered" in note for note in notes)
+
+
+def test_pipeline_reuses_probe_data_for_preflight(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    _write(tmp_path / "tests" / "test_orders.py", "import pytest\n\ndef test_smoke():\n    assert True\n")
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+
+    from ai_risk_manager.collectors.plugins import fastapi as fastapi_plugin
+
+    with patch(
+        "ai_risk_manager.collectors.plugins.fastapi.scan_fastapi_signals",
+        wraps=fastapi_plugin.scan_fastapi_signals,
+    ) as scan_mock:
+        result, code, _ = run_pipeline(ctx)
+
+    assert result is not None
+    assert code == 0
+    assert scan_mock.call_count == 1
