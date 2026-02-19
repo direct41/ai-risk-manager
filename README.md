@@ -51,6 +51,12 @@ riskmap analyze --suppress-file .airiskignore
 
 ## API Usage (sync)
 
+Install API dependencies first:
+
+```bash
+pip install -e '.[api]'
+```
+
 Start server:
 
 ```bash

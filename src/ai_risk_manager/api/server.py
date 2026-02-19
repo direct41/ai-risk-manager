@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ai_risk_manager import __version__
 from ai_risk_manager.pipeline.run import run_pipeline
@@ -10,6 +10,9 @@ from ai_risk_manager.schemas.types import RunContext, to_dict
 
 _API_INSTALL_HINT = "Install API dependencies with: pip install -e '.[api]'."
 _API_IMPORT_ERROR: Exception | None = None
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI as FastAPIApp
 
 try:
     from fastapi import FastAPI, HTTPException
@@ -85,7 +88,7 @@ def _collect_artifacts(output_dir: Path) -> dict[str, str]:
     return artifacts
 
 
-def create_app() -> Any:
+def create_app() -> FastAPIApp:
     FastAPI, HTTPException, AnalyzeRequest, AnalyzeResponse, HealthResponse = _load_api_dependencies()
     app = FastAPI(title="AI Risk Manager API", version=__version__)
 
