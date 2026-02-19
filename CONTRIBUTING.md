@@ -34,7 +34,7 @@ pytest --cov=ai_risk_manager --cov-fail-under=80
 
 ## Release flow (MVP)
 
-1. Update changelog/release notes.
+1. Update `CHANGELOG.md` and release notes.
 2. Ensure `main` passes quality + eval workflows.
 3. Tag release (`vX.Y.Z`).
 4. Publish GitHub Release; optional PyPI publish for discoverability.

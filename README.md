@@ -19,6 +19,12 @@ This project is still intentionally narrow in extraction scope, but architecture
 - stack detection + collector plugin dispatch
 - transport adapters (CLI/API)
 
+## Project Status
+
+- Current maturity: MVP (`0.1.x`), focused on `fastapi_pytest` repositories.
+- Intended usage: local/CI assistant for QA-risk mapping, not a generic SAST replacement.
+- API adapter is currently local/internal oriented (no auth, no multi-tenant guarantees).
+
 ## Quickstart
 
 ```bash
@@ -195,3 +201,11 @@ make eval
 - `docs/compatibility.md`: CLI/API/JSON compatibility policy
 - `ROADMAP.md`: MVP now / next
 - `SUPPORT.md`: support channels
+
+## Open Source
+
+- License: `LICENSE` (MIT)
+- Contributing guide: `CONTRIBUTING.md`
+- Code of conduct: `CODE_OF_CONDUCT.md`
+- Security policy: `SECURITY.md`
+- Changelog: `CHANGELOG.md`

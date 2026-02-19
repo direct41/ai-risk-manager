@@ -6,7 +6,13 @@ MVP support is provided for the latest minor version on `main`.
 
 ## Reporting a vulnerability
 
-Please report security issues via GitHub Issues in this repository.
+Do not report vulnerabilities publicly in regular GitHub Issues.
+
+Preferred channel:
+
+- GitHub Private Vulnerability Reporting / Security Advisory flow (repository Security tab).
+
+If private reporting is unavailable, open a minimal issue without exploit details and request a private follow-up.
 
 Include:
 
@@ -15,10 +21,9 @@ Include:
 - Expected vs actual behavior
 - Potential impact
 
-When creating the issue:
+General rules:
 
-- Use the `security` label (or mention `[security]` in the title).
-- Avoid posting sensitive secrets or production credentials.
-- Share a minimal reproducible example.
+- Avoid posting secrets, tokens, private keys, or production credentials.
+- Share only the minimum reproducible details required for triage.
 
 Initial triage target: within 3 business days.

@@ -19,6 +19,7 @@ riskmap analyze --sample --output-dir ./.riskmap
 Запуск API-сервера:
 
 ```bash
+pip install -e '.[api]'
 riskmap-api
 ```
 
