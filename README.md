@@ -190,8 +190,10 @@ Recommended PR mode job:
 
 ```bash
 make install
+make install-api
 make test
 make analyze-demo
+make serve-api
 make eval
 ```
 

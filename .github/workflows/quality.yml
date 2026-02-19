@@ -24,3 +24,20 @@ jobs:
 
       - name: Pytest + coverage
         run: pytest --cov=ai_risk_manager --cov-fail-under=80
+
+      - name: Minimal install smoke (no extras)
+        run: |
+          python -m venv .venv-min
+          . .venv-min/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install .
+          python -c "import ai_risk_manager.api.server"
+          set +e
+          output="$(riskmap-api 2>&1)"
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then
+            echo "Expected riskmap-api to fail without [api] extras."
+            exit 1
+          fi
+          echo "$output" | grep -q "Install API dependencies with: pip install -e '.[api]'."

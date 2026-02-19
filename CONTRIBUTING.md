@@ -10,6 +10,8 @@ source .venv/bin/activate
 pip install -e '.[dev]'
 ```
 
+`.[dev]` already includes API dependencies (`fastapi`, `uvicorn`, `httpx`) for local API testing.
+
 ## Local checks
 
 ```bash

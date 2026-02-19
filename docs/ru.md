@@ -42,6 +42,21 @@ curl -s http://127.0.0.1:8000/healthz
 
 - `path`, `mode`, `base`, `no_llm`, `provider`, `baseline_graph`, `output_dir`, `format`, `fail_on_severity`, `suppress_file`, `sample`
 
+Коды завершения:
+
+- `0` - успешно
+- `1` - недоступен явно запрошенный provider (`api|cli`)
+- `2` - репозиторий не соответствует поддерживаемым stack plugins
+- `3` - сработал порог `--fail-on-severity`
+
+Suppressions (`.airiskignore`):
+
+```yaml
+- key: "critical_path_no_tests:api:app:api.py:create_order"
+- rule: "missing_transition_handler"
+  file: "app/orders.py"
+```
+
 MVP ограничения:
 
 - на этапе v1 поддерживается только FastAPI extractor plugin
