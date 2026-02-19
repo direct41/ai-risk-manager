@@ -17,12 +17,15 @@
 - первая CI-платформа: `GitHub Actions` (GitLab после MVP);
 - режим CI в MVP: `non-blocking` (только report/comment, без fail build);
 - терминология: компонент построения графа везде называется `GraphBuilder`;
-- архитектура взаимодействия агентов: только JSON-контракты, без agent-to-agent чата.
+- архитектура взаимодействия агентов: только JSON-контракты, без agent-to-agent чата;
+- core запускается единым пайплайном (`run_pipeline`) с transport adapters: `CLI` и sync `HTTP API`;
+- extractor слой плагинный (статический registry), без dynamic plugin loading в MVP.
 
 ## 3) MVP Scope (без overengineering)
 
 В MVP делаем только необходимый минимум:
 - CLI-инструмент для локального запуска и CI;
+- sync HTTP API adapter (`/v1/analyze`) поверх того же pipeline;
 - анализ full-repo и PR diff;
 - 3 последовательных агента с фиксированными JSON-контрактами;
 - Markdown + JSON отчеты;
@@ -39,6 +42,7 @@
 ## 4) Proposed Architecture (MVP)
 
 Pipeline:
+0. Stack Discovery
 1. Collector
 2. GraphBuilder
 3. Rule Engine
@@ -49,6 +53,7 @@ Pipeline:
 ### 4.1 Components
 
 - Collector
+  - Выбор extractor plugin выполняется после `Stack Discovery`.
   - Вход: путь к репозиторию, режим (`full` | `pr`), diff.
   - Шаг `pre-flight check`: проверяем, что репозиторий соответствует допущениям MVP (FastAPI/pytest/routers), статус `PASS|WARN|FAIL`.
   - При `FAIL`: анализ пропускается с exit code `2` (unsupported project), с явным сообщением причины.
@@ -97,6 +102,27 @@ LLM configuration:
 - `--provider api`: провайдер и ключ через environment variables (через LiteLLM-совместимые переменные)
 - `--provider cli`: вызов установленного AI CLI-адаптера (локальный режим)
 - если выбранный backend не сконфигурирован, пользователь получает явную подсказку использовать другой backend или `--no-llm`
+
+### 4.3 API Contract (MVP, local/internal)
+
+Endpoints:
+- `GET /healthz` -> `{ \"status\": \"ok\", \"version\": \"...\" }`
+- `POST /v1/analyze` (sync run)
+
+`POST /v1/analyze` request fields:
+- `path`, `mode`, `base`, `no_llm`, `provider`, `baseline_graph`, `output_dir`, `format`, `fail_on_severity`, `suppress_file`, `sample`
+
+`POST /v1/analyze` response fields:
+- `exit_code`
+- `notes`
+- `output_dir`
+- `artifacts`
+- `result` (`null` when `exit_code` is `1` or `2`)
+
+Границы MVP:
+- без auth/multi-tenant/rate-limits;
+- один процесс, sync execution;
+- API только adapter, без отдельной бизнес-логики.
 
 ## 5) Contracts (обязательно)
 
@@ -267,13 +293,16 @@ ai-risk-manager/
   pyproject.toml
   src/ai_risk_manager/
     cli.py
+    api/
     pipeline/
     collectors/
+      plugins/
     graph/
     rules/
     agents/
     reports/
     schemas/
+    stacks/
   tests/
   eval/
     repos/
@@ -322,10 +351,18 @@ ai-risk-manager/
 - Добавлен `scripts/run_eval_suite.py` для прогонов и проверки ожидаемых правил.
 - Добавлен регулярный CI прогон (`.github/workflows/eval-suite.yml`) по расписанию и вручную.
 
+### Milestone 6 — Core + Plugin + API Adapter (completed)
+- FastAPI extraction перенесен в `collectors/plugins/fastapi.py`.
+- Добавлены `CollectorPlugin` protocol и статический registry плагинов.
+- Добавлен `Stack Discovery` слой с выбором extractor plugin.
+- Добавлен sync HTTP API adapter (`/healthz`, `/v1/analyze`) поверх `run_pipeline`.
+- Сохранена совместимость CLI/exit codes/JSON artifacts (additive changes only).
+
 ## 15) Definition of Done (для MVP)
 
 MVP готов, если:
 - запускается локально одной командой;
+- поддерживает запуск через CLI и через sync API adapter;
 - анализирует full repo и PR diff;
 - стабильно выдает `report.md`, `findings.json`, `test_plan.json`;
 - в CI публикует summary в PR без блокировки пайплайна;
@@ -340,15 +377,15 @@ MVP готов, если:
 
 ## 17) Next Iteration Backlog
 
-- [ ] Реализовать `.airiskignore` в runtime (парсинг + применение suppressions).
 - [ ] Добавить в `.airiskignore` опциональное поле `expires_at` и отчет по активным/истекшим suppressions.
 - [ ] Добавить валидацию LLM-выхода: рекомендация без `finding_id/source_ref` отбрасывается.
 - [ ] Ввести optional CI-fail mode по порогам severity после калибровки качества.
 - [ ] Расширить extractor после FastAPI (Django или TypeScript по решению).
-- [ ] Синхронизировать технический стек в плане при следующем архитектурном изменении (Pydantic/LiteLLM decision).
+- [ ] Добавить второй extractor plugin после стабилизации FastAPI plugin (Django или Flask).
+- [ ] Ввести hardening API режима при переходе от local/internal к service deployment (auth/rate limits).
 
 ---
 
 Owner: @andry  
-Status: Draft v0.6  
-Last updated: 2026-02-18
+Status: Draft v0.7  
+Last updated: 2026-02-19

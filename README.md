@@ -1,32 +1,25 @@
 # AI Risk Manager
 
-AI Risk Manager is an OSS MVP CLI for QA risk mapping in FastAPI repositories.
-It is not a generic SAST scanner. It focuses on two reliable risk classes in MVP:
+AI Risk Manager is an OSS risk-mapping tool with one shared analysis core and two adapters:
 
-- `critical_path_no_tests`
-- `missing_transition_handler`
+- `CLI` (`riskmap analyze ...`)
+- `HTTP API` (`/v1/analyze`)
 
-## Who Is This For?
+The analysis core is deterministic-first (`collector -> graph -> rules`) with optional LLM enrichment (`risk agent`, `qa strategy agent`).
 
-- Backend team leads: quick release-risk visibility for PRs and CI.
-- Solo developers: fast local QA risk feedback before merge.
-- QA engineers and startup CTOs: test-priority signals and coverage blind spots.
+## Scope (v0.1.x)
 
-## MVP Scope and Limits
+Current extractor support:
 
-Supported stack for MVP:
+- `fastapi_pytest` stack plugin (FastAPI + pytest patterns)
 
-- Python 3.11+
-- FastAPI code patterns
-- pytest test patterns
+This project is still intentionally narrow in extraction scope, but architecture is adapter/plugin based:
 
-Out of scope for MVP:
+- one core pipeline (`run_pipeline`)
+- stack detection + collector plugin dispatch
+- transport adapters (CLI/API)
 
-- Multi-language repositories
-- Non-Python service stacks
-- Full semantic/runtime analysis
-
-## Quickstart in 3 Commands
+## Quickstart
 
 ```bash
 pip install -e '.[dev]'
@@ -56,6 +49,47 @@ riskmap analyze --fail-on-severity high
 riskmap analyze --suppress-file .airiskignore
 ```
 
+## API Usage (sync)
+
+Start server:
+
+```bash
+riskmap-api
+```
+
+Healthcheck:
+
+```bash
+curl -s http://127.0.0.1:8000/healthz
+```
+
+Analyze:
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/v1/analyze \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "path": ".",
+    "mode": "full",
+    "provider": "auto",
+    "no_llm": true,
+    "output_dir": ".riskmap",
+    "format": "both"
+  }'
+```
+
+`POST /v1/analyze` request fields are compatible with `RunContext`:
+
+- `path`, `mode`, `base`, `no_llm`, `provider`, `baseline_graph`, `output_dir`, `format`, `fail_on_severity`, `suppress_file`, `sample`
+
+Response always includes:
+
+- `exit_code`
+- `notes`
+- `output_dir`
+- `artifacts`
+- `result` (`null` for `exit_code` 1/2)
+
 ## Provider Selection
 
 - `--provider auto` (default)
@@ -77,7 +111,7 @@ Supported credentials:
 |---|---|
 | 0 | Success |
 | 1 | Explicit provider unavailable (`--provider api|cli`) |
-| 2 | Unsupported repository for MVP preflight |
+| 2 | Unsupported repository for current extractor plugins |
 | 3 | `--fail-on-severity` threshold reached |
 
 ## Suppressions (`.airiskignore`)
@@ -137,7 +171,7 @@ Recommended PR mode job:
 ## Troubleshooting
 
 - `exit 1`: select another provider or run with `--no-llm`.
-- `exit 2`: repo does not match FastAPI/pytest assumptions.
+- `exit 2`: repo does not match supported stack plugins.
 - Empty PR findings: ensure baseline graph exists and changed files are detected.
 
 ## Development Commands
@@ -152,6 +186,6 @@ make eval
 ## Docs
 
 - `docs/ru.md`: short Russian guide
-- `docs/compatibility.md`: CLI/JSON compatibility policy
+- `docs/compatibility.md`: CLI/API/JSON compatibility policy
 - `ROADMAP.md`: MVP now / next
 - `SUPPORT.md`: support channels

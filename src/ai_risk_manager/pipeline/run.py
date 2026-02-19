@@ -11,12 +11,13 @@ from ai_risk_manager import __version__
 from ai_risk_manager.agents.provider import resolve_provider
 from ai_risk_manager.agents.qa_strategy_agent import generate_test_plan
 from ai_risk_manager.agents.risk_agent import generate_findings
-from ai_risk_manager.collectors.collector import collect_artifacts, preflight_check
+from ai_risk_manager.collectors.plugins.registry import get_plugin_for_stack
 from ai_risk_manager.graph.builder import build_graph, low_confidence_ratio
 from ai_risk_manager.reports.generator import render_pr_summary_md, render_report_md, write_report
 from ai_risk_manager.rules.engine import run_rules
 from ai_risk_manager.rules.suppressions import apply_suppressions, load_suppressions
 from ai_risk_manager.schemas.types import Graph, PipelineResult, RunContext, to_dict, write_json
+from ai_risk_manager.stacks.discovery import detect_stack
 
 SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 
@@ -110,16 +111,26 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
     total_steps = 6
     notes: list[str] = []
 
-    t = _progress(1, total_steps, "Pre-flight check")
-    preflight = preflight_check(ctx.repo_path)
-    _progress(1, total_steps, "Pre-flight check", t)
+    t = _progress(1, total_steps, "Stack detection and pre-flight")
+    detection = detect_stack(ctx.repo_path)
+    notes.append(f"Detected stack: {detection.stack_id} (confidence: {detection.confidence}).")
+    plugin = get_plugin_for_stack(detection.stack_id)
+    if plugin is None:
+        _progress(1, total_steps, "Stack detection and pre-flight", t)
+        notes.extend(detection.reasons)
+        notes.append(f"No collector plugin is registered for stack '{detection.stack_id}'.")
+        return None, 2, notes
+    preflight = plugin.preflight(ctx.repo_path)
+    _progress(1, total_steps, "Stack detection and pre-flight", t)
 
     if preflight.status == "FAIL":
         notes.extend(preflight.reasons)
         return None, 2, notes
+    if preflight.status == "WARN":
+        notes.extend(preflight.reasons)
 
     t = _progress(2, total_steps, "Collecting artifacts")
-    artifacts = collect_artifacts(ctx.repo_path)
+    artifacts = plugin.collect(ctx.repo_path)
     _progress(2, total_steps, "Collecting artifacts", t)
 
     t = _progress(3, total_steps, "Building graph")

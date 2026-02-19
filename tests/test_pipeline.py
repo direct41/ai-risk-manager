@@ -7,6 +7,7 @@ from unittest.mock import patch
 from ai_risk_manager.cli import main
 from ai_risk_manager.pipeline.run import run_pipeline
 from ai_risk_manager.schemas.types import RunContext
+from ai_risk_manager.stacks.discovery import StackDetectionResult
 
 
 def _write(path: Path, text: str) -> None:
@@ -376,3 +377,29 @@ def test_cli_parses_new_flags(tmp_path: Path) -> None:
         assert code == 2
         ctx = mock_run.call_args[0][0]
         assert ctx == expected_ctx
+
+
+def test_pipeline_returns_exit_2_when_no_plugin_for_detected_stack(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+
+    with patch(
+        "ai_risk_manager.pipeline.run.detect_stack",
+        return_value=StackDetectionResult(stack_id="unknown", confidence="low", reasons=["unknown stack"]),
+    ):
+        result, code, notes = run_pipeline(ctx)
+
+    assert result is None
+    assert code == 2
+    assert any("No collector plugin is registered" in note for note in notes)
