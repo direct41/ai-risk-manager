@@ -1,73 +1,41 @@
-# AI Risk Manager: что это для FastAPI-команд (RU)
+# AI Risk Manager: быстрый вход для FastAPI-команд
 
-AI Risk Manager - это инструмент для QA risk mapping в FastAPI-проектах.
+AI Risk Manager помогает перед merge/release ответить на два вопроса:
 
-Он отвечает на практический вопрос перед merge/release:
-
-- где сейчас самые рискованные места в бэкенде;
+- где сейчас рискованные backend-потоки;
 - какие тесты стоит добавить в первую очередь.
 
-Внутри работает один общий pipeline (`collector -> graph -> rules -> optional AI enrichment`) с двумя входами:
+Текущий `v0.1.x` сфокусирован на FastAPI + pytest.
 
-- `CLI` (`riskmap analyze`)
-- `HTTP API` (`POST /v1/analyze`)
+## Быстрый старт (5 минут)
 
-## Что именно анализируется
-
-Текущий стек в `v0.1.x`:
-
-- `fastapi_pytest` (FastAPI + pytest)
-
-Extractor в первую очередь собирает:
-
-- write-endpoints (`POST|PUT|PATCH|DELETE`)
-- связи endpoint <-> Pydantic models
-- declared vs handled state transitions
-- pytest тесты и HTTP-вызовы из тестов
-
-Детерминированные правила сейчас:
-
-- `critical_path_no_tests`
-- `missing_transition_handler`
-- `broken_invariant_on_transition`
-- `dependency_risk_policy_violation`
-
-Опционально добавляется semantic AI stage (если включен LLM backend).
-
-Важно: universal/mixed-stack стратегия пока в roadmap, в текущем `v0.1.x` shipped-поддержка сфокусирована на FastAPI.
-
-## Быстрый старт
+1. Установка:
 
 ```bash
 pip install -e '.[dev]'
+```
+
+2. Запуск на встроенном примере:
+
+```bash
 riskmap analyze --sample --no-llm --output-dir ./.riskmap
 cat ./.riskmap/report.md
 ```
 
-Опционально можно указать локальный sample через переменную окружения:
+Если нужно, можно переопределить sample:
 
 ```bash
 AIRISK_SAMPLE_REPO=/path/to/local/sample riskmap analyze --sample --no-llm
 ```
 
-На встроенном примере вы увидите вывод уровня:
+3. Что смотреть в первую очередь:
 
-- `high`: write-endpoint без тестов
-- `medium`: объявлен переход состояний, но не найден handler
+- `.riskmap/report.md` — понятный summary + top actions.
+- `.riskmap/pr_summary.md` — короткая PR-выжимка (только PR-режим).
+- `.riskmap/findings.json` — машинный формат findings.
+- `.riskmap/test_plan.json` — приоритизированные тестовые действия.
 
-## Что вы получаете после запуска
-
-По умолчанию (`--format both`):
-
-- `.riskmap/report.md` - читаемый отчет + top actions
-- `.riskmap/findings.json` - findings для автоматизации
-- `.riskmap/test_plan.json` - приоритизированный план тестов
-- `.riskmap/graph.json` - граф сущностей/связей
-- `.riskmap/findings.raw.json` - findings до merge-этапа
-- `.riskmap/run_metrics.json` - метрики качества запуска
-- `.riskmap/pr_summary.md` - только в PR-режиме (ранжирование по severity/confidence/evidence refs)
-
-## Практический workflow для реального репозитория
+## Запуск на реальном репозитории
 
 1. На `main` создайте baseline:
 
@@ -86,107 +54,80 @@ riskmap analyze \
   --output-dir ./.riskmap
 ```
 
-3. Смотрите `./.riskmap/pr_summary.md` и `./.riskmap/findings.json`.
+## Что именно анализируется
+
+Текущий stack plugin: `fastapi_pytest`.
+
+Extractor собирает:
+
+- write-endpoints (`POST|PUT|PATCH|DELETE`)
+- endpoint <-> Pydantic model связи
+- declared vs handled state transitions
+- pytest тесты и HTTP-вызовы тестов
+
+Детерминированные правила:
+
+- `critical_path_no_tests`
+- `missing_transition_handler`
+- `broken_invariant_on_transition`
+- `dependency_risk_policy_violation`
+
+Опционально добавляется semantic AI stage (если включен LLM backend).
+
+## Для кого это полезно сейчас
+
+- FastAPI-команды, где нужен быстрый release-risk скан.
+- Команды, где важна PR-видимость только новых high-signal рисков.
+- Команды, которым нужны конкретные test actions.
+
+## Ограничения текущей версии
+
+- В `v0.1.x` поддерживается FastAPI extractor plugin.
+- Инструмент не является generic multi-language SAST.
+- API рассчитан на local/internal usage.
+- Universal/mixed-stack стратегия пока в roadmap, это не текущий shipped scope.
 
 ## Ключевые CLI флаги
 
-- `--mode pr --base main` для PR-анализа
-- `--no-llm` для deterministic режима
-- `--provider auto|api|cli` для выбора LLM backend
-- `--analysis-engine deterministic|hybrid|ai-first` для стратегии анализа
-- `--only-new` чтобы в PR summary показывать только новые high/critical риски
-- `--min-confidence high|medium|low` для фильтрации low-confidence findings
-- `--ci-mode advisory|soft|block-new-critical` для порогов CI
-- `--support-level auto|l0|l1|l2` для уровня зрелости stack-поддержки
-- `--risk-policy conservative|balanced|aggressive` для профиля триажа рисков
-- `--format md|json|both` для формата артефактов
-- `--fail-on-severity high` для blocking поведения по порогу
-- `--suppress-file .airiskignore` для suppressions
+- `--mode pr --base main`
+- `--only-new`
+- `--ci-mode advisory|soft|block-new-critical`
+- `--support-level auto|l0|l1|l2`
+- `--risk-policy conservative|balanced|aggressive`
+- `--analysis-engine deterministic|hybrid|ai-first`
+- `--provider auto|api|cli`
+- `--no-llm`
+- `--fail-on-severity high`
+- `--suppress-file .airiskignore`
 
-Матрица effective `ci_mode`:
+## CI-режимы (кратко)
 
-- `l0`: `advisory|soft|block-new-critical -> advisory`
-- `l1`: `advisory -> advisory`, `soft -> soft`, `block-new-critical -> soft`
-- `l2`: режим применяется без изменений
-
-Профили dependency policy:
-
-- `conservative`: только `direct_reference` и `wildcard_version`
-- `balanced` (по умолчанию): `conservative` + `range_not_pinned`
-- `aggressive`: `balanced` + `unpinned_version`
-- severity теперь зависит от scope зависимости:
-- `runtime`: `direct_reference|wildcard_version -> high`, `range|unpinned -> medium`
-- `development`: `direct_reference|wildcard_version -> medium`, `range|unpinned -> low`
-
-Trust-first eval gates:
-
-- Пороги качества eval хранятся в `eval/trust_thresholds.json`.
-- `make eval` блокирующий по умолчанию (если trust gates не пройдены, команда завершается с ошибкой).
-- Для неблокирующего запуска: `AIRISK_EVAL_ENFORCE_THRESHOLDS=0 make eval`.
-- Недельный тренд формируется из артефактов:
-- `eval/results/trust_gate.json` - статус gate + агрегаты.
-- `eval/results/trust_history.jsonl` - окно snapshot'ов для тренда.
-- `eval/results/trust_trend.json` - machine-readable тренд и delta к прошлому запуску.
-- `eval/results/trust_trend.md` - таблица тренда для чтения.
-- Источник истории: `eval/.history/trust_gate_history.jsonl` (кешируется в `eval-suite.yml`).
-
-## Когда инструмент особенно полезен
-
-- FastAPI сервисы, где нужно быстро находить релизные QA-риски.
-- PR-процессы, где важны только новые high-signal риски.
-- Команды, которым нужен список конкретных тестовых действий, а не просто warnings.
-
-## Когда ожидания лучше ограничить
-
-- Если вам нужен полноценный multi-language SAST.
-- Если нужен production-ready hosted API (auth/multi-tenant/RBAC).
-- Если проект не похож на FastAPI + pytest паттерны.
-
-## Для каких стартапов польза максимальна сейчас
-
-| Профиль стартапа | Польза сейчас | Почему |
-|---|---|---|
-| FastAPI B2B SaaS с CI | Высокая | Прямой fit под стек и PR/release процесс. |
-| FastAPI-команда с ограниченным QA ресурсом | Высокая/Средняя | Ранжирование рисков и test actions снижает triage шум. |
-| Очень ранний стартап без CI-практик | Средняя/Низкая | Локальная ценность есть, но процессная стоимость выше. |
-| Polyglot стек (не FastAPI-first) | Низкая | Текущая extractor-поддержка ограничена FastAPI. |
-| Compliance-heavy (fin/health) | Средняя | Полезно для техрисков, но не покрывает полный compliance lifecycle. |
-
-## Коды завершения
-
-- `0` - успешно
-- `1` - недоступен явно запрошенный provider (`api|cli`)
-- `2` - репозиторий не соответствует поддерживаемым stack plugins в строгих уровнях (`--support-level l1|l2`)
-- `3` - сработал порог `--fail-on-severity` или `--ci-mode`
+- `advisory`: не блокирует merge по findings.
+- `soft`: блокирует при новых `high|critical` findings.
+- `block-new-critical`: блокирует только при `new + critical + high confidence + verified evidence`.
 
 ## API (sync)
-
-Запуск API-сервера:
 
 ```bash
 pip install -e '.[api]'
 riskmap-api
-```
-
-Проверка:
-
-```bash
 curl -s http://127.0.0.1:8000/healthz
 ```
 
-`POST /v1/analyze` принимает те же поля, что и `RunContext`:
+## Коды завершения
 
-- `path`, `mode`, `base`, `no_llm`, `provider`, `baseline_graph`, `output_dir`, `format`, `fail_on_severity`, `suppress_file`, `sample`
-- `analysis_engine`, `only_new`, `min_confidence`, `ci_mode`, `support_level`, `risk_policy`
+- `0` — успех
+- `1` — выбранный provider недоступен
+- `2` — неподдерживаемый репозиторий для текущих plugins
+- `3` — сработал `fail-on-severity` или `ci-mode` порог
 
-В `summary` ответа есть machine-readable поля rollout:
+## Trust-first eval
 
-- `support_level_applied`
-- `effective_ci_mode`
+- Пороги: `eval/trust_thresholds.json`
+- Артефакты: `trust_gate.json`, `trust_history.jsonl`, `trust_trend.json`, `trust_trend.md`
 
-## MVP ограничения
+## Где смотреть дальше
 
-- в `v0.1.x` поддерживается только FastAPI extractor plugin
-- API рассчитан на local/internal usage
-- инструмент не является generic SAST
-- при проблемах с `--sample` задайте `AIRISK_SAMPLE_REPO` на локальный sample-каталог
+- Полная англ. документация: `README.md`
+- Совместимость контрактов: `docs/compatibility.md`
+- План развития: `ROADMAP.md`, `BACKLOG_TRUST_FIRST.md`
