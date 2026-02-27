@@ -30,6 +30,7 @@ _ARTIFACT_FILES = (
     "findings.raw.json",
     "findings.json",
     "test_plan.json",
+    "run_metrics.json",
     "report.md",
     "pr_summary.md",
 )
@@ -118,6 +119,12 @@ def create_app() -> FastAPIApp:
             fail_on_severity=request.fail_on_severity,
             suppress_file=suppress_file,
             baseline_graph=baseline_graph,
+            analysis_engine=request.analysis_engine,
+            only_new=request.only_new,
+            min_confidence=request.min_confidence,
+            ci_mode=request.ci_mode,
+            support_level=request.support_level,
+            risk_policy=request.risk_policy,
         )
 
         result, exit_code, notes = run_pipeline(ctx)
@@ -127,6 +134,7 @@ def create_app() -> FastAPIApp:
             output_dir=str(output_dir),
             artifacts=_collect_artifacts(output_dir),
             result=to_dict(result) if result is not None else None,
+            summary=to_dict(result.summary) if result is not None else None,
         )
 
     return app

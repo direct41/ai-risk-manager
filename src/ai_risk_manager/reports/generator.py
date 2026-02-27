@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from ai_risk_manager.schemas.types import FindingsReport, PipelineResult, TestPlan
+from ai_risk_manager.schemas.types import FindingsReport, PipelineResult
 
 SEVERITY_ORDER = "critical high medium low".split()
 
@@ -39,9 +39,22 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
         for reason in result.preflight.reasons:
             lines.append(f"- Pre-flight note: {reason}")
     lines.append(f"- analysis_scope: `{result.analysis_scope}`")
+    lines.append(f"- support_level_applied: `{result.summary.support_level_applied}`")
+    lines.append(f"- competitive_mode: `{result.summary.competitive_mode}`")
+    lines.append(
+        f"- PR delta: new=`{result.summary.new_count}`, resolved=`{result.summary.resolved_count}`, unchanged=`{result.summary.unchanged_count}`"
+    )
+    if result.summary.fallback_reason:
+        lines.append(f"- fallback_reason: `{result.summary.fallback_reason}`")
     lines.append(f"- Data Quality (low-confidence ratio): `{result.data_quality_low_confidence_ratio:.2%}`")
     lines.append(f"- Graph Statistics: `{len(result.graph.nodes)} nodes`, `{len(result.graph.edges)} edges`")
     lines.append(f"- Suppressed findings: `{result.suppressed_count}`")
+    lines.append(f"- Run metric (precision proxy): `{result.run_metrics.precision_proxy:.2%}`")
+    lines.append(f"- Run metric (actionability proxy): `{result.run_metrics.actionability_proxy:.2%}`")
+    lines.append(f"- Run metric (verification pass rate): `{result.summary.verification_pass_rate:.2%}`")
+    lines.append(f"- Run metric (evidence completeness): `{result.summary.evidence_completeness:.2%}`")
+    lines.append(f"- Run metric (triage time proxy): `{result.run_metrics.triage_time_proxy_min:.1f} min`")
+    lines.append(f"- Duration: `{result.run_metrics.duration_ms} ms`")
     for note in notes:
         lines.append(f"- Provider note: {note}")
 
@@ -81,6 +94,8 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
         for finding in top:
             lines.append(f"### {finding.title}")
             lines.append(f"- Severity: `{finding.severity}`")
+            lines.append(f"- Status: `{finding.status}`")
+            lines.append(f"- Origin: `{finding.origin}`")
             lines.append(f"- Source: `{finding.source_ref}`")
             lines.append(f"- Why: {finding.description}")
             lines.append(f"- Action: {finding.recommendation}")
@@ -92,7 +107,9 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
     lines.append("## Findings")
     lines.append("")
     for finding in result.findings.findings:
-        lines.append(f"- [{finding.severity}] `{finding.rule_id}` at `{finding.source_ref}`: {finding.title}")
+        lines.append(
+            f"- [{finding.severity}] [{finding.status}] `{finding.rule_id}` at `{finding.source_ref}`: {finding.title}"
+        )
 
     lines.append("")
     lines.append("## Recommended Test Strategy")
@@ -111,19 +128,32 @@ def write_report(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def render_pr_summary_md(result: PipelineResult, notes: list[str]) -> str:
+def render_pr_summary_md(result: PipelineResult, notes: list[str], *, only_new: bool = False) -> str:
     marker = "<!-- ai-risk-manager -->"
     lines = [marker, "## AI Risk Manager Summary", ""]
     lines.append(f"- analysis_scope: `{result.analysis_scope}`")
+    lines.append(f"- support_level_applied: `{result.summary.support_level_applied}`")
+    lines.append(f"- competitive_mode: `{result.summary.competitive_mode}`")
     lines.append(f"- findings: `{len(result.findings.findings)}`")
+    lines.append(
+        f"- new/resolved/unchanged: `{result.summary.new_count}/{result.summary.resolved_count}/{result.summary.unchanged_count}`"
+    )
+    if result.summary.fallback_reason:
+        lines.append(f"- fallback_reason: `{result.summary.fallback_reason}`")
     if notes:
         lines.append(f"- notes: `{'; '.join(notes)}`")
     lines.append("")
 
-    top = sorted(
-        result.findings.findings,
-        key=lambda f: (SEVERITY_ORDER.index(f.severity), f.rule_id),
-    )[:5]
+    top_candidates = result.findings.findings
+    if only_new:
+        min_rank = SEVERITY_ORDER.index("high")
+        top_candidates = [
+            finding
+            for finding in top_candidates
+            if finding.status == "new" and SEVERITY_ORDER.index(finding.severity) <= min_rank
+        ]
+
+    top = sorted(top_candidates, key=lambda f: (SEVERITY_ORDER.index(f.severity), f.rule_id))[:5]
     if not top:
         lines.append("No findings in current PR scope.")
     else:
@@ -131,7 +161,7 @@ def render_pr_summary_md(result: PipelineResult, notes: list[str]) -> str:
         lines.append("")
         for finding in top:
             lines.append(
-                f"- [{finding.severity}] `{finding.rule_id}` at `{finding.source_ref}`: "
+                f"- [{finding.severity}] [{finding.status}] `{finding.rule_id}` at `{finding.source_ref}`: "
                 f"{finding.title}. Action: {finding.recommendation}"
             )
     lines.append("")

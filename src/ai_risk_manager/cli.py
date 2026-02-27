@@ -21,6 +21,37 @@ def _build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--output-dir", default=".riskmap", help="Output directory")
     analyze.add_argument("--format", choices=["md", "json", "both"], default="both", help="Output artifact format")
     analyze.add_argument(
+        "--analysis-engine",
+        choices=["deterministic", "hybrid", "ai-first"],
+        default="ai-first",
+        help="Analysis strategy. ai-first prioritizes semantic AI findings.",
+    )
+    analyze.add_argument("--only-new", action="store_true", help="PR summary: show only new high/critical findings")
+    analyze.add_argument(
+        "--min-confidence",
+        choices=["high", "medium", "low"],
+        default="low",
+        help="Drop findings below confidence threshold",
+    )
+    analyze.add_argument(
+        "--ci-mode",
+        choices=["advisory", "soft", "block-new-critical"],
+        default="advisory",
+        help="CI behavior: advisory, soft-block on new high/critical, or block new critical only",
+    )
+    analyze.add_argument(
+        "--support-level",
+        choices=["auto", "l0", "l1", "l2"],
+        default="auto",
+        help="Stack support maturity level (auto resolves by detected stack).",
+    )
+    analyze.add_argument(
+        "--risk-policy",
+        choices=["conservative", "balanced", "aggressive"],
+        default="balanced",
+        help="Risk triage policy profile.",
+    )
+    analyze.add_argument(
         "--fail-on-severity",
         choices=["critical", "high", "medium", "low"],
         default=None,
@@ -64,6 +95,12 @@ def _run_analyze(args: argparse.Namespace) -> int:
         fail_on_severity=args.fail_on_severity,
         suppress_file=suppress_file,
         baseline_graph=baseline_graph,
+        analysis_engine=args.analysis_engine.replace("-", "_"),
+        only_new=args.only_new,
+        min_confidence=args.min_confidence,
+        ci_mode=args.ci_mode.replace("-", "_"),
+        support_level=args.support_level,
+        risk_policy=args.risk_policy,
     )
 
     result, exit_code, notes = run_pipeline(ctx)

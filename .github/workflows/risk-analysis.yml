@@ -21,7 +21,12 @@ jobs:
 
       - name: Analyze main
         run: |
-          riskmap analyze --mode full --provider auto --output-dir ./.riskmap || {
+          riskmap analyze \
+            --mode full \
+            --provider auto \
+            --analysis-engine ai-first \
+            --ci-mode advisory \
+            --output-dir ./.riskmap || {
             rc=$?
             if [ "$rc" -ne 2 ]; then
               exit "$rc"
@@ -76,13 +81,18 @@ jobs:
         run: |
           if [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
             provider_flags="--no-llm"
+            ci_mode="advisory"
           else
             provider_flags="--provider auto"
+            ci_mode="${AIRISK_CI_MODE:-advisory}"
           fi
           riskmap analyze \
             --mode pr \
             --base "${{ github.base_ref }}" \
             ${provider_flags} \
+            --analysis-engine ai-first \
+            --only-new \
+            --ci-mode "${ci_mode}" \
             --output-dir ./.riskmap \
             --baseline-graph ./.riskmap/baseline/graph.json
 

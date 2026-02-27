@@ -51,6 +51,27 @@ def _parse_ast(path: Path) -> ast.AST | None:
         return None
 
 
+def _line_snippet(source_lines: list[str], line: int, *, window: int = 3) -> str:
+    start = max(0, line - 1)
+    end = min(len(source_lines), start + window)
+    return "\n".join(part.rstrip() for part in source_lines[start:end]).strip()
+
+
+def _decorator_route_path(decorator: ast.AST) -> str | None:
+    if not isinstance(decorator, ast.Call):
+        return None
+    if decorator.args:
+        first = _constant_str(decorator.args[0])
+        if first:
+            return first
+    for kw in decorator.keywords:
+        if kw.arg in {"path", "url"}:
+            value = _constant_str(kw.value)
+            if value:
+                return value
+    return None
+
+
 def _is_router_decorator(decorator: ast.AST) -> tuple[bool, str]:
     node = decorator
     if isinstance(node, ast.Call):
@@ -72,15 +93,17 @@ def _has_router_anchor(node: ast.AST) -> bool:
     return False
 
 
-def _extract_write_endpoints(tree: ast.AST) -> list[str]:
-    endpoints: list[str] = []
+def _extract_write_endpoints(tree: ast.AST, source_lines: list[str]) -> list[tuple[str, str, str, int, str]]:
+    endpoints: list[tuple[str, str, str, int, str]] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         for decorator in node.decorator_list:
             is_router, method = _is_router_decorator(decorator)
             if is_router and method in WRITE_METHODS:
-                endpoints.append(node.name)
+                route_path = _decorator_route_path(decorator) or f"/{node.name}"
+                line = getattr(node, "lineno", 1)
+                endpoints.append((node.name, method.upper(), route_path, line, _line_snippet(source_lines, line)))
                 break
     return endpoints
 
@@ -160,8 +183,8 @@ def _constant_str(node: ast.AST) -> str | None:
     return None
 
 
-def _extract_declared_transitions(tree: ast.AST) -> list[tuple[str, str, str]]:
-    declared: list[tuple[str, str, str]] = []
+def _extract_declared_transitions(tree: ast.AST, source_lines: list[str]) -> list[tuple[str, str, str, int, str]]:
+    declared: list[tuple[str, str, str, int, str]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign):
             continue
@@ -185,16 +208,18 @@ def _extract_declared_transitions(tree: ast.AST) -> list[tuple[str, str, str]]:
                 for elt in value.elts:
                     dst = _constant_str(elt)
                     if dst:
-                        declared.append((machine, src, dst))
+                        line = getattr(node, "lineno", 1)
+                        declared.append((machine, src, dst, line, _line_snippet(source_lines, line)))
             else:
                 dst = _constant_str(value)
                 if dst:
-                    declared.append((machine, src, dst))
+                    line = getattr(node, "lineno", 1)
+                    declared.append((machine, src, dst, line, _line_snippet(source_lines, line)))
     return declared
 
 
-def _extract_handled_transitions(tree: ast.AST) -> list[tuple[str, str, str]]:
-    handled: list[tuple[str, str, str]] = []
+def _extract_handled_transitions(tree: ast.AST, source_lines: list[str]) -> list[tuple[str, str, str, int, str]]:
+    handled: list[tuple[str, str, str, int, str]] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
@@ -226,20 +251,53 @@ def _extract_handled_transitions(tree: ast.AST) -> list[tuple[str, str, str]]:
                     if status_is_attr and isinstance(target, ast.Attribute) and target.attr == "status":
                         dst_state = _constant_str(stmt.value)
                         if dst_state:
-                            handled.append((fn_name, src_state, dst_state))
+                            line = getattr(stmt, "lineno", getattr(node, "lineno", 1))
+                            handled.append((fn_name, src_state, dst_state, line, _line_snippet(source_lines, line)))
                     if status_var_name and isinstance(target, ast.Name) and target.id == status_var_name:
                         dst_state = _constant_str(stmt.value)
                         if dst_state:
-                            handled.append((fn_name, src_state, dst_state))
+                            line = getattr(stmt, "lineno", getattr(node, "lineno", 1))
+                            handled.append((fn_name, src_state, dst_state, line, _line_snippet(source_lines, line)))
     return handled
 
 
-def _extract_test_cases(tree: ast.AST) -> list[str]:
-    cases: list[str] = []
+def _extract_test_cases(tree: ast.AST, source_lines: list[str]) -> list[tuple[str, int, str]]:
+    cases: list[tuple[str, int, str]] = []
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_"):
-            cases.append(node.name)
+            line = getattr(node, "lineno", 1)
+            cases.append((node.name, line, _line_snippet(source_lines, line)))
     return cases
+
+
+def _extract_test_http_calls(tree: ast.AST, source_lines: list[str]) -> list[tuple[str, str, str, int, str]]:
+    calls: list[tuple[str, str, str, int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or not node.name.startswith("test_"):
+            continue
+        test_name = node.name
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call) or not isinstance(child.func, ast.Attribute):
+                continue
+            method = child.func.attr.lower()
+            if method not in ROUTE_METHODS:
+                continue
+
+            route_path: str | None = None
+            if child.args:
+                route_path = _constant_str(child.args[0])
+            if route_path is None:
+                for kw in child.keywords:
+                    if kw.arg in {"path", "url"}:
+                        route_path = _constant_str(kw.value)
+                        if route_path is not None:
+                            break
+            if route_path is None:
+                continue
+
+            line = getattr(child, "lineno", getattr(node, "lineno", 1))
+            calls.append((test_name, method.upper(), route_path, line, _line_snippet(source_lines, line)))
+    return calls
 
 
 def scan_fastapi_signals(repo_path: Path) -> FastAPISignals:
@@ -343,35 +401,41 @@ class FastAPICollectorPlugin:
             )
         ]
 
-        parsed: list[tuple[Path, ast.AST, str]] = []
+        parsed: list[tuple[Path, ast.AST, str, list[str]]] = []
         for path in bundle.python_files:
-            tree = _parse_ast(path)
-            if tree is None:
+            text = _read_text(path)
+            if not text:
+                continue
+            try:
+                tree = ast.parse(text)
+            except SyntaxError:
                 continue
             relative = str(path.relative_to(repo_path))
-            parsed.append((path, tree, relative))
+            parsed.append((path, tree, relative, text.splitlines()))
 
-        for _, tree, relative in parsed:
+        for _, tree, relative, _ in parsed:
             for model_name in _extract_pydantic_models(tree):
                 bundle.pydantic_models.append((relative, model_name))
 
         known_models = {name for _, name in bundle.pydantic_models}
 
-        for path, tree, relative in parsed:
-            for endpoint in _extract_write_endpoints(tree):
-                bundle.write_endpoints.append((relative, endpoint))
+        for path, tree, relative, source_lines in parsed:
+            for endpoint_name, method, route_path, line, snippet in _extract_write_endpoints(tree, source_lines):
+                bundle.write_endpoints.append((relative, endpoint_name, method, route_path, line, snippet))
 
             for endpoint_name, model_name in _extract_endpoint_models(tree, known_models):
                 bundle.endpoint_models.append((relative, endpoint_name, model_name))
 
-            for machine, src, dst in _extract_declared_transitions(tree):
-                bundle.declared_transitions.append((relative, machine, src, dst))
+            for machine, src, dst, line, snippet in _extract_declared_transitions(tree, source_lines):
+                bundle.declared_transitions.append((relative, machine, src, dst, line, snippet))
 
-            for machine, src, dst in _extract_handled_transitions(tree):
-                bundle.handled_transitions.append((relative, machine, src, dst))
+            for machine, src, dst, line, snippet in _extract_handled_transitions(tree, source_lines):
+                bundle.handled_transitions.append((relative, machine, src, dst, line, snippet))
 
             if path in bundle.test_files:
-                for case in _extract_test_cases(tree):
-                    bundle.test_cases.append((relative, case))
+                for case, line, snippet in _extract_test_cases(tree, source_lines):
+                    bundle.test_cases.append((relative, case, line, snippet))
+                for test_name, method, route_path, line, snippet in _extract_test_http_calls(tree, source_lines):
+                    bundle.test_http_calls.append((relative, test_name, method, route_path, line, snippet))
 
         return bundle

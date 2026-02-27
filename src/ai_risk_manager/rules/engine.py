@@ -23,6 +23,8 @@ def run_rules(graph: Graph) -> FindingsReport:
                     source_ref=api.source_ref,
                     suppression_key=f"{finding_id}",
                     recommendation=f"Add API/service tests for endpoint '{api.name}', including success and error paths.",
+                    origin="deterministic",
+                    evidence_refs=[api.source_ref],
                 )
             )
 
@@ -44,6 +46,8 @@ def run_rules(graph: Graph) -> FindingsReport:
                 source_ref=source_ref,
                 suppression_key=finding_id,
                 recommendation=f"Implement handler logic for transition '{source} -> {target}' or remove stale declaration.",
+                origin="deterministic",
+                evidence_refs=[source_ref],
             )
         )
 

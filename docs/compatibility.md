@@ -23,6 +23,8 @@ Breaking changes include:
   `exit_code`, `notes`, `output_dir`, `artifacts`, `result`
 - moving pipeline execution errors from `exit_code` to incompatible HTTP semantics
 
+Additive response fields (for example `summary`) are allowed in minor releases.
+
 ## JSON artifact compatibility
 
 Artifacts include metadata fields:
@@ -30,6 +32,8 @@ Artifacts include metadata fields:
 - `schema_version`
 - `generated_at`
 - `tool_version`
+
+Additional artifacts (for example `run_metrics.json`) may be added in minor releases.
 
 Breaking changes include:
 

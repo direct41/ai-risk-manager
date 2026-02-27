@@ -60,6 +60,8 @@ def run_case(case: EvalCase) -> dict:
         "forbidden_hit_count": 0,
         "precision_proxy": 1.0,
         "recall_proxy": 1.0,
+        "actionability_proxy": 1.0,
+        "triage_time_proxy_min": 0.0,
         "flaky": False,
         "status": "failed",
         "errors": [],
@@ -73,6 +75,7 @@ def run_case(case: EvalCase) -> dict:
         run_count = 1
 
     rules_per_run: list[set[str]] = []
+    metrics_per_run: list[dict] = []
     for run_idx in range(run_count):
         cmd = [
             sys.executable,
@@ -108,6 +111,9 @@ def run_case(case: EvalCase) -> dict:
         data = json.loads(findings_file.read_text(encoding="utf-8"))
         rules = {row["rule_id"] for row in data.get("findings", [])}
         rules_per_run.append(rules)
+        metrics_file = out_dir / "run_metrics.json"
+        if metrics_file.exists():
+            metrics_per_run.append(json.loads(metrics_file.read_text(encoding="utf-8")))
 
     if not rules_per_run:
         result["errors"].append("No eval runs were executed.")
@@ -123,6 +129,12 @@ def run_case(case: EvalCase) -> dict:
     result["forbidden_hit_count"] = len(present_forbidden)
     result["precision_proxy"] = 1.0 - (len(present_forbidden) / max(1, len(rules)))
     result["recall_proxy"] = 1.0 - (len(missing_required) / max(1, len(case.required_rules)))
+    if metrics_per_run:
+        result["actionability_proxy"] = mean(float(row.get("actionability_proxy", 0.0)) for row in metrics_per_run)
+        result["triage_time_proxy_min"] = mean(float(row.get("triage_time_proxy_min", 0.0)) for row in metrics_per_run)
+    else:
+        result["actionability_proxy"] = 0.0
+        result["triage_time_proxy_min"] = 0.0
     if missing_required:
         result["errors"].append(f"missing required rules: {sorted(missing_required)}")
     if present_forbidden:
@@ -142,11 +154,15 @@ def write_summary(results: list[dict]) -> int:
 
     avg_precision = mean(row.get("precision_proxy", 0.0) for row in results) if results else 0.0
     avg_recall = mean(row.get("recall_proxy", 0.0) for row in results) if results else 0.0
+    avg_actionability = mean(row.get("actionability_proxy", 0.0) for row in results) if results else 0.0
+    avg_triage = mean(row.get("triage_time_proxy_min", 0.0) for row in results) if results else 0.0
     lines = [
         "# Eval Suite Summary",
         "",
         f"- Avg precision proxy: `{avg_precision:.2%}`",
         f"- Avg recall proxy: `{avg_recall:.2%}`",
+        f"- Avg actionability proxy: `{avg_actionability:.2%}`",
+        f"- Avg triage time proxy: `{avg_triage:.1f} min`",
         f"- Flaky cases: `{sum(1 for row in results if row.get('flaky'))}`",
         "",
     ]
@@ -160,6 +176,8 @@ def write_summary(results: list[dict]) -> int:
         lines.append(f"- Found rules: `{', '.join(row['found_rules']) or 'none'}`")
         lines.append(f"- Precision proxy: `{row.get('precision_proxy', 0.0):.2%}`")
         lines.append(f"- Recall proxy: `{row.get('recall_proxy', 0.0):.2%}`")
+        lines.append(f"- Actionability proxy: `{row.get('actionability_proxy', 0.0):.2%}`")
+        lines.append(f"- Triage time proxy: `{row.get('triage_time_proxy_min', 0.0):.1f} min`")
         lines.append(f"- Flaky: `{row.get('flaky', False)}`")
         if row["errors"]:
             lines.append("- Errors:")

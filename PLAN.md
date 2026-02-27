@@ -384,8 +384,151 @@ MVP готов, если:
 - [ ] Добавить второй extractor plugin после стабилизации FastAPI plugin (Django или Flask).
 - [ ] Ввести hardening API режима при переходе от local/internal к service deployment (auth/rate limits).
 
+## 18) Market Landscape and Comparable Approaches
+
+1. `Deterministic SAST` (CodeQL/Semgrep):
+   - сильны в CI-стабильности и policy-enforcement;
+   - требуют языкового/фреймворк-моделирования.
+2. `Pure LLM review`:
+   - широкое покрытие стеков и быстрая генерация инсайтов;
+   - высокий риск trust issues/false positives без строгой верификации.
+3. `CPG/Graph-based analysis`:
+   - хорошо ловит межфункциональные зависимости и data-flow;
+   - зависит от качества extraction и вычислительной стоимости.
+4. `Hybrid model p.2`:
+   - объединяет ширину AI и надежность deterministic-валидации.
+
+## 19) Pros / Cons Matrix
+
+1. `Deterministic-only`
+   - Pros: предсказуемость, зрелый CI rollout, tracking across runs.
+   - Cons: медленное масштабирование по стеку, слабее в семантике продуктовой логики.
+2. `LLM-only`
+   - Pros: быстрое stack-agnostic покрытие, хорошая семантическая интерпретация.
+   - Cons: нестабильность формата/качества, ложные срабатывания, сложнее блокировать CI безопасно.
+3. `Graph/CPG-only`
+   - Pros: сильный анализ связей, переходов, data-flow.
+   - Cons: высокая цена построения/поддержки графа, сложность универсального extraction.
+4. `Hybrid p.2 (target)`
+   - Pros: баланс precision и recall, explainability через evidence, безопасный CI-gating через confidence+verification.
+   - Cons: сложнее архитектурно, нужен строгий контракт и quality-gates.
+
+## 20) Competitive Thesis for Model p.2
+
+Позиционирование: `Trustable AI code risk review` между классическим SAST и "чат-ревью".
+
+Почему конкурентно:
+- `Stack reach`: L0 generic coverage для новых стеков без полной ручной поддержки.
+- `Trust`: finding без `evidence_refs` автоматически отбрасывается.
+- `Adoption`: постепенный rollout (`advisory -> soft -> block_new_critical`) снижает барьер внедрения.
+- `PR value`: фокус на `new` findings и короткий actionable summary уменьшает review overhead.
+
+Где выигрываем рынок:
+- команды с polyglot-монолитами и микросервисами, где ручное stack-by-stack масштабирование слишком долгое;
+- организации с давлением одновременно на lead time и incident-rate.
+
+Где не обещаем лидерство на старте:
+- глубокая language-specific security depth уровня зрелых rulepack-экосистем сразу по всем языкам.
+
+## 21) Business Value Scenarios (Market-facing)
+
+1. `Engineering Manager`:
+   - снижение времени triage и review queue;
+   - быстрее merge без роста риска.
+2. `Head of Platform`:
+   - единый quality guardrail для mixed-stack репозиториев.
+3. `Security Lead`:
+   - более раннее обнаружение риска на PR, а не после релиза.
+4. `Product/Business`:
+   - меньше регрессий в critical user flows;
+   - ниже стоимость инцидентов.
+5. Основной профит в деньгах/времени:
+   - меньше rework после release;
+   - меньше ручного анализа "что реально важно";
+   - быстрее cycle time при контролируемом риске.
+
+## 22) Competitive Risks and Countermoves
+
+1. Риск: "очередной AI noise tool".
+   - Counter: KPI-first acceptance (`Precision@5`, `Actioned Findings Rate`, `Evidence completeness`).
+2. Риск: низкое доверие к блокировкам.
+   - Counter: block только для `new + critical + high_confidence + verified`.
+3. Риск: стоимость inference.
+   - Counter: PR-first slicing, caching by file hash, лимиты top findings.
+4. Риск: сравнение с уже внедренными SAST.
+   - Counter: интеграция как надстройка над existing scanners (anchors), а не замена "в лоб".
+
+## 23) 90-Day Validation Plan
+
+1. Недели 1-3: baseline benchmark на 10 polyglot репозиториях.
+2. Недели 4-6: pilot в 2-3 командах, `ci_mode=advisory`.
+3. Недели 7-9: `ci_mode=soft` для L1/L2 support stacks.
+4. Недели 10-12: решение о расширении rollout по KPI gate.
+
+KPI gates:
+- `Precision@5 >= 0.75`
+- `Actioned Findings Rate >= 0.40`
+- `Median time-to-triage <= 10 min`
+- `fallback-to-full <= 0.15`
+
+## 24) External Evidence (sources)
+
+1. GitHub CodeQL custom modeling/query packs:
+   - https://docs.github.com/en/code-security/code-scanning/using-advanced-setup-of-code-scanning/customizing-your-advanced-setup-for-code-scanning
+   - https://docs.github.com/en/code-security/codeql-cli/using-the-advanced-functionality-of-the-codeql-cli/using-custom-queries-with-the-codeql-cli
+2. GitHub PR triage/SARIF tracking:
+   - https://docs.github.com/en/code-security/code-scanning/managing-code-scanning-alerts/triaging-code-scanning-alerts-in-pull-requests
+   - https://docs.github.com/en/code-security/code-scanning/integrating-with-code-scanning/sarif-support-for-code-scanning
+3. Semgrep CI/blocking modes:
+   - https://semgrep.dev/docs/deployment/add-semgrep-to-ci
+   - https://semgrep.dev/docs/kb/semgrep-code/understand-blocking
+4. Real-world diff-time value (Meta Infer):
+   - https://engineering.fb.com/2015/06/11/developer-tools/open-sourcing-facebook-infer-identify-bugs-before-you-ship/
+5. CPG practical power:
+   - https://fabianyamaguchi.com/files/2014-ieeesp.pdf
+6. Hybrid LLM+CPG empirical gains:
+   - https://arxiv.org/abs/2507.16585
+7. LLM review adoption limits:
+   - https://arxiv.org/abs/2505.16339
+
+### 24.1 Additive Public Interfaces (adopted)
+
+Request:
+- `support_level: auto|l0|l1|l2` (default `auto`)
+- `risk_policy: conservative|balanced|aggressive` (default `balanced`)
+
+Response summary:
+- `support_level_applied`
+- `verification_pass_rate`
+- `evidence_completeness`
+- `competitive_mode: deterministic|hybrid`
+
+`run_metrics.json`:
+- `precision_proxy`
+- `actionability_proxy`
+- `triage_time_proxy_min`
+- `fallback_reason`
+- `new_findings_count`
+
+### 24.2 Acceptance Scenarios (adopted)
+
+1. Unknown stack -> `support_level=l0`, advisory-only, pipeline не падает.
+2. Finding без `evidence_refs` не попадает в итоговый отчёт.
+3. `support_level=l2` + `ci_mode=block_new_critical` блокирует только verified critical new.
+4. PR-only run показывает только `new` findings при `only_new=true`.
+5. `run_metrics.json` содержит `verification_pass_rate` и `evidence_completeness`.
+6. Backward compatibility: старые CLI/API вызовы работают без изменения поведения.
+
+### 24.3 Assumptions and Defaults (adopted)
+
+1. p.2 фиксирован как основная рабочая модель на roadmap 2026.
+2. Product wedge: не заменить весь SAST, а добавить trustable semantic layer поверх существующих scanner'ов.
+3. По умолчанию rollout всегда начинается с `advisory`.
+4. Любой blocking допустим только при подтвержденной верификации и high confidence.
+5. KPI важнее объема найденных проблем: шум не считается ценностью.
+
 ---
 
 Owner: @andry  
-Status: Draft v0.7  
-Last updated: 2026-02-19
+Status: Draft v0.8  
+Last updated: 2026-02-21

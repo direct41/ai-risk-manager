@@ -4,10 +4,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Protocol
 
-from ai_risk_manager.schemas.types import PreflightResult
+from ai_risk_manager.schemas.types import Confidence, PreflightResult
 
 StackId = Literal["fastapi_pytest", "unknown"]
-DetectionConfidence = Literal["high", "medium", "low"]
+DetectionConfidence = Confidence  # backward-compatible alias
 
 
 @dataclass
@@ -28,13 +28,18 @@ class ArtifactBundle:
 
     all_files: list[Path] = field(default_factory=list)
     python_files: list[Path] = field(default_factory=list)
-    write_endpoints: list[tuple[str, str]] = field(default_factory=list)  # (file, endpoint_name)
+    write_endpoints: list[tuple[str, str, str, str, int, str]] = field(default_factory=list)
+    # (file, endpoint_name, method, route_path, line, snippet)
     endpoint_models: list[tuple[str, str, str]] = field(default_factory=list)  # (file, endpoint_name, model_name)
     pydantic_models: list[tuple[str, str]] = field(default_factory=list)  # (file, model_name)
-    declared_transitions: list[tuple[str, str, str, str]] = field(default_factory=list)  # (file, machine, src, dst)
-    handled_transitions: list[tuple[str, str, str, str]] = field(default_factory=list)  # (file, machine, src, dst)
+    declared_transitions: list[tuple[str, str, str, str, int, str]] = field(default_factory=list)
+    # (file, machine, src, dst, line, snippet)
+    handled_transitions: list[tuple[str, str, str, str, int, str]] = field(default_factory=list)
+    # (file, machine, src, dst, line, snippet)
     test_files: list[Path] = field(default_factory=list)
-    test_cases: list[tuple[str, str]] = field(default_factory=list)  # (file, test_function_name)
+    test_cases: list[tuple[str, str, int, str]] = field(default_factory=list)  # (file, test_name, line, snippet)
+    test_http_calls: list[tuple[str, str, str, str, int, str]] = field(default_factory=list)
+    # (file, test_name, method, route_path, line, snippet)
 
 
 class CollectorPlugin(Protocol):

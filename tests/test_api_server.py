@@ -15,11 +15,6 @@ from ai_risk_manager.pipeline.run import run_pipeline
 from ai_risk_manager.schemas.types import RunContext
 
 
-def _write(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-
-
 def test_healthz_returns_ok_and_version() -> None:
     client = TestClient(app)
     response = client.get("/healthz")
@@ -30,12 +25,12 @@ def test_healthz_returns_ok_and_version() -> None:
     assert "version" in payload
 
 
-def test_api_analyze_matches_pipeline_for_same_input(tmp_path: Path) -> None:
-    _write(
+def test_api_analyze_matches_pipeline_for_same_input(tmp_path: Path, write_file) -> None:
+    write_file(
         tmp_path / "app" / "api.py",
         "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
     )
-    _write(tmp_path / "tests" / "test_other.py", "def test_smoke():\n    assert True\n")
+    write_file(tmp_path / "tests" / "test_other.py", "def test_smoke():\n    assert True\n")
 
     output_dir = tmp_path / ".riskmap_api"
     payload = {
@@ -66,6 +61,8 @@ def test_api_analyze_matches_pipeline_for_same_input(tmp_path: Path) -> None:
     assert direct_result is not None
     assert api_data["exit_code"] == direct_code
     assert api_data["result"] is not None
+    assert api_data["summary"] is not None
+    assert "new_count" in api_data["summary"]
     assert api_data["result"]["analysis_scope"] == direct_result.analysis_scope
     assert len(api_data["result"]["findings"]["findings"]) == len(direct_result.findings.findings)
 
@@ -85,12 +82,12 @@ def test_api_returns_400_for_missing_repo_path(tmp_path: Path) -> None:
     assert response.status_code == 400
 
 
-def test_api_returns_exit_1_for_unavailable_explicit_provider(tmp_path: Path) -> None:
-    _write(
+def test_api_returns_exit_1_for_unavailable_explicit_provider(tmp_path: Path, write_file) -> None:
+    write_file(
         tmp_path / "app" / "api.py",
         "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
     )
-    _write(tmp_path / "tests" / "test_api.py", "import pytest\n\ndef test_create_order():\n    assert True\n")
+    write_file(tmp_path / "tests" / "test_api.py", "import pytest\n\ndef test_create_order():\n    assert True\n")
 
     client = TestClient(app)
     with patch("ai_risk_manager.agents.provider._has_api_credentials", return_value=False):
@@ -111,12 +108,12 @@ def test_api_returns_exit_1_for_unavailable_explicit_provider(tmp_path: Path) ->
     assert payload["result"] is None
 
 
-def test_api_respects_fail_on_severity_and_returns_exit_3(tmp_path: Path) -> None:
-    _write(
+def test_api_respects_fail_on_severity_and_returns_exit_3(tmp_path: Path, write_file) -> None:
+    write_file(
         tmp_path / "app" / "api.py",
         "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
     )
-    _write(tmp_path / "tests" / "test_api.py", "import pytest\n\ndef test_smoke():\n    assert True\n")
+    write_file(tmp_path / "tests" / "test_api.py", "import pytest\n\ndef test_smoke():\n    assert True\n")
 
     client = TestClient(app)
     response = client.post(
@@ -131,3 +128,34 @@ def test_api_respects_fail_on_severity_and_returns_exit_3(tmp_path: Path) -> Non
 
     assert response.status_code == 200
     assert response.json()["exit_code"] == 3
+
+
+def test_api_accepts_ai_first_request_fields(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_api.py", "import pytest\n\ndef test_create_order():\n    assert True\n")
+
+    client = TestClient(app)
+    response = client.post(
+        "/v1/analyze",
+        json={
+            "path": str(tmp_path),
+            "mode": "full",
+            "no_llm": True,
+            "analysis_engine": "ai_first",
+            "only_new": True,
+            "min_confidence": "low",
+            "ci_mode": "advisory",
+            "support_level": "auto",
+            "risk_policy": "balanced",
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["exit_code"] == 0
+    assert payload["summary"]["support_level_applied"] in {"l0", "l1", "l2"}
+    assert "verification_pass_rate" in payload["summary"]
+    assert "evidence_completeness" in payload["summary"]
+    assert payload["summary"]["competitive_mode"] in {"deterministic", "hybrid"}
