@@ -115,6 +115,12 @@ Trust-first eval gates:
 - Пороги качества eval хранятся в `eval/trust_thresholds.json`.
 - `make eval` блокирующий по умолчанию (если trust gates не пройдены, команда завершается с ошибкой).
 - Для неблокирующего запуска: `AIRISK_EVAL_ENFORCE_THRESHOLDS=0 make eval`.
+- Недельный тренд формируется из артефактов:
+- `eval/results/trust_gate.json` - статус gate + агрегаты.
+- `eval/results/trust_history.jsonl` - окно snapshot'ов для тренда.
+- `eval/results/trust_trend.json` - machine-readable тренд и delta к прошлому запуску.
+- `eval/results/trust_trend.md` - таблица тренда для чтения.
+- Источник истории: `eval/.history/trust_gate_history.jsonl` (кешируется в `eval-suite.yml`).
 
 ## Когда инструмент особенно полезен
 

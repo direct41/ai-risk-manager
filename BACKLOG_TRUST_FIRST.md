@@ -12,13 +12,13 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - PR fallback-to-full rate: <= 15%
 
 ## Epic 1: Trust Platform (P0)
-- Status: In progress
+- Status: Done (2026-02-27)
 - Outcome: quality regressions are caught automatically before rollout
 
 ### Stories
-1. Eval trust gates with explicit thresholds and CI enforcement.
-2. Trust gate artifact contract (`summary.json`, `summary.md`, `trust_gate.json`).
-3. Weekly trend tracking from eval artifacts.
+1. [x] Eval trust gates with explicit thresholds and CI enforcement.
+2. [x] Trust gate artifact contract (`summary.json`, `summary.md`, `trust_gate.json`).
+3. [x] Weekly trend tracking from eval artifacts.
 
 ### Definition of Done
 - Weekly eval workflow fails on threshold breach.
@@ -26,26 +26,26 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Gate outputs are visible in CI artifacts.
 
 ## Epic 2: Rule Precision and Explainability (P0)
-- Status: Planned
+- Status: Done (2026-02-27)
 - Outcome: findings are actionable and low-noise
 
 ### Stories
-1. Tighten transition invariant detection (reduce false positives).
-2. Expand dependency policy rules with context-aware severity.
-3. Add explanation templates with concrete next action and evidence ranking.
+1. [x] Tighten transition invariant detection (reduce false positives).
+2. [x] Expand dependency policy rules with context-aware severity.
+3. [x] Add explanation templates with concrete next action and evidence ranking.
 
 ### Definition of Done
 - No net precision regression in eval.
 - Each finding includes evidence refs and recommendation.
 
 ## Epic 3: CI Rollout Control (P0)
-- Status: Planned
+- Status: Done (2026-02-27)
 - Outcome: safe adoption path from advisory to blocking modes
 
 ### Stories
-1. Support-level x CI-mode compatibility matrix as executable checks.
-2. Guardrails for `block-new-critical` (high-confidence + verified evidence only).
-3. PR comment policy for only-new high-signal findings.
+1. [x] Support-level x CI-mode compatibility matrix as executable checks.
+2. [x] Guardrails for `block-new-critical` (high-confidence + verified evidence only).
+3. [x] PR comment policy for only-new high-signal findings.
 
 ### Definition of Done
 - Deterministic mode behavior is stable in fork PRs.

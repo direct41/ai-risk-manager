@@ -16,6 +16,14 @@ jobs:
 
       - uses: ./.github/actions/setup-python-env
 
+      - name: Restore eval trend cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ./eval/.history
+          key: eval-trend-${{ github.repository }}-${{ github.run_id }}
+          restore-keys: |
+            eval-trend-${{ github.repository }}-
+
       - name: Run eval suite
         env:
           AIRISK_EVAL_ENFORCE_THRESHOLDS: "1"
@@ -29,3 +37,10 @@ jobs:
           name: eval-suite-${{ github.run_id }}
           path: eval/results/
           if-no-files-found: error
+
+      - name: Save eval trend cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ./eval/.history
+          key: eval-trend-${{ github.repository }}-${{ github.run_id }}

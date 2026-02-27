@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import sys
+from unittest.mock import patch
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "run_eval_suite.py"
@@ -55,3 +57,125 @@ def test_evaluate_trust_gates_passes_on_healthy_aggregates() -> None:
     errors = run_eval_suite.evaluate_trust_gates(aggregates, dict(run_eval_suite.DEFAULT_TRUST_THRESHOLDS))
 
     assert errors == []
+
+
+def test_load_trend_history_skips_non_json_lines(tmp_path: Path) -> None:
+    history_path = tmp_path / "trust_gate_history.jsonl"
+    history_path.write_text(
+        "\n".join(
+            [
+                '{"generated_at_utc":"2026-01-01T00:00:00Z","gate_status":"passed","aggregates":{"avg_precision_proxy":0.9}}',
+                "not-json",
+                "42",
+                '{"generated_at_utc":"2026-01-08T00:00:00Z","gate_status":"failed","aggregates":{"avg_precision_proxy":0.7}}',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = run_eval_suite.load_trend_history(history_path)
+
+    assert len(loaded) == 2
+    assert loaded[0]["gate_status"] == "passed"
+    assert loaded[1]["gate_status"] == "failed"
+
+
+def test_write_trend_artifacts_generates_history_and_delta(tmp_path: Path) -> None:
+    output_root = tmp_path / "results"
+    output_root.mkdir(parents=True, exist_ok=True)
+    history_path = tmp_path / "history" / "trust_gate_history.jsonl"
+
+    first_aggregates = {
+        "avg_precision_proxy": 0.80,
+        "avg_recall_proxy": 0.85,
+        "avg_actionability_proxy": 0.50,
+        "avg_evidence_completeness": 0.98,
+        "avg_verification_pass_rate": 0.97,
+        "avg_fallback_rate": 0.10,
+        "avg_triage_time_proxy_min": 6.0,
+        "flaky_cases": 0.0,
+    }
+    second_aggregates = dict(first_aggregates)
+    second_aggregates["avg_precision_proxy"] = 0.90
+    second_aggregates["avg_fallback_rate"] = 0.05
+
+    with patch.object(run_eval_suite, "_utc_now_iso", side_effect=["2026-01-01T00:00:00Z", "2026-01-08T00:00:00Z"]):
+        run_eval_suite.write_trend_artifacts(
+            aggregates=first_aggregates,
+            gate_payload={"status": "passed"},
+            output_root=output_root,
+            history_path=history_path,
+            trend_window=12,
+        )
+        run_eval_suite.write_trend_artifacts(
+            aggregates=second_aggregates,
+            gate_payload={"status": "passed"},
+            output_root=output_root,
+            history_path=history_path,
+            trend_window=12,
+        )
+
+    history_lines = history_path.read_text(encoding="utf-8").splitlines()
+    assert len(history_lines) == 2
+
+    trend_payload = json.loads((output_root / "trust_trend.json").read_text(encoding="utf-8"))
+    assert trend_payload["window_size"] == 2
+    assert trend_payload["latest"]["generated_at_utc"] == "2026-01-08T00:00:00Z"
+    assert abs(trend_payload["delta_vs_previous"]["avg_precision_proxy"] - 0.10) < 1e-9
+    assert abs(trend_payload["delta_vs_previous"]["avg_fallback_rate"] + 0.05) < 1e-9
+
+    trend_md = (output_root / "trust_trend.md").read_text(encoding="utf-8")
+    assert "Delta vs Previous Run" in trend_md
+    assert "avg_precision_proxy" in trend_md
+
+
+def test_write_trend_artifacts_applies_window_limit(tmp_path: Path) -> None:
+    output_root = tmp_path / "results"
+    output_root.mkdir(parents=True, exist_ok=True)
+    history_path = tmp_path / "history" / "trust_gate_history.jsonl"
+    aggregates = {
+        "avg_precision_proxy": 0.80,
+        "avg_recall_proxy": 0.80,
+        "avg_actionability_proxy": 0.50,
+        "avg_evidence_completeness": 0.98,
+        "avg_verification_pass_rate": 0.97,
+        "avg_fallback_rate": 0.10,
+        "avg_triage_time_proxy_min": 6.0,
+        "flaky_cases": 0.0,
+    }
+
+    with patch.object(
+        run_eval_suite,
+        "_utc_now_iso",
+        side_effect=[
+            "2026-01-01T00:00:00Z",
+            "2026-01-08T00:00:00Z",
+            "2026-01-15T00:00:00Z",
+        ],
+    ):
+        run_eval_suite.write_trend_artifacts(
+            aggregates=aggregates,
+            gate_payload={"status": "passed"},
+            output_root=output_root,
+            history_path=history_path,
+            trend_window=2,
+        )
+        run_eval_suite.write_trend_artifacts(
+            aggregates=aggregates,
+            gate_payload={"status": "passed"},
+            output_root=output_root,
+            history_path=history_path,
+            trend_window=2,
+        )
+        run_eval_suite.write_trend_artifacts(
+            aggregates=aggregates,
+            gate_payload={"status": "passed"},
+            output_root=output_root,
+            history_path=history_path,
+            trend_window=2,
+        )
+
+    history_payload = run_eval_suite.load_trend_history(history_path)
+    assert len(history_payload) == 2
+    assert history_payload[0]["generated_at_utc"] == "2026-01-08T00:00:00Z"
+    assert history_payload[1]["generated_at_utc"] == "2026-01-15T00:00:00Z"

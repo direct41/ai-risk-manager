@@ -223,6 +223,17 @@ Effective CI mode matrix:
 | `l2` | `soft` | `soft` |
 | `l2` | `block-new-critical` | `block-new-critical` |
 
+## Eval Trust Trend Artifacts
+
+Weekly eval runs produce trend artifacts from trust gate outputs:
+
+- `eval/results/trust_gate.json` - gate status, thresholds, aggregates.
+- `eval/results/trust_history.jsonl` - sliding window snapshots used for trend.
+- `eval/results/trust_trend.json` - machine-readable trend + delta vs previous run.
+- `eval/results/trust_trend.md` - human-readable trend table.
+
+History source is `eval/.history/trust_gate_history.jsonl` (restored/saved by `eval-suite.yml` cache).
+
 ## Suppressions (`.airiskignore`)
 
 Use suppressions for known noise:

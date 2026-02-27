@@ -6,12 +6,24 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_ROOT = REPO_ROOT / "eval" / "results"
+HISTORY_ROOT = REPO_ROOT / "eval" / ".history"
 TRUST_THRESHOLDS_PATH = REPO_ROOT / "eval" / "trust_thresholds.json"
+DEFAULT_HISTORY_PATH = HISTORY_ROOT / "trust_gate_history.jsonl"
+DEFAULT_TREND_WINDOW = 12
+PERCENT_METRICS = {
+    "avg_precision_proxy",
+    "avg_recall_proxy",
+    "avg_actionability_proxy",
+    "avg_evidence_completeness",
+    "avg_verification_pass_rate",
+    "avg_fallback_rate",
+}
 DEFAULT_TRUST_THRESHOLDS: dict[str, float] = {
     "min_avg_precision_proxy": 0.75,
     "min_avg_recall_proxy": 0.75,
@@ -63,6 +75,158 @@ def _parse_bool_env(name: str, default: bool) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _parse_positive_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def resolve_history_path() -> Path:
+    raw = os.getenv("AIRISK_EVAL_HISTORY_PATH")
+    if raw:
+        return Path(raw).expanduser()
+    return DEFAULT_HISTORY_PATH
+
+
+def load_trend_history(path: Path) -> list[dict]:
+    if not path.is_file():
+        return []
+    rows: list[dict] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            rows.append(payload)
+    return rows
+
+
+def write_trend_history(path: Path, history: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [json.dumps(row, ensure_ascii=False) for row in history]
+    text = "\n".join(lines)
+    if text:
+        text += "\n"
+    path.write_text(text, encoding="utf-8")
+
+
+def _build_trend_snapshot(aggregates: dict[str, float], gate_payload: dict[str, object]) -> dict:
+    return {
+        "generated_at_utc": _utc_now_iso(),
+        "run_id": os.getenv("GITHUB_RUN_ID", "local"),
+        "git_sha": os.getenv("GITHUB_SHA", "local"),
+        "git_ref": os.getenv("GITHUB_REF_NAME") or os.getenv("GITHUB_REF", "local"),
+        "gate_status": gate_payload.get("status", "unknown"),
+        "aggregates": {key: float(value) for key, value in aggregates.items()},
+    }
+
+
+def _build_trend_payload(history: list[dict]) -> dict:
+    latest = history[-1] if history else None
+    delta_vs_previous: dict[str, float] = {}
+    if len(history) >= 2:
+        prev = history[-2].get("aggregates", {})
+        curr = history[-1].get("aggregates", {})
+        if isinstance(prev, dict) and isinstance(curr, dict):
+            for metric_name in curr:
+                prev_value = prev.get(metric_name)
+                curr_value = curr.get(metric_name)
+                if isinstance(prev_value, (int, float)) and isinstance(curr_value, (int, float)):
+                    delta_vs_previous[metric_name] = float(curr_value) - float(prev_value)
+    return {
+        "window_size": len(history),
+        "latest": latest,
+        "delta_vs_previous": delta_vs_previous,
+        "history": history,
+    }
+
+
+def _render_delta(value: float, metric_name: str) -> str:
+    if metric_name in PERCENT_METRICS:
+        return f"{value * 100:+.2f} pp"
+    if metric_name == "avg_triage_time_proxy_min":
+        return f"{value:+.2f} min"
+    if metric_name == "flaky_cases":
+        return f"{value:+.0f}"
+    return f"{value:+.4f}"
+
+
+def render_trend_md(history: list[dict], delta_vs_previous: dict[str, float]) -> str:
+    lines = [
+        "# Eval Trust Trend",
+        "",
+        f"- Window size: `{len(history)}`",
+        "",
+        "| Run (UTC) | Gate | Precision | Recall | Actionability | Evidence | Verification | Fallback | Triage | Flaky |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for row in reversed(history):
+        aggregates = row.get("aggregates", {})
+        if not isinstance(aggregates, dict):
+            continue
+        lines.append(
+            "| "
+            f"{row.get('generated_at_utc', 'unknown')} | "
+            f"{row.get('gate_status', 'unknown')} | "
+            f"{float(aggregates.get('avg_precision_proxy', 0.0)):.2%} | "
+            f"{float(aggregates.get('avg_recall_proxy', 0.0)):.2%} | "
+            f"{float(aggregates.get('avg_actionability_proxy', 0.0)):.2%} | "
+            f"{float(aggregates.get('avg_evidence_completeness', 0.0)):.2%} | "
+            f"{float(aggregates.get('avg_verification_pass_rate', 0.0)):.2%} | "
+            f"{float(aggregates.get('avg_fallback_rate', 0.0)):.2%} | "
+            f"{float(aggregates.get('avg_triage_time_proxy_min', 0.0)):.1f} min | "
+            f"{int(float(aggregates.get('flaky_cases', 0.0)))} |"
+        )
+
+    if delta_vs_previous:
+        lines.extend(["", "## Delta vs Previous Run", ""])
+        for metric_name in sorted(delta_vs_previous):
+            lines.append(f"- {metric_name}: `{_render_delta(delta_vs_previous[metric_name], metric_name)}`")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_trend_artifacts(
+    *,
+    aggregates: dict[str, float],
+    gate_payload: dict[str, object],
+    output_root: Path = OUTPUT_ROOT,
+    history_path: Path | None = None,
+    trend_window: int | None = None,
+) -> None:
+    resolved_history_path = history_path or resolve_history_path()
+    resolved_window = trend_window or _parse_positive_int_env("AIRISK_EVAL_TREND_WINDOW", DEFAULT_TREND_WINDOW)
+    history = load_trend_history(resolved_history_path)
+    history.append(_build_trend_snapshot(aggregates, gate_payload))
+    history = history[-resolved_window:]
+    write_trend_history(resolved_history_path, history)
+    write_trend_history(output_root / "trust_history.jsonl", history)
+
+    trend_payload = _build_trend_payload(history)
+    (output_root / "trust_trend.json").write_text(json.dumps(trend_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_root / "trust_trend.md").write_text(
+        render_trend_md(history, trend_payload["delta_vs_previous"]),
+        encoding="utf-8",
+    )
 
 
 def load_trust_thresholds(path: Path = TRUST_THRESHOLDS_PATH) -> dict[str, float]:
@@ -284,6 +448,7 @@ def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_
         "errors": gate_errors,
     }
     (OUTPUT_ROOT / "trust_gate.json").write_text(json.dumps(gate_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_trend_artifacts(aggregates=aggregates, gate_payload=gate_payload)
 
     lines = [
         "# Eval Suite Summary",
