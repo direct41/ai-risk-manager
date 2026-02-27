@@ -6,6 +6,7 @@ from pathlib import Path
 from ai_risk_manager.schemas.types import FindingsReport, PipelineResult
 
 SEVERITY_ORDER = "critical high medium low".split()
+CONFIDENCE_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
 def _summary_counts(findings: FindingsReport) -> dict[str, int]:
@@ -16,6 +17,18 @@ def _summary_counts(findings: FindingsReport) -> dict[str, int]:
         "medium": counts.get("medium", 0),
         "low": counts.get("low", 0),
     }
+
+
+def _rank_findings(findings):
+    return sorted(
+        findings,
+        key=lambda f: (
+            SEVERITY_ORDER.index(f.severity),
+            CONFIDENCE_ORDER.get(f.confidence, 3),
+            -len(f.evidence_refs),
+            f.rule_id,
+        ),
+    )
 
 
 def render_report_md(result: PipelineResult, notes: list[str]) -> str:
@@ -76,7 +89,7 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
     if not result.findings.findings:
         lines.append("No immediate actions required.")
     else:
-        actions = sorted(result.findings.findings, key=lambda f: SEVERITY_ORDER.index(f.severity))[:5]
+        actions = _rank_findings(result.findings.findings)[:5]
         for finding in actions:
             lines.append(f"- Action: {finding.recommendation}")
             lines.append(f"  Expected impact: reduce `{finding.rule_id}` risk around `{finding.source_ref}`.")
@@ -87,13 +100,12 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
     if not result.findings.findings:
         lines.append("No risks detected in current scope.")
     else:
-        top = sorted(
-            result.findings.findings,
-            key=lambda f: (SEVERITY_ORDER.index(f.severity), f.rule_id),
-        )[:5]
+        top = _rank_findings(result.findings.findings)[:5]
         for finding in top:
             lines.append(f"### {finding.title}")
             lines.append(f"- Severity: `{finding.severity}`")
+            lines.append(f"- Confidence: `{finding.confidence}`")
+            lines.append(f"- Evidence refs: `{len(finding.evidence_refs)}`")
             lines.append(f"- Status: `{finding.status}`")
             lines.append(f"- Origin: `{finding.origin}`")
             lines.append(f"- Source: `{finding.source_ref}`")
@@ -153,7 +165,7 @@ def render_pr_summary_md(result: PipelineResult, notes: list[str], *, only_new: 
             if finding.status == "new" and SEVERITY_ORDER.index(finding.severity) <= min_rank
         ]
 
-    top = sorted(top_candidates, key=lambda f: (SEVERITY_ORDER.index(f.severity), f.rule_id))[:5]
+    top = _rank_findings(top_candidates)[:5]
     if not top:
         lines.append("No findings in current PR scope.")
     else:
@@ -162,7 +174,8 @@ def render_pr_summary_md(result: PipelineResult, notes: list[str], *, only_new: 
         for finding in top:
             lines.append(
                 f"- [{finding.severity}] [{finding.status}] `{finding.rule_id}` at `{finding.source_ref}`: "
-                f"{finding.title}. Action: {finding.recommendation}"
+                f"{finding.title}. confidence=`{finding.confidence}`, evidence_refs=`{len(finding.evidence_refs)}`. "
+                f"Action: {finding.recommendation}"
             )
     lines.append("")
     lines.append("Full details: see workflow artifacts (`report.md`, `findings.json`, `test_plan.json`).")

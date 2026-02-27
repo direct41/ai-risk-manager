@@ -57,7 +57,7 @@ cat ./.riskmap/report.md
 - `.riskmap/graph.json` - граф сущностей/связей
 - `.riskmap/findings.raw.json` - findings до merge-этапа
 - `.riskmap/run_metrics.json` - метрики качества запуска
-- `.riskmap/pr_summary.md` - только в PR-режиме
+- `.riskmap/pr_summary.md` - только в PR-режиме (ранжирование по severity/confidence/evidence refs)
 
 ## Практический workflow для реального репозитория
 

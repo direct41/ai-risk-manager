@@ -80,6 +80,9 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     assert all(not node["source_ref"].startswith("/") for node in graph["nodes"])
     report = (out_dir / "report.md").read_text(encoding="utf-8")
     assert "Graph Statistics:" in report
+    pr_summary = (out_dir / "pr_summary.md").read_text(encoding="utf-8")
+    assert "confidence=`" in pr_summary
+    assert "evidence_refs=`" in pr_summary
 
 
 def test_full_mode_sets_full_analysis_scope(tmp_path: Path, write_file) -> None:

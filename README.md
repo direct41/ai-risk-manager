@@ -62,7 +62,7 @@ Default output (`--format both`):
 - `.riskmap/graph.json` - extracted graph
 - `.riskmap/findings.raw.json` - deterministic findings before merge
 - `.riskmap/run_metrics.json` - run quality/coverage proxies
-- `.riskmap/pr_summary.md` - PR mode only
+- `.riskmap/pr_summary.md` - PR mode only (ranked by severity, confidence, evidence refs)
 
 ## Typical Workflow For a Real Repo
 
