@@ -6,6 +6,7 @@ from ai_risk_manager.schemas.types import Finding, FindingsReport, Graph
 def run_rules(graph: Graph) -> FindingsReport:
     findings: list[Finding] = []
     api_nodes = [n for n in graph.nodes if n.type == "API"]
+    dependency_nodes = [n for n in graph.nodes if n.type == "Dependency"]
     covered_api_ids = {e.target_node_id for e in graph.edges if e.type == "covered_by"}
 
     for api in api_nodes:
@@ -77,6 +78,43 @@ def run_rules(graph: Graph) -> FindingsReport:
                 ),
                 origin="deterministic",
                 evidence_refs=[transition.source_ref],
+            )
+        )
+
+    for dep in dependency_nodes:
+        violation = str(dep.details.get("policy_violation") or "").strip()
+        if not violation:
+            continue
+        spec = str(dep.details.get("spec") or "").strip()
+        if violation == "direct_reference":
+            recommendation = (
+                f"Replace direct reference for dependency '{dep.name}' with a pinned package version (==) "
+                "from a trusted index."
+            )
+        elif violation == "wildcard_version":
+            recommendation = f"Replace wildcard pin for dependency '{dep.name}' with an exact version (==)."
+        elif violation == "range_not_pinned":
+            recommendation = f"Pin dependency '{dep.name}' to an exact version (==) and update via controlled bumps."
+        else:
+            recommendation = f"Specify an exact version (==) for dependency '{dep.name}'."
+
+        finding_id = f"dependency_risk_policy_violation:{dep.id}"
+        findings.append(
+            Finding(
+                id=finding_id,
+                rule_id="dependency_risk_policy_violation",
+                title=f"Dependency '{dep.name}' violates version policy ({violation})",
+                description=(
+                    "Dependency specification is not pinned to an immutable version and may increase supply-chain risk."
+                ),
+                severity="high" if violation in {"direct_reference", "wildcard_version"} else "medium",
+                confidence="high",
+                evidence=f"Detected dependency spec '{spec or '(none)'}' at {dep.source_ref}.",
+                source_ref=dep.source_ref,
+                suppression_key=finding_id,
+                recommendation=recommendation,
+                origin="deterministic",
+                evidence_refs=[dep.source_ref],
             )
         )
 

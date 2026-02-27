@@ -687,3 +687,59 @@ def test_pipeline_skips_broken_invariant_when_guard_exists(tmp_path: Path, write
     assert result is not None
     rule_ids = {finding.rule_id for finding in result.findings.findings}
     assert "broken_invariant_on_transition" not in rule_ids
+
+
+def test_pipeline_reports_dependency_policy_violation(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/orders')\n"
+        "def create_order():\n"
+        "    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_api.py", "def test_create_order():\n    assert True\n")
+    write_file(tmp_path / "requirements.txt", "fastapi==0.110.0\nrequests>=2.31.0\n")
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+
+    result, code, _ = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    rule_ids = {finding.rule_id for finding in result.findings.findings}
+    assert "dependency_risk_policy_violation" in rule_ids
+
+
+def test_pipeline_skips_dependency_policy_when_versions_are_pinned(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/orders')\n"
+        "def create_order():\n"
+        "    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_api.py", "def test_create_order():\n    assert True\n")
+    write_file(tmp_path / "requirements.txt", "fastapi==0.110.0\nrequests==2.31.0\n")
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+
+    result, code, _ = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    rule_ids = {finding.rule_id for finding in result.findings.findings}
+    assert "dependency_risk_policy_violation" not in rule_ids

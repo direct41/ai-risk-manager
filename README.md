@@ -28,6 +28,7 @@ Deterministic rules currently include:
 - `critical_path_no_tests`
 - `missing_transition_handler`
 - `broken_invariant_on_transition`
+- `dependency_risk_policy_violation`
 
 Optional semantic AI stage can add extra grounded findings with evidence refs.
 

@@ -102,3 +102,42 @@ def test_fastapi_plugin_marks_transition_with_guard(tmp_path: Path, write_file) 
     transition = next((row for row in bundle.handled_transitions if row[1] == "pay_order"), None)
     assert transition is not None
     assert transition[6] is True
+
+
+def test_fastapi_plugin_collects_dependency_specs_from_requirements(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "requirements.txt",
+        "fastapi==0.110.0\nrequests>=2.31.0\ninternal-lib @ git+https://example.com/internal.git\n",
+    )
+
+    plugin = get_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+    bundle = plugin.collect(tmp_path)
+
+    violations = {(name, violation) for _, name, _, _, violation in bundle.dependency_specs}
+    assert ("fastapi", None) in violations
+    assert ("requests", "range_not_pinned") in violations
+    assert ("internal-lib", "direct_reference") in violations
+
+
+def test_fastapi_plugin_collects_project_dependencies_from_pyproject(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "pyproject.toml",
+        "[project]\nname='demo'\nversion='0.1.0'\ndependencies=['httpx>=0.27','uvicorn==0.30.0']\n",
+    )
+
+    plugin = get_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+    bundle = plugin.collect(tmp_path)
+
+    violations = {(name, violation) for _, name, _, _, violation in bundle.dependency_specs}
+    assert ("httpx", "range_not_pinned") in violations
+    assert ("uvicorn", None) in violations

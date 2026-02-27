@@ -23,6 +23,23 @@ def _with_line_ref(file_path: str, line: int | None) -> str:
 def build_graph(artifacts: ArtifactBundle) -> Graph:
     graph = Graph()
 
+    for file_path, dep_name, raw_spec, line, policy_violation in artifacts.dependency_specs:
+        dep_node_id = f"dependency:{_safe_id(file_path)}:{_safe_id(dep_name)}:{line or 0}"
+        graph.nodes.append(
+            Node(
+                id=dep_node_id,
+                type="Dependency",
+                name=dep_name,
+                layer="infrastructure",
+                source_ref=_with_line_ref(file_path, line),
+                confidence="high",
+                details={
+                    "spec": raw_spec,
+                    "policy_violation": policy_violation,
+                },
+            )
+        )
+
     for file_path, model_name in artifacts.pydantic_models:
         model_node_id = f"entity:{_safe_id(file_path)}:{model_name}"
         graph.nodes.append(

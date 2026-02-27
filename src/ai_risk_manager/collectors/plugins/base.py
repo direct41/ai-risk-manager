@@ -40,6 +40,8 @@ class ArtifactBundle:
     test_cases: list[tuple[str, str, int, str]] = field(default_factory=list)  # (file, test_name, line, snippet)
     test_http_calls: list[tuple[str, str, str, str, int, str]] = field(default_factory=list)
     # (file, test_name, method, route_path, line, snippet)
+    dependency_specs: list[tuple[str, str, str, int | None, str | None]] = field(default_factory=list)
+    # (file, dependency_name, raw_spec, line, policy_violation)
 
 
 class CollectorPlugin(Protocol):

@@ -30,6 +30,7 @@ Extractor в первую очередь собирает:
 - `critical_path_no_tests`
 - `missing_transition_handler`
 - `broken_invariant_on_transition`
+- `dependency_risk_policy_violation`
 
 Опционально добавляется semantic AI stage (если включен LLM backend).
 
