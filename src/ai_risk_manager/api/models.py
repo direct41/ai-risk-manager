@@ -44,6 +44,7 @@ class AnalyzeSummary(BaseModel):
     unchanged_count: int
     fallback_reason: str | None = None
     support_level_applied: AppliedSupportLevel
+    effective_ci_mode: CIMode
     verification_pass_rate: float
     evidence_completeness: float
     competitive_mode: CompetitiveMode

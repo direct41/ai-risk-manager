@@ -167,7 +167,7 @@ Response always includes:
 - `output_dir`
 - `artifacts`
 - `result` (`null` for `exit_code` 1/2)
-- `summary` (`new_count`, `resolved_count`, `unchanged_count`, `fallback_reason`, `support_level_applied`, `verification_pass_rate`, `evidence_completeness`, `competitive_mode`)
+- `summary` (`new_count`, `resolved_count`, `unchanged_count`, `fallback_reason`, `support_level_applied`, `effective_ci_mode`, `verification_pass_rate`, `evidence_completeness`, `competitive_mode`)
 
 ## Provider Selection
 

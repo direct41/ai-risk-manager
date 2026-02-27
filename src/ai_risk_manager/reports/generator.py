@@ -53,6 +53,7 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
             lines.append(f"- Pre-flight note: {reason}")
     lines.append(f"- analysis_scope: `{result.analysis_scope}`")
     lines.append(f"- support_level_applied: `{result.summary.support_level_applied}`")
+    lines.append(f"- effective_ci_mode: `{result.summary.effective_ci_mode}`")
     lines.append(f"- competitive_mode: `{result.summary.competitive_mode}`")
     lines.append(
         f"- PR delta: new=`{result.summary.new_count}`, resolved=`{result.summary.resolved_count}`, unchanged=`{result.summary.unchanged_count}`"
@@ -145,6 +146,7 @@ def render_pr_summary_md(result: PipelineResult, notes: list[str], *, only_new: 
     lines = [marker, "## AI Risk Manager Summary", ""]
     lines.append(f"- analysis_scope: `{result.analysis_scope}`")
     lines.append(f"- support_level_applied: `{result.summary.support_level_applied}`")
+    lines.append(f"- effective_ci_mode: `{result.summary.effective_ci_mode}`")
     lines.append(f"- competitive_mode: `{result.summary.competitive_mode}`")
     lines.append(f"- findings: `{len(result.findings.findings)}`")
     lines.append(

@@ -142,6 +142,7 @@ class RunSummary:
     unchanged_count: int = 0
     fallback_reason: str | None = None
     support_level_applied: AppliedSupportLevel = "l0"
+    effective_ci_mode: CIMode = "advisory"
     verification_pass_rate: float = 0.0
     evidence_completeness: float = 0.0
     competitive_mode: CompetitiveMode = "deterministic"

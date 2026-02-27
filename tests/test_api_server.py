@@ -63,6 +63,7 @@ def test_api_analyze_matches_pipeline_for_same_input(tmp_path: Path, write_file)
     assert api_data["result"] is not None
     assert api_data["summary"] is not None
     assert "new_count" in api_data["summary"]
+    assert "effective_ci_mode" in api_data["summary"]
     assert api_data["result"]["analysis_scope"] == direct_result.analysis_scope
     assert len(api_data["result"]["findings"]["findings"]) == len(direct_result.findings.findings)
 
@@ -156,6 +157,7 @@ def test_api_accepts_ai_first_request_fields(tmp_path: Path, write_file) -> None
     payload = response.json()
     assert payload["exit_code"] == 0
     assert payload["summary"]["support_level_applied"] in {"l0", "l1", "l2"}
+    assert payload["summary"]["effective_ci_mode"] == "advisory"
     assert "verification_pass_rate" in payload["summary"]
     assert "evidence_completeness" in payload["summary"]
     assert payload["summary"]["competitive_mode"] in {"deterministic", "hybrid"}

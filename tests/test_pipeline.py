@@ -80,9 +80,11 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     assert all(not node["source_ref"].startswith("/") for node in graph["nodes"])
     report = (out_dir / "report.md").read_text(encoding="utf-8")
     assert "Graph Statistics:" in report
+    assert "effective_ci_mode:" in report
     pr_summary = (out_dir / "pr_summary.md").read_text(encoding="utf-8")
     assert "confidence=`" in pr_summary
     assert "evidence_refs=`" in pr_summary
+    assert "effective_ci_mode:" in pr_summary
 
 
 def test_full_mode_sets_full_analysis_scope(tmp_path: Path, write_file) -> None:
@@ -466,8 +468,10 @@ def test_ci_mode_block_new_critical_blocks_only_new_critical(tmp_path: Path, wri
 
     with patch("ai_risk_manager.pipeline.run.run_rules", return_value=critical):
         with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"app/api.py"}):
-            _, code, notes = run_pipeline(ctx)
+            result, code, notes = run_pipeline(ctx)
     assert code == 3
+    assert result is not None
+    assert result.summary.effective_ci_mode == "block_new_critical"
     assert any("block_new_critical" in note for note in notes)
 
 
@@ -512,8 +516,10 @@ def test_ci_mode_block_new_critical_ignores_unverified_findings(tmp_path: Path, 
 
     with patch("ai_risk_manager.pipeline.run.run_rules", return_value=critical):
         with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"app/api.py"}):
-            _, code, notes = run_pipeline(ctx)
+            result, code, notes = run_pipeline(ctx)
     assert code == 0
+    assert result is not None
+    assert result.summary.effective_ci_mode == "block_new_critical"
     assert not any("block_new_critical triggered" in note for note in notes)
 
 
@@ -558,8 +564,10 @@ def test_ci_mode_l1_downgrades_block_to_soft_and_blocks_unverified_critical(tmp_
 
     with patch("ai_risk_manager.pipeline.run.run_rules", return_value=critical):
         with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"app/api.py"}):
-            _, code, notes = run_pipeline(ctx)
+            result, code, notes = run_pipeline(ctx)
     assert code == 3
+    assert result is not None
+    assert result.summary.effective_ci_mode == "soft"
     assert any("support_level=l1" in note for note in notes)
     assert any("ci_mode=soft triggered" in note for note in notes)
 
@@ -669,6 +677,7 @@ def test_unknown_stack_auto_uses_l0_advisory_and_does_not_fail(tmp_path: Path, w
     assert code == 0
     assert result is not None
     assert result.summary.support_level_applied == "l0"
+    assert result.summary.effective_ci_mode == "advisory"
     assert any("ci_mode overridden to advisory" in note for note in notes)
 
 

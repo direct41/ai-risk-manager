@@ -155,6 +155,11 @@ curl -s http://127.0.0.1:8000/healthz
 - `path`, `mode`, `base`, `no_llm`, `provider`, `baseline_graph`, `output_dir`, `format`, `fail_on_severity`, `suppress_file`, `sample`
 - `analysis_engine`, `only_new`, `min_confidence`, `ci_mode`, `support_level`, `risk_policy`
 
+В `summary` ответа есть machine-readable поля rollout:
+
+- `support_level_applied`
+- `effective_ci_mode`
+
 ## MVP ограничения
 
 - в `v0.1.x` поддерживается только FastAPI extractor plugin

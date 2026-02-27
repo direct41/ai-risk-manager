@@ -553,6 +553,7 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
             exit_code = 3
 
     effective_ci_mode, ci_mode_note = _resolve_effective_ci_mode(ctx.ci_mode, support_level_applied)
+    result.summary.effective_ci_mode = effective_ci_mode
     if ci_mode_note:
         notes.append(ci_mode_note)
 
