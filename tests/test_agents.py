@@ -181,3 +181,30 @@ def test_semantic_agent_uses_valid_payload() -> None:
     assert report.generated_without_llm is False
     assert len(report.findings) == 1
     assert report.findings[0].origin == "ai"
+
+
+def test_semantic_agent_degrades_on_unknown_severity() -> None:
+    graph = _sample_graph()
+    payload = {
+        "findings": [
+            {
+                "id": "s3",
+                "rule_id": "semantic_risk",
+                "title": "Unexpected severity label",
+                "description": "d",
+                "severity": "info",
+                "confidence": "high",
+                "evidence": "e",
+                "source_ref": "app/api.py:1",
+                "recommendation": "r",
+                "evidence_refs": ["app/api.py:1"],
+            }
+        ]
+    }
+
+    with patch("ai_risk_manager.agents.semantic_risk_agent.call_llm_json", return_value=payload):
+        report, notes = generate_semantic_findings(graph, provider="api", generated_without_llm=False)
+
+    assert report.generated_without_llm is True
+    assert not report.findings
+    assert any("Unsupported semantic finding severity" in note for note in notes)

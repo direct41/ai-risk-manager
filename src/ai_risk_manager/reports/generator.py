@@ -7,6 +7,7 @@ from ai_risk_manager.schemas.types import FindingsReport, PipelineResult
 
 SEVERITY_ORDER = "critical high medium low".split()
 CONFIDENCE_ORDER = {"high": 0, "medium": 1, "low": 2}
+SEVERITY_INDEX = {severity: idx for idx, severity in enumerate(SEVERITY_ORDER)}
 
 
 def _summary_counts(findings: FindingsReport) -> dict[str, int]:
@@ -23,7 +24,7 @@ def _rank_findings(findings):
     return sorted(
         findings,
         key=lambda f: (
-            SEVERITY_ORDER.index(f.severity),
+            SEVERITY_INDEX.get(f.severity, len(SEVERITY_ORDER)),
             CONFIDENCE_ORDER.get(f.confidence, 3),
             -len(f.evidence_refs),
             f.rule_id,
@@ -78,7 +79,10 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
     if not result.findings.findings:
         lines.append("No high-signal release risks detected in current scope.")
     else:
-        top_severity = sorted(result.findings.findings, key=lambda f: SEVERITY_ORDER.index(f.severity))[0].severity
+        top_severity = sorted(
+            result.findings.findings,
+            key=lambda f: SEVERITY_INDEX.get(f.severity, len(SEVERITY_ORDER)),
+        )[0].severity
         lines.append(
             f"Detected `{len(result.findings.findings)}` active risk(s). "
             f"Highest severity is `{top_severity}`, which can impact release confidence if ignored."
@@ -160,11 +164,11 @@ def render_pr_summary_md(result: PipelineResult, notes: list[str], *, only_new: 
 
     top_candidates = result.findings.findings
     if only_new:
-        min_rank = SEVERITY_ORDER.index("high")
+        min_rank = SEVERITY_INDEX["high"]
         top_candidates = [
             finding
             for finding in top_candidates
-            if finding.status == "new" and SEVERITY_ORDER.index(finding.severity) <= min_rank
+            if finding.status == "new" and SEVERITY_INDEX.get(finding.severity, len(SEVERITY_ORDER)) <= min_rank
         ]
 
     top = _rank_findings(top_candidates)[:5]

@@ -12,7 +12,17 @@ from ai_risk_manager.schemas.types import PreflightResult
 
 WRITE_METHODS = ("post", "put", "patch", "delete")
 ROUTE_METHODS = WRITE_METHODS + ("get",)
-EXCLUDED_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules", ".riskmap"}
+EXCLUDED_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "node_modules",
+    ".riskmap",
+    "eval",
+    "fixtures",
+    "testdata",
+}
 GUARD_HINTS = (
     "allow",
     "valid",

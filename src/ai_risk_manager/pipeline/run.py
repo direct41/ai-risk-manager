@@ -490,6 +490,10 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
     summary.verification_pass_rate = verification_pass_rate
     summary.evidence_completeness = evidence_completeness
     summary.competitive_mode = competitive_mode
+    effective_ci_mode, ci_mode_note = _resolve_effective_ci_mode(ctx.ci_mode, support_level_applied)
+    summary.effective_ci_mode = effective_ci_mode
+    if ci_mode_note:
+        notes.append(ci_mode_note)
 
     t = _progress(6, total_steps, "QA strategy agent")
     test_plan = generate_test_plan(
@@ -525,6 +529,33 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
         run_metrics=run_metrics,
     )
 
+    exit_code = 0
+    if ctx.fail_on_severity:
+        max_sev = _max_severity([finding.severity for finding in result.findings.findings])
+        if max_sev and SEVERITY_RANK.get(max_sev, 0) >= SEVERITY_RANK[ctx.fail_on_severity]:
+            notes.append(
+                f"Fail-on-severity triggered: found '{max_sev}' which is >= threshold '{ctx.fail_on_severity}'."
+            )
+            exit_code = 3
+
+    if effective_ci_mode == "soft":
+        if any(
+            finding.status == "new" and SEVERITY_RANK.get(finding.severity, 0) >= SEVERITY_RANK["high"]
+            for finding in result.findings.findings
+        ):
+            notes.append("ci_mode=soft triggered: new high/critical finding exists.")
+            exit_code = 3
+    elif effective_ci_mode == "block_new_critical":
+        if any(
+            finding.status == "new"
+            and finding.severity == "critical"
+            and finding.confidence == "high"
+            and finding.fingerprint in verified_fingerprints
+            for finding in result.findings.findings
+        ):
+            notes.append("ci_mode=block_new_critical triggered: verified high-confidence new critical finding exists.")
+            exit_code = 3
+
     ctx.output_dir.mkdir(parents=True, exist_ok=True)
     generated_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     if ctx.output_format in {"json", "both"}:
@@ -542,37 +573,5 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
         if ctx.mode == "pr":
             pr_summary = render_pr_summary_md(result, notes, only_new=ctx.only_new)
             write_report(ctx.output_dir / "pr_summary.md", pr_summary)
-
-    exit_code = 0
-    if ctx.fail_on_severity:
-        max_sev = _max_severity([finding.severity for finding in result.findings.findings])
-        if max_sev and SEVERITY_RANK[max_sev] >= SEVERITY_RANK[ctx.fail_on_severity]:
-            notes.append(
-                f"Fail-on-severity triggered: found '{max_sev}' which is >= threshold '{ctx.fail_on_severity}'."
-            )
-            exit_code = 3
-
-    effective_ci_mode, ci_mode_note = _resolve_effective_ci_mode(ctx.ci_mode, support_level_applied)
-    result.summary.effective_ci_mode = effective_ci_mode
-    if ci_mode_note:
-        notes.append(ci_mode_note)
-
-    if effective_ci_mode == "soft":
-        if any(
-            finding.status == "new" and SEVERITY_RANK[finding.severity] >= SEVERITY_RANK["high"]
-            for finding in result.findings.findings
-        ):
-            notes.append("ci_mode=soft triggered: new high/critical finding exists.")
-            exit_code = 3
-    elif effective_ci_mode == "block_new_critical":
-        if any(
-            finding.status == "new"
-            and finding.severity == "critical"
-            and finding.confidence == "high"
-            and finding.fingerprint in verified_fingerprints
-            for finding in result.findings.findings
-        ):
-            notes.append("ci_mode=block_new_critical triggered: verified high-confidence new critical finding exists.")
-            exit_code = 3
 
     return result, exit_code, notes

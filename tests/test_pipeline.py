@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
 from ai_risk_manager.cli import main
 from ai_risk_manager.pipeline.run import _resolve_effective_ci_mode, run_pipeline
-from ai_risk_manager.schemas.types import Finding, FindingsReport, RunContext
+from ai_risk_manager.schemas.types import Finding, FindingsReport, RunContext, Severity
 from ai_risk_manager.stacks.discovery import StackDetectionResult
 
 
@@ -1004,3 +1005,107 @@ def test_pipeline_dependency_severity_is_lower_for_development_scope(tmp_path: P
     assert dev_range
     assert runtime_range[0].severity == "medium"
     assert dev_range[0].severity == "low"
+
+
+def test_report_uses_effective_ci_mode_after_support_level_resolution(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/orders')\n"
+        "def create_order():\n"
+        "    return {'ok': True}\n",
+    )
+
+    result, code, _ = run_pipeline(
+        RunContext(
+            repo_path=tmp_path,
+            mode="full",
+            base=None,
+            output_dir=tmp_path / ".riskmap",
+            provider="auto",
+            no_llm=True,
+            ci_mode="block_new_critical",
+            support_level="l1",
+        )
+    )
+    assert code == 0
+    assert result is not None
+    assert result.summary.effective_ci_mode == "soft"
+
+    report = (tmp_path / ".riskmap" / "report.md").read_text(encoding="utf-8")
+    assert "- effective_ci_mode: `soft`" in report
+    assert "support_level=l1" in report
+
+
+def test_report_includes_fail_on_severity_note(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/orders')\n"
+        "def create_order():\n"
+        "    return {'ok': True}\n",
+    )
+
+    _, code, _ = run_pipeline(
+        RunContext(
+            repo_path=tmp_path,
+            mode="full",
+            base=None,
+            output_dir=tmp_path / ".riskmap",
+            provider="auto",
+            no_llm=True,
+            fail_on_severity="high",
+        )
+    )
+    assert code == 3
+    report = (tmp_path / ".riskmap" / "report.md").read_text(encoding="utf-8")
+    assert "Fail-on-severity triggered" in report
+
+
+def test_pipeline_tolerates_unexpected_severity_in_findings(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/orders')\n"
+        "def create_order():\n"
+        "    return {'ok': True}\n",
+    )
+
+    mocked = FindingsReport(
+        findings=[
+            Finding(
+                id="x1",
+                rule_id="semantic_unexpected",
+                title="Unexpected severity from AI",
+                description="d",
+                severity=cast(Severity, "info"),
+                confidence="high",
+                evidence="e",
+                source_ref="app/api.py:1",
+                suppression_key="x1",
+                recommendation="r",
+                evidence_refs=["app/api.py:1"],
+            )
+        ],
+        generated_without_llm=True,
+    )
+
+    with patch("ai_risk_manager.pipeline.run.run_rules", return_value=mocked):
+        result, code, _ = run_pipeline(
+            RunContext(
+                repo_path=tmp_path,
+                mode="pr",
+                base="main",
+                output_dir=tmp_path / ".riskmap",
+                provider="auto",
+                no_llm=True,
+            )
+        )
+
+    assert code == 0
+    assert result is not None
+    pr_summary = (tmp_path / ".riskmap" / "pr_summary.md").read_text(encoding="utf-8")
+    assert "Unexpected severity from AI" in pr_summary

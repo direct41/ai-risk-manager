@@ -178,3 +178,36 @@ def test_fastapi_plugin_marks_dev_scope_from_requirements_filename(tmp_path: Pat
 
     violations = {(name, violation, scope) for _, name, _, _, violation, scope in bundle.dependency_specs}
     assert ("pytest", "range_not_pinned", "development") in violations
+
+
+def test_fastapi_plugin_skips_eval_and_fixture_directories(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "eval" / "repos" / "fixture_app.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\nALLOWED_TRANSITIONS={'pending':['paid']}\n",
+    )
+    write_file(
+        tmp_path / "fixtures" / "fixture_api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/fixture')\ndef fixture_ep():\n    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "testdata" / "fixture_test.py",
+        "def test_fixture():\n    assert True\n",
+    )
+
+    plugin = get_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+    bundle = plugin.collect(tmp_path)
+
+    collected_refs = {
+        *[row[0] for row in bundle.write_endpoints],
+        *[row[0] for row in bundle.declared_transitions],
+        *[row[0] for row in bundle.test_cases],
+    }
+    assert "app/api.py" in collected_refs
+    assert all(not ref.startswith("eval/") for ref in collected_refs)
+    assert all(not ref.startswith("fixtures/") for ref in collected_refs)
+    assert all(not ref.startswith("testdata/") for ref in collected_refs)

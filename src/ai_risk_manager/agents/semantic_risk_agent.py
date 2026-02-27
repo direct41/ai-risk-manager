@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+from typing import cast
 
 from ai_risk_manager.agents.llm_runtime import LLMRuntimeError, call_llm_json
-from ai_risk_manager.schemas.types import Finding, FindingsReport, Graph
+from ai_risk_manager.schemas.types import Confidence, Finding, FindingsReport, Graph, Severity
 
 _MAX_CONTEXT_ITEMS = 120
+_ALLOWED_SEVERITY: set[str] = {"critical", "high", "medium", "low"}
+_ALLOWED_CONFIDENCE: set[str] = {"high", "medium", "low"}
 
 
 def _graph_context(graph: Graph) -> dict:
@@ -41,6 +44,12 @@ def _validate_semantic_payload(payload: dict) -> FindingsReport:
         evidence_refs = row.get("evidence_refs")
         if not isinstance(evidence_refs, list) or not all(isinstance(ref, str) for ref in evidence_refs):
             raise ValueError("Each semantic finding must include list field 'evidence_refs' with string refs")
+        severity = str(row.get("severity", "")).strip().lower()
+        if severity not in _ALLOWED_SEVERITY:
+            raise ValueError(f"Unsupported semantic finding severity: {severity!r}")
+        confidence = str(row.get("confidence", "")).strip().lower()
+        if confidence not in _ALLOWED_CONFIDENCE:
+            raise ValueError(f"Unsupported semantic finding confidence: {confidence!r}")
 
         findings.append(
             Finding(
@@ -48,8 +57,8 @@ def _validate_semantic_payload(payload: dict) -> FindingsReport:
                 rule_id=str(row["rule_id"]),
                 title=str(row["title"]),
                 description=str(row["description"]),
-                severity=row["severity"],
-                confidence=row["confidence"],
+                severity=cast(Severity, severity),
+                confidence=cast(Confidence, confidence),
                 evidence=str(row["evidence"]),
                 source_ref=str(row["source_ref"]),
                 suppression_key=str(row.get("suppression_key") or f"{row['rule_id']}:{row['id']}"),
