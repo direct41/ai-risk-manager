@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from ai_risk_manager.cli import main
-from ai_risk_manager.pipeline.run import run_pipeline
+from ai_risk_manager.pipeline.run import _resolve_effective_ci_mode, run_pipeline
 from ai_risk_manager.schemas.types import Finding, FindingsReport, RunContext
 from ai_risk_manager.stacks.discovery import StackDetectionResult
 
@@ -402,6 +402,29 @@ def test_cli_parses_new_flags(tmp_path: Path, write_file) -> None:
         assert ctx == expected_ctx
 
 
+def test_ci_mode_matrix_resolution_by_support_level() -> None:
+    cases = [
+        ("advisory", "l0", "advisory", None),
+        ("soft", "l0", "advisory", "support_level=l0"),
+        ("block_new_critical", "l0", "advisory", "support_level=l0"),
+        ("advisory", "l1", "advisory", None),
+        ("soft", "l1", "soft", None),
+        ("block_new_critical", "l1", "soft", "support_level=l1"),
+        ("advisory", "l2", "advisory", None),
+        ("soft", "l2", "soft", None),
+        ("block_new_critical", "l2", "block_new_critical", None),
+    ]
+
+    for requested, support_level, expected, note_marker in cases:
+        resolved, note = _resolve_effective_ci_mode(requested, support_level)
+        assert resolved == expected
+        if note_marker is None:
+            assert note is None
+        else:
+            assert note is not None
+            assert note_marker in note
+
+
 def test_ci_mode_block_new_critical_blocks_only_new_critical(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",
@@ -492,6 +515,53 @@ def test_ci_mode_block_new_critical_ignores_unverified_findings(tmp_path: Path, 
             _, code, notes = run_pipeline(ctx)
     assert code == 0
     assert not any("block_new_critical triggered" in note for note in notes)
+
+
+def test_ci_mode_l1_downgrades_block_to_soft_and_blocks_unverified_critical(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    baseline = tmp_path / ".riskmap" / "baseline" / "graph.json"
+    write_file(baseline, '{"nodes": []}')
+
+    critical = FindingsReport(
+        findings=[
+            Finding(
+                id="critical:new",
+                rule_id="critical_new_risk",
+                title="Critical new risk",
+                description="d",
+                severity="critical",
+                confidence="high",
+                evidence="e",
+                source_ref="app/api.py:1",
+                suppression_key="critical:new",
+                recommendation="fix now",
+                evidence_refs=["missing/file.py:1"],
+            )
+        ],
+        generated_without_llm=True,
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+        baseline_graph=baseline,
+        ci_mode="block_new_critical",
+        support_level="l1",
+    )
+
+    with patch("ai_risk_manager.pipeline.run.run_rules", return_value=critical):
+        with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"app/api.py"}):
+            _, code, notes = run_pipeline(ctx)
+    assert code == 3
+    assert any("support_level=l1" in note for note in notes)
+    assert any("ci_mode=soft triggered" in note for note in notes)
 
 
 def test_pr_baseline_status_and_only_new_summary(tmp_path: Path, write_file) -> None:

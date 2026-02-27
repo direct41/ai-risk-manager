@@ -22,6 +22,7 @@ from ai_risk_manager.rules.suppressions import apply_suppressions, load_suppress
 from ai_risk_manager.schemas.types import (
     AnalysisScope,
     AppliedSupportLevel,
+    CIMode,
     CompetitiveMode,
     FindingsReport,
     Graph,
@@ -38,6 +39,23 @@ from ai_risk_manager.stacks.discovery import detect_stack
 SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 CONFIDENCE_RANK = {"high": 3, "medium": 2, "low": 1}
 RISK_POLICY_TOP_LIMIT = {"conservative": 10, "balanced": 20, "aggressive": 30}
+CI_MODE_MATRIX: dict[AppliedSupportLevel, dict[CIMode, CIMode]] = {
+    "l0": {
+        "advisory": "advisory",
+        "soft": "advisory",
+        "block_new_critical": "advisory",
+    },
+    "l1": {
+        "advisory": "advisory",
+        "soft": "soft",
+        "block_new_critical": "soft",
+    },
+    "l2": {
+        "advisory": "advisory",
+        "soft": "soft",
+        "block_new_critical": "block_new_critical",
+    },
+}
 
 
 def _resolve_support_level(requested: str, detected_stack: str) -> AppliedSupportLevel:
@@ -52,6 +70,17 @@ def _resolve_competitive_mode(analysis_engine: str) -> CompetitiveMode:
     if analysis_engine == "deterministic":
         return "deterministic"
     return "hybrid"
+
+
+def _resolve_effective_ci_mode(requested: CIMode, support_level_applied: AppliedSupportLevel) -> tuple[CIMode, str | None]:
+    effective = CI_MODE_MATRIX[support_level_applied][requested]
+    if effective == requested:
+        return effective, None
+    if support_level_applied == "l0":
+        return effective, f"ci_mode overridden to advisory for support_level=l0 (requested: {requested})."
+    if support_level_applied == "l1":
+        return effective, f"ci_mode downgraded to soft for support_level=l1 (requested: {requested})."
+    return effective, None
 
 
 def _progress(step: int, total: int, label: str, start_ts: float | None = None) -> float:
@@ -523,13 +552,9 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
             )
             exit_code = 3
 
-    effective_ci_mode = ctx.ci_mode
-    if support_level_applied == "l0" and ctx.ci_mode != "advisory":
-        effective_ci_mode = "advisory"
-        notes.append("ci_mode overridden to advisory for support_level=l0.")
-    elif support_level_applied == "l1" and ctx.ci_mode == "block_new_critical":
-        effective_ci_mode = "soft"
-        notes.append("ci_mode downgraded to soft for support_level=l1.")
+    effective_ci_mode, ci_mode_note = _resolve_effective_ci_mode(ctx.ci_mode, support_level_applied)
+    if ci_mode_note:
+        notes.append(ci_mode_note)
 
     if effective_ci_mode == "soft":
         if any(

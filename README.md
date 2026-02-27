@@ -209,6 +209,20 @@ Supported credentials:
 - `l1`: verified/adoption mode, `block-new-critical` is downgraded to `soft`.
 - `l2`: strict mode, full CI policy behavior.
 
+Effective CI mode matrix:
+
+| support_level_applied | requested `ci_mode` | effective `ci_mode` |
+|---|---|---|
+| `l0` | `advisory` | `advisory` |
+| `l0` | `soft` | `advisory` |
+| `l0` | `block-new-critical` | `advisory` |
+| `l1` | `advisory` | `advisory` |
+| `l1` | `soft` | `soft` |
+| `l1` | `block-new-critical` | `soft` |
+| `l2` | `advisory` | `advisory` |
+| `l2` | `soft` | `soft` |
+| `l2` | `block-new-critical` | `block-new-critical` |
+
 ## Suppressions (`.airiskignore`)
 
 Use suppressions for known noise:

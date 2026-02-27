@@ -95,6 +95,12 @@ riskmap analyze \
 - `--fail-on-severity high` для blocking поведения по порогу
 - `--suppress-file .airiskignore` для suppressions
 
+Матрица effective `ci_mode`:
+
+- `l0`: `advisory|soft|block-new-critical -> advisory`
+- `l1`: `advisory -> advisory`, `soft -> soft`, `block-new-critical -> soft`
+- `l2`: режим применяется без изменений
+
 Профили dependency policy:
 
 - `conservative`: только `direct_reference` и `wildcard_version`
