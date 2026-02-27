@@ -523,6 +523,54 @@ def test_ci_mode_block_new_critical_ignores_unverified_findings(tmp_path: Path, 
     assert not any("block_new_critical triggered" in note for note in notes)
 
 
+def test_ci_mode_block_new_critical_ignores_low_confidence_critical(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    baseline = tmp_path / ".riskmap" / "baseline" / "graph.json"
+    write_file(baseline, '{"nodes": []}')
+
+    critical_low_conf = FindingsReport(
+        findings=[
+            Finding(
+                id="critical:new",
+                rule_id="critical_new_risk",
+                title="Critical new risk",
+                description="d",
+                severity="critical",
+                confidence="low",
+                evidence="e",
+                source_ref="app/api.py:1",
+                suppression_key="critical:new",
+                recommendation="fix now",
+                evidence_refs=["app/api.py:1"],
+            )
+        ],
+        generated_without_llm=True,
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+        baseline_graph=baseline,
+        ci_mode="block_new_critical",
+        support_level="l2",
+    )
+
+    with patch("ai_risk_manager.pipeline.run.run_rules", return_value=critical_low_conf):
+        with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"app/api.py"}):
+            result, code, notes = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    assert result.summary.effective_ci_mode == "block_new_critical"
+    assert not any("block_new_critical triggered" in note for note in notes)
+
+
 def test_ci_mode_l1_downgrades_block_to_soft_and_blocks_unverified_critical(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",

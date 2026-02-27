@@ -568,10 +568,11 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
         if any(
             finding.status == "new"
             and finding.severity == "critical"
+            and finding.confidence == "high"
             and finding.fingerprint in verified_fingerprints
             for finding in result.findings.findings
         ):
-            notes.append("ci_mode=block_new_critical triggered: verified new critical finding exists.")
+            notes.append("ci_mode=block_new_critical triggered: verified high-confidence new critical finding exists.")
             exit_code = 3
 
     return result, exit_code, notes

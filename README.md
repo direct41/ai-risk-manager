@@ -200,7 +200,7 @@ Supported credentials:
 
 - `advisory` (default): never fail only because of new findings.
 - `soft`: fail when any new `high|critical` finding exists.
-- `block-new-critical`: fail only when a new `critical` finding is verified by evidence refs.
+- `block-new-critical`: fail only when a new `critical` finding is both `high` confidence and verified by evidence refs.
 
 ## Support Levels
 
