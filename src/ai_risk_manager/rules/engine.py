@@ -1,9 +1,15 @@
 from __future__ import annotations
 
-from ai_risk_manager.schemas.types import Finding, FindingsReport, Graph
+from ai_risk_manager.schemas.types import Finding, FindingsReport, Graph, RiskPolicy
+
+DEPENDENCY_VIOLATIONS_BY_POLICY: dict[RiskPolicy, set[str]] = {
+    "conservative": {"direct_reference", "wildcard_version"},
+    "balanced": {"direct_reference", "wildcard_version", "range_not_pinned"},
+    "aggressive": {"direct_reference", "wildcard_version", "range_not_pinned", "unpinned_version"},
+}
 
 
-def run_rules(graph: Graph) -> FindingsReport:
+def run_rules(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -> FindingsReport:
     findings: list[Finding] = []
     api_nodes = [n for n in graph.nodes if n.type == "API"]
     dependency_nodes = [n for n in graph.nodes if n.type == "Dependency"]
@@ -84,6 +90,8 @@ def run_rules(graph: Graph) -> FindingsReport:
     for dep in dependency_nodes:
         violation = str(dep.details.get("policy_violation") or "").strip()
         if not violation:
+            continue
+        if violation not in DEPENDENCY_VIOLATIONS_BY_POLICY[risk_policy]:
             continue
         spec = str(dep.details.get("spec") or "").strip()
         if violation == "direct_reference":

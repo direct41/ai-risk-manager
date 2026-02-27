@@ -394,7 +394,7 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
             notes.append("Baseline graph not found or invalid; using full_fallback scan.")
 
     t = _progress(4, total_steps, "Running deterministic rules")
-    findings_raw = run_rules(analysis_graph)
+    findings_raw = run_rules(analysis_graph, risk_policy=ctx.risk_policy)
     _progress(4, total_steps, "Running deterministic rules", t)
 
     suppress_path = ctx.suppress_file

@@ -743,3 +743,57 @@ def test_pipeline_skips_dependency_policy_when_versions_are_pinned(tmp_path: Pat
     assert result is not None
     rule_ids = {finding.rule_id for finding in result.findings.findings}
     assert "dependency_risk_policy_violation" not in rule_ids
+
+
+def _dependency_violation_kinds(result) -> set[str]:
+    kinds: set[str] = set()
+    for finding in result.findings.findings:
+        if finding.rule_id != "dependency_risk_policy_violation":
+            continue
+        if "(" in finding.title and finding.title.endswith(")"):
+            kinds.add(finding.title.rsplit("(", 1)[1][:-1])
+    return kinds
+
+
+def test_pipeline_dependency_policy_profiles_control_violation_sensitivity(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/orders')\n"
+        "def create_order():\n"
+        "    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_api.py", "def test_create_order():\n    assert True\n")
+    write_file(
+        tmp_path / "requirements.txt",
+        "fastapi==0.110.0\nrequests>=2.31.0\npytest\ninternal-lib @ git+https://example.com/internal.git\n",
+    )
+
+    base_ctx = dict(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+
+    conservative_result, code, _ = run_pipeline(RunContext(**base_ctx, risk_policy="conservative"))
+    assert code == 0
+    assert conservative_result is not None
+    assert _dependency_violation_kinds(conservative_result) == {"direct_reference"}
+
+    balanced_result, code, _ = run_pipeline(RunContext(**base_ctx, risk_policy="balanced"))
+    assert code == 0
+    assert balanced_result is not None
+    assert _dependency_violation_kinds(balanced_result) == {"direct_reference", "range_not_pinned"}
+
+    aggressive_result, code, _ = run_pipeline(RunContext(**base_ctx, risk_policy="aggressive"))
+    assert code == 0
+    assert aggressive_result is not None
+    assert _dependency_violation_kinds(aggressive_result) == {
+        "direct_reference",
+        "range_not_pinned",
+        "unpinned_version",
+    }

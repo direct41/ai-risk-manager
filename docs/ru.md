@@ -95,6 +95,12 @@ riskmap analyze \
 - `--fail-on-severity high` для blocking поведения по порогу
 - `--suppress-file .airiskignore` для suppressions
 
+Профили dependency policy:
+
+- `conservative`: только `direct_reference` и `wildcard_version`
+- `balanced` (по умолчанию): `conservative` + `range_not_pinned`
+- `aggressive`: `balanced` + `unpinned_version`
+
 ## Когда инструмент особенно полезен
 
 - FastAPI сервисы, где нужно быстро находить релизные QA-риски.

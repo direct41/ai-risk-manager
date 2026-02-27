@@ -111,6 +111,12 @@ riskmap analyze --fail-on-severity high
 riskmap analyze --suppress-file .airiskignore
 ```
 
+Dependency policy profile behavior:
+
+- `conservative`: reports only `direct_reference` and `wildcard_version`.
+- `balanced` (default): `conservative` + `range_not_pinned`.
+- `aggressive`: `balanced` + `unpinned_version`.
+
 ## API Usage (sync)
 
 Install API dependencies:
