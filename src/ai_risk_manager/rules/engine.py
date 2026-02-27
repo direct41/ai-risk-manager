@@ -7,6 +7,20 @@ DEPENDENCY_VIOLATIONS_BY_POLICY: dict[RiskPolicy, set[str]] = {
     "balanced": {"direct_reference", "wildcard_version", "range_not_pinned"},
     "aggressive": {"direct_reference", "wildcard_version", "range_not_pinned", "unpinned_version"},
 }
+DEPENDENCY_SEVERITY_BY_SCOPE: dict[str, dict[str, str]] = {
+    "runtime": {
+        "direct_reference": "high",
+        "wildcard_version": "high",
+        "range_not_pinned": "medium",
+        "unpinned_version": "medium",
+    },
+    "development": {
+        "direct_reference": "medium",
+        "wildcard_version": "medium",
+        "range_not_pinned": "low",
+        "unpinned_version": "low",
+    },
+}
 
 
 def run_rules(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -> FindingsReport:
@@ -93,6 +107,8 @@ def run_rules(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -> Findings
             continue
         if violation not in DEPENDENCY_VIOLATIONS_BY_POLICY[risk_policy]:
             continue
+        scope = str(dep.details.get("scope") or "runtime").strip().lower() or "runtime"
+        severity_map = DEPENDENCY_SEVERITY_BY_SCOPE.get(scope, DEPENDENCY_SEVERITY_BY_SCOPE["runtime"])
         spec = str(dep.details.get("spec") or "").strip()
         if violation == "direct_reference":
             recommendation = (
@@ -115,9 +131,9 @@ def run_rules(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -> Findings
                 description=(
                     "Dependency specification is not pinned to an immutable version and may increase supply-chain risk."
                 ),
-                severity="high" if violation in {"direct_reference", "wildcard_version"} else "medium",
+                severity=severity_map.get(violation, "medium"),
                 confidence="high",
-                evidence=f"Detected dependency spec '{spec or '(none)'}' at {dep.source_ref}.",
+                evidence=f"Detected dependency spec '{spec or '(none)'}' at {dep.source_ref} (scope: {scope}).",
                 source_ref=dep.source_ref,
                 suppression_key=finding_id,
                 recommendation=recommendation,

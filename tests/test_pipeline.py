@@ -755,6 +755,18 @@ def _dependency_violation_kinds(result) -> set[str]:
     return kinds
 
 
+def _dependency_violation_severity_by_kind(result) -> dict[str, str]:
+    severity_by_kind: dict[str, str] = {}
+    for finding in result.findings.findings:
+        if finding.rule_id != "dependency_risk_policy_violation":
+            continue
+        if "(" not in finding.title or not finding.title.endswith(")"):
+            continue
+        kind = finding.title.rsplit("(", 1)[1][:-1]
+        severity_by_kind[kind] = finding.severity
+    return severity_by_kind
+
+
 def test_pipeline_dependency_policy_profiles_control_violation_sensitivity(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",
@@ -797,3 +809,39 @@ def test_pipeline_dependency_policy_profiles_control_violation_sensitivity(tmp_p
         "range_not_pinned",
         "unpinned_version",
     }
+
+
+def test_pipeline_dependency_severity_is_lower_for_development_scope(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/orders')\n"
+        "def create_order():\n"
+        "    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_api.py", "def test_create_order():\n    assert True\n")
+    write_file(tmp_path / "requirements.txt", "requests>=2.31.0\n")
+    write_file(tmp_path / "requirements-dev.txt", "pytest>=8.0\n")
+
+    result, code, _ = run_pipeline(
+        RunContext(
+            repo_path=tmp_path,
+            mode="full",
+            base=None,
+            output_dir=tmp_path / ".riskmap",
+            provider="auto",
+            no_llm=True,
+            risk_policy="balanced",
+        )
+    )
+    assert code == 0
+    assert result is not None
+
+    dep_findings = [f for f in result.findings.findings if f.rule_id == "dependency_risk_policy_violation"]
+    runtime_range = [f for f in dep_findings if "requirements.txt" in f.source_ref and "range_not_pinned" in f.title]
+    dev_range = [f for f in dep_findings if "requirements-dev.txt" in f.source_ref and "range_not_pinned" in f.title]
+    assert runtime_range
+    assert dev_range
+    assert runtime_range[0].severity == "medium"
+    assert dev_range[0].severity == "low"

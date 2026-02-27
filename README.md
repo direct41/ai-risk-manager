@@ -116,6 +116,9 @@ Dependency policy profile behavior:
 - `conservative`: reports only `direct_reference` and `wildcard_version`.
 - `balanced` (default): `conservative` + `range_not_pinned`.
 - `aggressive`: `balanced` + `unpinned_version`.
+- Severity is context-aware by dependency scope:
+- `runtime`: `direct_reference|wildcard_version -> high`, `range|unpinned -> medium`.
+- `development`: `direct_reference|wildcard_version -> medium`, `range|unpinned -> low`.
 
 ## API Usage (sync)
 

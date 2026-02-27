@@ -100,6 +100,9 @@ riskmap analyze \
 - `conservative`: только `direct_reference` и `wildcard_version`
 - `balanced` (по умолчанию): `conservative` + `range_not_pinned`
 - `aggressive`: `balanced` + `unpinned_version`
+- severity теперь зависит от scope зависимости:
+- `runtime`: `direct_reference|wildcard_version -> high`, `range|unpinned -> medium`
+- `development`: `direct_reference|wildcard_version -> medium`, `range|unpinned -> low`
 
 Trust-first eval gates:
 

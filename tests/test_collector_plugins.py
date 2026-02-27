@@ -118,10 +118,10 @@ def test_fastapi_plugin_collects_dependency_specs_from_requirements(tmp_path: Pa
     assert plugin is not None
     bundle = plugin.collect(tmp_path)
 
-    violations = {(name, violation) for _, name, _, _, violation in bundle.dependency_specs}
-    assert ("fastapi", None) in violations
-    assert ("requests", "range_not_pinned") in violations
-    assert ("internal-lib", "direct_reference") in violations
+    violations = {(name, violation, scope) for _, name, _, _, violation, scope in bundle.dependency_specs}
+    assert ("fastapi", None, "runtime") in violations
+    assert ("requests", "range_not_pinned", "runtime") in violations
+    assert ("internal-lib", "direct_reference", "runtime") in violations
 
 
 def test_fastapi_plugin_collects_project_dependencies_from_pyproject(tmp_path: Path, write_file) -> None:
@@ -138,6 +138,43 @@ def test_fastapi_plugin_collects_project_dependencies_from_pyproject(tmp_path: P
     assert plugin is not None
     bundle = plugin.collect(tmp_path)
 
-    violations = {(name, violation) for _, name, _, _, violation in bundle.dependency_specs}
-    assert ("httpx", "range_not_pinned") in violations
-    assert ("uvicorn", None) in violations
+    violations = {(name, violation, scope) for _, name, _, _, violation, scope in bundle.dependency_specs}
+    assert ("httpx", "range_not_pinned", "runtime") in violations
+    assert ("uvicorn", None, "runtime") in violations
+
+
+def test_fastapi_plugin_marks_dev_dependency_scope_from_optional_group(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "pyproject.toml",
+        "[project]\n"
+        "name='demo'\n"
+        "version='0.1.0'\n"
+        "dependencies=['fastapi==0.110.0']\n"
+        "optional-dependencies={dev=['pytest>=8.0']}\n",
+    )
+
+    plugin = get_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+    bundle = plugin.collect(tmp_path)
+
+    violations = {(name, violation, scope) for _, name, _, _, violation, scope in bundle.dependency_specs}
+    assert ("pytest", "range_not_pinned", "development") in violations
+
+
+def test_fastapi_plugin_marks_dev_scope_from_requirements_filename(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "requirements-dev.txt", "pytest>=8.0\n")
+
+    plugin = get_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+    bundle = plugin.collect(tmp_path)
+
+    violations = {(name, violation, scope) for _, name, _, _, violation, scope in bundle.dependency_specs}
+    assert ("pytest", "range_not_pinned", "development") in violations
