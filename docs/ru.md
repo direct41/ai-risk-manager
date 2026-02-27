@@ -101,6 +101,12 @@ riskmap analyze \
 - `balanced` (по умолчанию): `conservative` + `range_not_pinned`
 - `aggressive`: `balanced` + `unpinned_version`
 
+Trust-first eval gates:
+
+- Пороги качества eval хранятся в `eval/trust_thresholds.json`.
+- `make eval` блокирующий по умолчанию (если trust gates не пройдены, команда завершается с ошибкой).
+- Для неблокирующего запуска: `AIRISK_EVAL_ENFORCE_THRESHOLDS=0 make eval`.
+
 ## Когда инструмент особенно полезен
 
 - FastAPI сервисы, где нужно быстро находить релизные QA-риски.

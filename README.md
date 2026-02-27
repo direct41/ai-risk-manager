@@ -267,11 +267,15 @@ make serve-api
 make eval
 ```
 
+`make eval` runs trust gates using thresholds from `eval/trust_thresholds.json`.
+Set `AIRISK_EVAL_ENFORCE_THRESHOLDS=0` to run eval in non-blocking mode.
+
 ## Docs
 
 - `docs/ru.md`: short Russian guide
 - `docs/compatibility.md`: CLI/API/JSON compatibility policy
 - `ROADMAP.md`: MVP now / next
+- `BACKLOG_TRUST_FIRST.md`: Trust-first delivery backlog and KPI gates
 - `SUPPORT.md`: support channels
 
 ## Open Source

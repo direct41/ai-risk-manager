@@ -17,6 +17,8 @@ jobs:
       - uses: ./.github/actions/setup-python-env
 
       - name: Run eval suite
+        env:
+          AIRISK_EVAL_ENFORCE_THRESHOLDS: "1"
         run: |
           python scripts/run_eval_suite.py
 
