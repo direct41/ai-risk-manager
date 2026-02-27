@@ -60,6 +60,7 @@ class TransitionSpec:
     source_ref: str
     line: int | None = None
     snippet: str = ""
+    invariant_guarded: bool = True
 
 
 @dataclass

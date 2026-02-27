@@ -51,4 +51,33 @@ def run_rules(graph: Graph) -> FindingsReport:
             )
         )
 
+    for transition in graph.handled_transitions:
+        if transition.invariant_guarded:
+            continue
+        finding_id = f"broken_invariant_on_transition:{transition.machine}:{transition.source}->{transition.target}"
+        findings.append(
+            Finding(
+                id=finding_id,
+                rule_id="broken_invariant_on_transition",
+                title=f"Transition '{transition.source} -> {transition.target}' lacks invariant guard",
+                description=(
+                    "State transition handler mutates status without explicit invariant/guard validation before write."
+                ),
+                severity="high",
+                confidence="medium",
+                evidence=(
+                    f"Detected direct transition '{transition.source}->{transition.target}' in handler "
+                    f"'{transition.machine}' without guard markers."
+                ),
+                source_ref=transition.source_ref,
+                suppression_key=finding_id,
+                recommendation=(
+                    f"Add explicit guard checks for transition '{transition.source} -> {transition.target}' "
+                    f"in handler '{transition.machine}' (assertions/validation/policy checks)."
+                ),
+                origin="deterministic",
+                evidence_refs=[transition.source_ref],
+            )
+        )
+
     return FindingsReport(findings=findings, generated_without_llm=True)

@@ -626,3 +626,64 @@ def test_pipeline_reuses_probe_data_for_preflight(tmp_path: Path, write_file) ->
     assert result is not None
     assert code == 0
     assert scan_mock.call_count == 1
+
+
+def test_pipeline_reports_broken_invariant_on_unguarded_transition(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "ALLOWED_TRANSITIONS = {'pending': ['paid']}\n"
+        "@router.post('/orders/{order_id}/pay')\n"
+        "def pay_order(order_id: str):\n"
+        "    status = 'pending'\n"
+        "    if status == 'pending':\n"
+        "        status = 'paid'\n"
+        "    return {'order_id': order_id, 'status': status}\n",
+    )
+    write_file(tmp_path / "tests" / "test_pay_order.py", "def test_pay_order():\n    assert True\n")
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+    result, code, _ = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    rule_ids = {finding.rule_id for finding in result.findings.findings}
+    assert "broken_invariant_on_transition" in rule_ids
+
+
+def test_pipeline_skips_broken_invariant_when_guard_exists(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/orders/{order_id}/pay')\n"
+        "def pay_order(order_id: str):\n"
+        "    status = 'pending'\n"
+        "    can_transition = order_id != ''\n"
+        "    if status == 'pending':\n"
+        "        assert can_transition\n"
+        "        status = 'paid'\n"
+        "    return {'order_id': order_id, 'status': status}\n",
+    )
+    write_file(tmp_path / "tests" / "test_pay_order.py", "def test_pay_order():\n    assert True\n")
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+    result, code, _ = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    rule_ids = {finding.rule_id for finding in result.findings.findings}
+    assert "broken_invariant_on_transition" not in rule_ids

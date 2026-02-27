@@ -11,6 +11,20 @@ from ai_risk_manager.schemas.types import PreflightResult
 WRITE_METHODS = ("post", "put", "patch", "delete")
 ROUTE_METHODS = WRITE_METHODS + ("get",)
 EXCLUDED_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules", ".riskmap"}
+GUARD_HINTS = (
+    "allow",
+    "valid",
+    "invariant",
+    "guard",
+    "check",
+    "ensure",
+    "verify",
+    "auth",
+    "permission",
+    "can_",
+    "policy",
+    "transition",
+)
 
 
 @dataclass
@@ -218,32 +232,103 @@ def _extract_declared_transitions(tree: ast.AST, source_lines: list[str]) -> lis
     return declared
 
 
-def _extract_handled_transitions(tree: ast.AST, source_lines: list[str]) -> list[tuple[str, str, str, int, str]]:
-    handled: list[tuple[str, str, str, int, str]] = []
+def _call_name(node: ast.Call) -> str:
+    if isinstance(node.func, ast.Name):
+        return node.func.id.lower()
+    if isinstance(node.func, ast.Attribute):
+        return node.func.attr.lower()
+    return ""
+
+
+def _has_guard_hint(value: str) -> bool:
+    normalized = value.lower()
+    return any(hint in normalized for hint in GUARD_HINTS)
+
+
+def _looks_like_guard_expr(expr: ast.AST) -> bool:
+    for node in ast.walk(expr):
+        if isinstance(node, ast.Name) and _has_guard_hint(node.id):
+            return True
+        if isinstance(node, ast.Attribute) and _has_guard_hint(node.attr):
+            return True
+        if isinstance(node, ast.Call):
+            call_name = _call_name(node)
+            if call_name and _has_guard_hint(call_name):
+                return True
+    return False
+
+
+def _extract_status_source(test: ast.AST) -> tuple[str | None, str | None, bool]:
+    if isinstance(test, ast.BoolOp) and isinstance(test.op, ast.And):
+        for value in test.values:
+            src_state, status_var_name, status_is_attr = _extract_status_source(value)
+            if src_state:
+                return src_state, status_var_name, status_is_attr
+        return None, None, False
+
+    if not (isinstance(test, ast.Compare) and len(test.ops) == 1 and isinstance(test.ops[0], ast.Eq)):
+        return None, None, False
+    if not test.comparators:
+        return None, None, False
+
+    src_state = _constant_str(test.comparators[0])
+    if not src_state:
+        return None, None, False
+    left = test.left
+    if isinstance(left, ast.Attribute) and left.attr == "status":
+        return src_state, None, True
+    if isinstance(left, ast.Name) and left.id == "status":
+        return src_state, left.id, False
+    return None, None, False
+
+
+def _has_additional_guard_in_test(test: ast.AST) -> bool:
+    if not (isinstance(test, ast.BoolOp) and isinstance(test.op, ast.And)):
+        return False
+    for value in test.values:
+        src_state, _, _ = _extract_status_source(value)
+        if src_state:
+            continue
+        if _looks_like_guard_expr(value):
+            return True
+    return False
+
+
+def _collect_guard_lines(node: ast.AST) -> set[int]:
+    lines: set[int] = set()
+    for child in ast.walk(node):
+        line = getattr(child, "lineno", None)
+        if line is None:
+            continue
+        if isinstance(child, ast.Assert):
+            lines.add(line)
+            continue
+        if isinstance(child, ast.If) and _looks_like_guard_expr(child.test):
+            lines.add(line)
+            continue
+        if isinstance(child, ast.Expr) and isinstance(child.value, ast.Call):
+            if _has_guard_hint(_call_name(child.value)):
+                lines.add(line)
+    return lines
+
+
+def _extract_handled_transitions(tree: ast.AST, source_lines: list[str]) -> list[tuple[str, str, str, int, str, bool]]:
+    handled: list[tuple[str, str, str, int, str, bool]] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         fn_name = node.name
+        function_guard_lines = _collect_guard_lines(node)
         for child in ast.walk(node):
             if not isinstance(child, ast.If):
                 continue
-            src_state: str | None = None
-            status_var_name: str | None = None
-            status_is_attr = False
-            test = child.test
-            if isinstance(test, ast.Compare) and len(test.ops) == 1 and isinstance(test.ops[0], ast.Eq):
-                left = test.left
-                if isinstance(left, ast.Attribute) and left.attr == "status":
-                    if test.comparators:
-                        src_state = _constant_str(test.comparators[0])
-                        status_is_attr = True
-                if isinstance(left, ast.Name) and left.id == "status":
-                    if test.comparators:
-                        src_state = _constant_str(test.comparators[0])
-                        status_var_name = left.id
+            src_state, status_var_name, status_is_attr = _extract_status_source(child.test)
             if not src_state:
                 continue
 
+            branch_guard_lines = _collect_guard_lines(child)
+            guard_lines = function_guard_lines | branch_guard_lines
+            has_test_guard = _has_additional_guard_in_test(child.test)
             for stmt in ast.walk(child):
                 if not isinstance(stmt, ast.Assign):
                     continue
@@ -252,12 +337,18 @@ def _extract_handled_transitions(tree: ast.AST, source_lines: list[str]) -> list
                         dst_state = _constant_str(stmt.value)
                         if dst_state:
                             line = getattr(stmt, "lineno", getattr(node, "lineno", 1))
-                            handled.append((fn_name, src_state, dst_state, line, _line_snippet(source_lines, line)))
+                            invariant_guarded = has_test_guard or any(guard_line < line for guard_line in guard_lines)
+                            handled.append(
+                                (fn_name, src_state, dst_state, line, _line_snippet(source_lines, line), invariant_guarded)
+                            )
                     if status_var_name and isinstance(target, ast.Name) and target.id == status_var_name:
                         dst_state = _constant_str(stmt.value)
                         if dst_state:
                             line = getattr(stmt, "lineno", getattr(node, "lineno", 1))
-                            handled.append((fn_name, src_state, dst_state, line, _line_snippet(source_lines, line)))
+                            invariant_guarded = has_test_guard or any(guard_line < line for guard_line in guard_lines)
+                            handled.append(
+                                (fn_name, src_state, dst_state, line, _line_snippet(source_lines, line), invariant_guarded)
+                            )
     return handled
 
 
@@ -429,8 +520,8 @@ class FastAPICollectorPlugin:
             for machine, src, dst, line, snippet in _extract_declared_transitions(tree, source_lines):
                 bundle.declared_transitions.append((relative, machine, src, dst, line, snippet))
 
-            for machine, src, dst, line, snippet in _extract_handled_transitions(tree, source_lines):
-                bundle.handled_transitions.append((relative, machine, src, dst, line, snippet))
+            for machine, src, dst, line, snippet, invariant_guarded in _extract_handled_transitions(tree, source_lines):
+                bundle.handled_transitions.append((relative, machine, src, dst, line, snippet, invariant_guarded))
 
             if path in bundle.test_files:
                 for case, line, snippet in _extract_test_cases(tree, source_lines):

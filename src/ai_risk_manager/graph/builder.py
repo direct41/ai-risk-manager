@@ -185,9 +185,17 @@ def build_graph(artifacts: ArtifactBundle) -> Graph:
             )
         )
 
-    for file_path, machine, src, dst, line, snippet in artifacts.handled_transitions:
+    for file_path, machine, src, dst, line, snippet, invariant_guarded in artifacts.handled_transitions:
         graph.handled_transitions.append(
-            TransitionSpec(machine=machine, source=src, target=dst, source_ref=_with_line_ref(file_path, line), line=line, snippet=snippet)
+            TransitionSpec(
+                machine=machine,
+                source=src,
+                target=dst,
+                source_ref=_with_line_ref(file_path, line),
+                line=line,
+                snippet=snippet,
+                invariant_guarded=invariant_guarded,
+            )
         )
 
     return graph
