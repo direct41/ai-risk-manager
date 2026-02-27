@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from ai_risk_manager import __version__
 from ai_risk_manager.pipeline.run import run_pipeline
+from ai_risk_manager.sample_repo import resolve_sample_repo_path
 from ai_risk_manager.schemas.types import RunContext, to_dict
 
 _API_INSTALL_HINT = "Install API dependencies with: pip install -e '.[api]'."
@@ -50,27 +51,9 @@ def _load_api_dependencies() -> tuple[Any, Any, Any, Any, Any]:
     return FastAPI, HTTPException, AnalyzeRequest, AnalyzeResponse, HealthResponse
 
 
-def _resolve_sample_repo() -> Path:
-    env_repo = os.getenv("AIRISK_SAMPLE_REPO", "").strip()
-    if env_repo:
-        candidate = Path(env_repo).expanduser().resolve()
-        if candidate.is_dir():
-            return candidate
-        raise FileNotFoundError(f"AIRISK_SAMPLE_REPO points to a missing directory: {candidate}")
-
-    for parent in Path(__file__).resolve().parents:
-        candidate = parent / "eval" / "repos" / "milestone2_fastapi"
-        if candidate.is_dir():
-            return candidate
-    raise FileNotFoundError(
-        "Bundled sample repository is unavailable in this installation. "
-        "Set AIRISK_SAMPLE_REPO to a local sample path or pass sample=false with an explicit path."
-    )
-
-
 def _resolve_repo_path(path: str, sample: bool) -> Path:
     if sample:
-        return _resolve_sample_repo().resolve()
+        return resolve_sample_repo_path()
 
     repo_path = Path(path).resolve()
     if not repo_path.exists():

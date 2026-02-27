@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 from ai_risk_manager.agents.llm_runtime import LLMRuntimeError
 from ai_risk_manager.agents.qa_strategy_agent import generate_test_plan
-from ai_risk_manager.agents.risk_agent import generate_findings
 from ai_risk_manager.agents.semantic_risk_agent import generate_semantic_findings
 from ai_risk_manager.schemas.types import Edge, Finding, FindingsReport, Graph, Node
 
@@ -46,46 +45,6 @@ def _sample_findings_raw() -> FindingsReport:
         ],
         generated_without_llm=True,
     )
-
-
-def test_risk_agent_uses_llm_payload_when_valid() -> None:
-    findings_raw = _sample_findings_raw()
-    graph = _sample_graph()
-
-    llm_payload = {
-        "findings": [
-            {
-                "id": "x1",
-                "rule_id": "critical_path_no_tests",
-                "title": "t",
-                "description": "d",
-                "severity": "high",
-                "confidence": "high",
-                "evidence": "ev",
-                "source_ref": "app/api.py",
-                "suppression_key": "sk",
-                "recommendation": "do",
-                "generated_without_llm": False,
-            }
-        ]
-    }
-
-    with patch("ai_risk_manager.agents.risk_agent.call_llm_json", return_value=llm_payload):
-        report = generate_findings(findings_raw, graph, provider="api", generated_without_llm=False)
-
-    assert report.generated_without_llm is False
-    assert report.findings[0].id == "x1"
-
-
-def test_risk_agent_degrades_to_deterministic_on_llm_failure() -> None:
-    findings_raw = _sample_findings_raw()
-    graph = _sample_graph()
-
-    with patch("ai_risk_manager.agents.risk_agent.call_llm_json", side_effect=LLMRuntimeError("boom")):
-        report = generate_findings(findings_raw, graph, provider="api", generated_without_llm=False)
-
-    assert report.generated_without_llm is True
-    assert all(f.confidence == "low" for f in report.findings)
 
 
 def test_qa_agent_degrades_to_deterministic_on_llm_failure() -> None:

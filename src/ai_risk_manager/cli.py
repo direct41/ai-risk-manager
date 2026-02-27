@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from ai_risk_manager.pipeline.run import run_pipeline
+from ai_risk_manager.sample_repo import resolve_sample_repo_path
 from ai_risk_manager.schemas.types import RunContext
 
 
@@ -67,17 +68,9 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _resolve_sample_repo() -> Path:
-    for parent in Path(__file__).resolve().parents:
-        candidate = parent / "eval" / "repos" / "milestone2_fastapi"
-        if candidate.is_dir():
-            return candidate
-    raise FileNotFoundError("Bundled sample repository not found")
-
-
 def _run_analyze(args: argparse.Namespace) -> int:
     if args.sample:
-        repo_path = _resolve_sample_repo().resolve()
+        repo_path = resolve_sample_repo_path()
     else:
         repo_path = Path(args.path).resolve()
     output_dir = Path(args.output_dir).resolve()
