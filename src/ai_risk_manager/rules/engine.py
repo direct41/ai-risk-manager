@@ -75,6 +75,9 @@ def run_rules(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -> Findings
     for transition in graph.handled_transitions:
         if transition.invariant_guarded:
             continue
+        if (transition.source, transition.target) in declared_pairs:
+            # Treat explicit transition declarations as a baseline invariant anchor.
+            continue
         finding_id = f"broken_invariant_on_transition:{transition.machine}:{transition.source}->{transition.target}"
         findings.append(
             Finding(
