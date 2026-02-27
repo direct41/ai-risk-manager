@@ -34,12 +34,20 @@ Extractor в первую очередь собирает:
 
 Опционально добавляется semantic AI stage (если включен LLM backend).
 
+Важно: universal/mixed-stack стратегия пока в roadmap, в текущем `v0.1.x` shipped-поддержка сфокусирована на FastAPI.
+
 ## Быстрый старт
 
 ```bash
 pip install -e '.[dev]'
 riskmap analyze --sample --no-llm --output-dir ./.riskmap
 cat ./.riskmap/report.md
+```
+
+Опционально можно указать локальный sample через переменную окружения:
+
+```bash
+AIRISK_SAMPLE_REPO=/path/to/local/sample riskmap analyze --sample --no-llm
 ```
 
 На встроенном примере вы увидите вывод уровня:
@@ -134,6 +142,16 @@ Trust-first eval gates:
 - Если нужен production-ready hosted API (auth/multi-tenant/RBAC).
 - Если проект не похож на FastAPI + pytest паттерны.
 
+## Для каких стартапов польза максимальна сейчас
+
+| Профиль стартапа | Польза сейчас | Почему |
+|---|---|---|
+| FastAPI B2B SaaS с CI | Высокая | Прямой fit под стек и PR/release процесс. |
+| FastAPI-команда с ограниченным QA ресурсом | Высокая/Средняя | Ранжирование рисков и test actions снижает triage шум. |
+| Очень ранний стартап без CI-практик | Средняя/Низкая | Локальная ценность есть, но процессная стоимость выше. |
+| Polyglot стек (не FastAPI-first) | Низкая | Текущая extractor-поддержка ограничена FastAPI. |
+| Compliance-heavy (fin/health) | Средняя | Полезно для техрисков, но не покрывает полный compliance lifecycle. |
+
 ## Коды завершения
 
 - `0` - успешно
@@ -171,3 +189,4 @@ curl -s http://127.0.0.1:8000/healthz
 - в `v0.1.x` поддерживается только FastAPI extractor plugin
 - API рассчитан на local/internal usage
 - инструмент не является generic SAST
+- при проблемах с `--sample` задайте `AIRISK_SAMPLE_REPO` на локальный sample-каталог

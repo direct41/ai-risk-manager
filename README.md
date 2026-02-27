@@ -38,6 +38,7 @@ Optional semantic AI stage can add extra grounded findings with evidence refs.
 - Intended usage: local/CI assistant for QA-risk mapping.
 - Not a generic SAST replacement.
 - API adapter is local/internal oriented (no auth, no multi-tenant guarantees).
+- Universal/mixed-stack strategy is a roadmap direction, not current shipped behavior.
 
 ## 2-Minute Demo
 
@@ -45,6 +46,12 @@ Optional semantic AI stage can add extra grounded findings with evidence refs.
 pip install -e '.[dev]'
 riskmap analyze --sample --no-llm --output-dir ./.riskmap
 cat ./.riskmap/report.md
+```
+
+Optional sample override:
+
+```bash
+AIRISK_SAMPLE_REPO=/path/to/local/sample riskmap analyze --sample --no-llm
 ```
 
 Bundled sample output includes findings similar to:
@@ -250,6 +257,16 @@ Use suppressions for known noise:
 - You need PR-level visibility on only new high-signal risks.
 - You want to convert findings into concrete test actions, not just static warnings.
 
+## Startup Fit (Current Version)
+
+| Startup profile | Current fit | Why |
+|---|---|---|
+| FastAPI B2B SaaS team with CI (5-30 eng) | High | Direct match to stack and PR/release workflow. |
+| FastAPI startup with limited QA capacity | High/Medium | Risk-to-test prioritization reduces triage noise. |
+| Solo/pre-seed without CI discipline | Medium/Low | Local value exists, but setup/process overhead may exceed benefit. |
+| Polyglot stack (Node/Go/Java primary) | Low | Current extractor coverage is FastAPI-focused. |
+| Compliance-heavy startup (fin/health) | Medium | Useful for release-risk signal, but not a full compliance control system. |
+
 ## When This Tool Is Not The Best Fit (yet)
 
 - You need broad polyglot SAST across many languages/frameworks.
@@ -283,6 +300,7 @@ Recommended PR mode job:
 - `exit 2`: repo does not match supported stack plugins in strict support levels (`--support-level l1|l2`).
 - Empty PR findings: ensure baseline graph exists and changed files are detected.
 - Unknown stack with default `--support-level auto`: run continues in L0 advisory mode.
+- `--sample` cannot find bundled repo: set `AIRISK_SAMPLE_REPO` to a local sample directory.
 
 ## Development Commands
 

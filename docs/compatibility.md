@@ -20,10 +20,10 @@ Breaking changes include:
 
 - removing `GET /healthz` or `POST /v1/analyze`
 - changing `POST /v1/analyze` response contract fields:
-  `exit_code`, `notes`, `output_dir`, `artifacts`, `result`
+  `exit_code`, `notes`, `output_dir`, `artifacts`, `result`, `summary`
 - moving pipeline execution errors from `exit_code` to incompatible HTTP semantics
 
-Additive response fields (for example `summary`) are allowed in minor releases.
+Additive response fields are allowed in minor releases.
 
 ## JSON artifact compatibility
 

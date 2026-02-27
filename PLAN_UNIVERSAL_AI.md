@@ -1,5 +1,7 @@
 # Universal AI-First Strategy Plan
 
+Status note (as of 2026-02-27): this document describes target direction. Current shipped product (`v0.1.x`) is focused on FastAPI + pytest and is not yet mixed-stack/polyglot.
+
 ## 1. Product Hypothesis
 
 Гипотеза: масштабирование через stack-specific экстракторы неэффективно. Нужен universal AI-подход, где LLM приводит любой код к единому абстрактному представлению (IR/Graph), а risk-анализ выполняется на этом слое.
