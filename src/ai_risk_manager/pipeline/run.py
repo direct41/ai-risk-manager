@@ -10,6 +10,7 @@ from typing import Literal
 from ai_risk_manager.agents.provider import ProviderResolution, resolve_provider
 from ai_risk_manager.agents.qa_strategy_agent import generate_test_plan
 from ai_risk_manager.agents.semantic_risk_agent import generate_semantic_findings
+from ai_risk_manager.agents.semantic_signal_agent import generate_semantic_signals
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle, CollectorPlugin
 from ai_risk_manager.collectors.plugins.registry import get_plugin_for_stack
 from ai_risk_manager.graph.builder import build_graph, low_confidence_ratio
@@ -19,6 +20,7 @@ from ai_risk_manager.rules.engine import run_rules
 from ai_risk_manager.rules.policy import PolicyConfig, apply_policy, is_blocking_enabled_for_finding, load_policy
 from ai_risk_manager.rules.suppressions import apply_suppressions, load_suppressions
 from ai_risk_manager.signals.adapters import artifact_bundle_to_signal_bundle
+from ai_risk_manager.signals.merge import merge_signal_bundles
 from ai_risk_manager.signals.types import SignalBundle
 from ai_risk_manager.schemas.types import (
     AnalysisScope,
@@ -180,6 +182,19 @@ def _filter_graph_to_impacted(graph: Graph, changed_files: set[str]) -> Graph:
     return Graph(nodes=nodes, edges=edges, declared_transitions=declared, handled_transitions=handled)
 
 
+def _filter_signals_to_impacted(signals: SignalBundle, changed_files: set[str]) -> SignalBundle:
+    changed = {_normalize_path(path) for path in changed_files}
+    filtered = []
+    for signal in signals.signals:
+        source_file = _source_file_ref(signal.source_ref)
+        if source_file in changed:
+            filtered.append(signal)
+            continue
+        if any(_source_file_ref(ref) in changed for ref in signal.evidence_refs):
+            filtered.append(signal)
+    return SignalBundle(signals=filtered, supported_kinds=set(signals.supported_kinds))
+
+
 def _max_severity(findings_count: list[str]) -> str | None:
     if not findings_count:
         return None
@@ -337,6 +352,7 @@ class _CollectStage:
 class _ScopeStage:
     analysis_scope: AnalysisScope
     analysis_graph: Graph
+    analysis_signals: SignalBundle
     fallback_reason: str | None
 
 
@@ -439,12 +455,14 @@ def _stage_build_graph(
 def _stage_resolve_scope(
     ctx: RunContext,
     graph: Graph,
+    signals: SignalBundle,
     *,
     sinks: PipelineSinks,
     notes: list[str],
 ) -> _ScopeStage:
     analysis_scope: AnalysisScope = "full"
     analysis_graph = graph
+    analysis_signals = signals
     fallback_reason: str | None = None
     if ctx.mode == "pr":
         if _baseline_graph_is_valid(ctx.baseline_graph):
@@ -461,6 +479,7 @@ def _stage_resolve_scope(
                 impacted_graph = _filter_graph_to_impacted(graph, changed_files)
                 if impacted_graph.nodes:
                     analysis_graph = impacted_graph
+                    analysis_signals = _filter_signals_to_impacted(signals, changed_files)
                     analysis_scope = "impacted"
                     notes.append(f"Impacted subgraph selected from {len(changed_files)} changed file(s).")
                 else:
@@ -475,6 +494,7 @@ def _stage_resolve_scope(
     return _ScopeStage(
         analysis_scope=analysis_scope,
         analysis_graph=analysis_graph,
+        analysis_signals=analysis_signals,
         fallback_reason=fallback_reason,
     )
 
@@ -523,10 +543,18 @@ def _stage_analysis(
         return None, provider_exit
 
     t = sinks.progress.start(5, total_steps, "Semantic AI risk stage")
+    semantic_signals, semantic_signal_notes = generate_semantic_signals(
+        scope.analysis_graph,
+        provider=provider_resolution.provider,
+        generated_without_llm=provider_resolution.generated_without_llm,
+    )
+    notes.extend(semantic_signal_notes)
+    merged_signals = merge_signal_bundles(scope.analysis_signals, semantic_signals, min_confidence=ctx.min_confidence)
+    semantic_graph = build_graph(merged_signals)
     semantic_findings = FindingsReport(findings=[], generated_without_llm=True)
     if ctx.analysis_engine != "deterministic":
         semantic_findings, semantic_notes = generate_semantic_findings(
-            scope.analysis_graph,
+            semantic_graph,
             provider=provider_resolution.provider,
             generated_without_llm=provider_resolution.generated_without_llm,
         )
@@ -587,7 +615,7 @@ def _stage_analysis(
     t = sinks.progress.start(6, total_steps, "QA strategy agent")
     test_plan = generate_test_plan(
         findings,
-        scope.analysis_graph,
+        semantic_graph,
         provider=provider_resolution.provider,
         generated_without_llm=provider_resolution.generated_without_llm or ctx.analysis_engine == "deterministic",
     )
@@ -662,7 +690,7 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
         total_steps=total_steps,
     )
     graph = _stage_build_graph(collected_stage.signals, sinks=active_sinks, total_steps=total_steps)
-    scope_stage = _stage_resolve_scope(ctx, graph, sinks=active_sinks, notes=notes)
+    scope_stage = _stage_resolve_scope(ctx, graph, collected_stage.signals, sinks=active_sinks, notes=notes)
     analysis_stage, analysis_exit = _stage_analysis(
         ctx,
         scope=scope_stage,
