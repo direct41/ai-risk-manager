@@ -261,6 +261,7 @@ Use `AIRISK_EVAL_ENFORCE_THRESHOLDS=0 make eval` for non-blocking eval runs.
 
 - `docs/ru.md`: Russian quick guide
 - `docs/compatibility.md`: CLI/API/JSON compatibility policy
+- `docs/capability-signals.md`: stack-agnostic capability signal model and coverage map
 - `ROADMAP.md`: MVP now / next
 - `BACKLOG_TRUST_FIRST.md`: trust-first delivery backlog and KPI gates
 - `SUPPORT.md`: support channels

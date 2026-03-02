@@ -1,0 +1,147 @@
+from __future__ import annotations
+
+from ai_risk_manager.collectors.plugins.base import ArtifactBundle
+from ai_risk_manager.signals.types import CapabilitySignal, SignalBundle, SignalKind
+
+
+def _line_ref(file_path: str, line: int | None) -> str:
+    if line is None:
+        return file_path
+    return f"{file_path}:{line}"
+
+
+def artifact_bundle_to_signal_bundle(artifacts: ArtifactBundle) -> SignalBundle:
+    signals: list[CapabilitySignal] = []
+    supported_kinds: set[SignalKind] = set()
+
+    for file_path, endpoint_name, method, route_path, line, snippet in artifacts.write_endpoints:
+        supported_kinds.add("http_write_surface")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:http:{file_path}:{endpoint_name}:{line or 0}",
+                kind="http_write_surface",
+                source_ref=_line_ref(file_path, line),
+                confidence="high",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "endpoint_name": endpoint_name,
+                    "method": method.upper(),
+                    "path": route_path,
+                    "snippet": snippet,
+                },
+            )
+        )
+
+    model_sources = {model_name: model_file for model_file, model_name in artifacts.pydantic_models}
+    for file_path, endpoint_name, model_name in artifacts.endpoint_models:
+        supported_kinds.add("request_contract_binding")
+        evidence = [file_path]
+        model_source = model_sources.get(model_name)
+        if model_source:
+            evidence.append(model_source)
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:contract:{file_path}:{endpoint_name}:{model_name}",
+                kind="request_contract_binding",
+                source_ref=file_path,
+                confidence="medium",
+                evidence_refs=evidence,
+                attributes={
+                    "endpoint_name": endpoint_name,
+                    "model_name": model_name,
+                    "model_source": model_source,
+                },
+            )
+        )
+
+    for file_path, machine, src, dst, line, snippet in artifacts.declared_transitions:
+        supported_kinds.add("state_transition_declared")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:transition:declared:{file_path}:{machine}:{src}:{dst}:{line or 0}",
+                kind="state_transition_declared",
+                source_ref=_line_ref(file_path, line),
+                confidence="high",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "machine": machine,
+                    "source_state": src,
+                    "target_state": dst,
+                    "snippet": snippet,
+                },
+            )
+        )
+
+    for file_path, machine, src, dst, line, snippet, invariant_guarded in artifacts.handled_transitions:
+        supported_kinds.add("state_transition_handled_guarded")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:transition:handled:{file_path}:{machine}:{src}:{dst}:{line or 0}",
+                kind="state_transition_handled_guarded",
+                source_ref=_line_ref(file_path, line),
+                confidence="high" if invariant_guarded else "medium",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "machine": machine,
+                    "source_state": src,
+                    "target_state": dst,
+                    "invariant_guarded": invariant_guarded,
+                    "snippet": snippet,
+                },
+            )
+        )
+
+    for file_path, test_name, method, route_path, line, snippet in artifacts.test_http_calls:
+        supported_kinds.add("test_to_endpoint_coverage")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:coverage:http:{file_path}:{test_name}:{line or 0}",
+                kind="test_to_endpoint_coverage",
+                source_ref=_line_ref(file_path, line),
+                confidence="high",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "test_name": test_name,
+                    "method": method.upper(),
+                    "path": route_path,
+                    "snippet": snippet,
+                },
+            )
+        )
+
+    for file_path, test_name, line, snippet in artifacts.test_cases:
+        supported_kinds.add("test_to_endpoint_coverage")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:coverage:test:{file_path}:{test_name}:{line or 0}",
+                kind="test_to_endpoint_coverage",
+                source_ref=_line_ref(file_path, line),
+                confidence="medium",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "test_name": test_name,
+                    "snippet": snippet,
+                    "coverage_mode": "name_fallback_candidate",
+                },
+            )
+        )
+
+    for file_path, dep_name, raw_spec, line, policy_violation, scope in artifacts.dependency_specs:
+        supported_kinds.add("dependency_version_policy")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:dependency:{file_path}:{dep_name}:{line or 0}",
+                kind="dependency_version_policy",
+                source_ref=_line_ref(file_path, line),
+                confidence="high",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "dependency_name": dep_name,
+                    "spec": raw_spec,
+                    "policy_violation": policy_violation,
+                    "scope": scope,
+                },
+            )
+        )
+
+    return SignalBundle(signals=signals, supported_kinds=supported_kinds)
