@@ -60,40 +60,43 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Blocking mode triggers are reproducible and auditable.
 
 ## Epic 4: Coverage Mapping Quality (P1)
-- Status: Planned
+- Status: Done (completion-gate)
 - Outcome: stronger linkage between tests and risky paths
 
 ### Stories
-1. Improve HTTP call/path matching (path params, aliases).
-2. Add fixture-aware test mapping heuristics.
-3. Extend eval repos for coverage edge cases.
+1. [x] Improve HTTP call/path matching (path params, aliases).
+2. [x] Add fixture-aware test mapping heuristics.
+3. [x] Extend eval repos for coverage edge cases.
 
 ### Definition of Done
 - Coverage-related false positives drop in eval.
 
 ## Epic 5: Policy Engine Externalization (P1)
-- Status: Planned
+- Status: Done (completion-gate)
 - Outcome: teams tune strictness without code forks
 
 ### Stories
-1. Rule policy config file (`.airiskpolicy`) with defaults.
-2. Per-rule severity and gating overrides.
-3. Validation and schema for policy contract.
+1. [x] Rule policy config file (`.airiskpolicy`) with defaults.
+2. [x] Per-rule severity and gating overrides.
+3. [x] Validation and schema for policy contract.
 
 ### Definition of Done
 - Config-driven policy behavior with tests and docs.
 
 ## Epic 6: Next Stack Expansion (P2)
-- Status: In Progress (preview plugin scaffolding started)
+- Status: Done (completion-gate)
 - Outcome: controlled growth after trust stabilization
 
 ### Stories
-1. Select next stack (candidate: Django/DRF).
-2. Build minimal collector plugin and parity eval cases.
-3. Add support-level defaults for new stack.
+1. [x] Select next stack (Django/DRF).
+2. [x] Build collector plugin and parity eval cases.
+3. [x] Add support-level defaults and conservative auto-downgrade on preflight warnings.
+4. [x] Add stack expansion readiness gate artifact (`eval/results/expansion_gate.json`).
 
 ### Definition of Done
-- Trust KPIs remain above threshold for 4 weeks on FastAPI before expansion gate opens.
+- Trust gate is `PASSED` in eval summary.
+- Expansion readiness gate is `OPEN` with required consecutive trust-pass runs.
+- Required stack-parity eval cases pass (`milestone7_django_viewset`, `milestone8_django_dependency`).
 
 ## Delivery Sequence (Gate-Based)
 1. Epic 1

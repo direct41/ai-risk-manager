@@ -21,6 +21,7 @@
 - Trust-first quality controls:
   - eval trust gates with versioned thresholds
   - weekly trend tracking artifacts from eval runs
+  - expansion readiness gate artifact (`eval/results/expansion_gate.json`)
 - Explainability and risk precision improvements:
   - confidence/evidence-based ranking in reports
   - dependency policy profiles with scope-aware severity
@@ -28,8 +29,6 @@
 ## Next
 
 - Additional collector plugins beyond FastAPI/Django
-- Better test-to-endpoint mapping precision (path params, aliases, fixture-aware heuristics)
-- Policy externalization (`.airiskpolicy`) for per-rule severity/gating tuning
 - Additional rules for authorization and critical-path behavior patterns
 - Hardening for service deployment scenarios (auth, rate limits) after local/internal maturity
 
@@ -44,7 +43,7 @@
 
 ## Execution Sequence (By Completion)
 
-1. Stage 1: pipeline contract stabilization and stage decomposition.
-2. Stage 2: coverage mapping quality improvements.
-3. Stage 3: policy engine externalization (`.airiskpolicy`).
-4. Stage 4: next stack expansion behind trust gates.
+1. [x] Stage 1: pipeline contract stabilization and stage decomposition.
+2. [x] Stage 2: coverage mapping quality improvements.
+3. [x] Stage 3: policy engine externalization (`.airiskpolicy`).
+4. [x] Stage 4: next stack expansion behind trust gates.

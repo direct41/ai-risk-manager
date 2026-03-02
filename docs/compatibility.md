@@ -33,7 +33,7 @@ Artifacts include metadata fields:
 - `generated_at`
 - `tool_version`
 
-Additional artifacts (for example `run_metrics.json`) may be added in minor releases.
+Additional artifacts (for example `run_metrics.json`, `expansion_gate.json`) may be added in minor releases.
 
 Breaking changes include:
 

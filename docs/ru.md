@@ -128,7 +128,8 @@ curl -s http://127.0.0.1:8000/healthz
 ## Trust-first eval
 
 - Пороги: `eval/trust_thresholds.json`
-- Артефакты: `trust_gate.json`, `trust_history.jsonl`, `trust_trend.json`, `trust_trend.md`
+- Артефакты: `trust_gate.json`, `trust_history.jsonl`, `trust_trend.json`, `trust_trend.md`, `expansion_gate.json`
+- Гейт расширения стека использует последовательные trust-pass прогоны (`AIRISK_EXPANSION_GATE_CONSECUTIVE_RUNS`, по умолчанию `4`).
 
 ## Где смотреть дальше
 

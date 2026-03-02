@@ -230,8 +230,10 @@ Weekly eval workflow publishes:
 - `eval/results/trust_history.jsonl`
 - `eval/results/trust_trend.json`
 - `eval/results/trust_trend.md`
+- `eval/results/expansion_gate.json`
 
 Thresholds are versioned in `eval/trust_thresholds.json`.
+Expansion gate readiness uses consecutive trust-pass runs (`AIRISK_EXPANSION_GATE_CONSECUTIVE_RUNS`, default `4`).
 
 ## Troubleshooting
 

@@ -22,6 +22,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Expanded `django_drf` extraction with DRF router/viewset endpoint mapping and `reverse(...)`-based test path resolution.
 - Added Django viewset eval fixture `eval/repos/milestone7_django_viewset` and included it in eval-suite cases.
 - Added shared dependency extraction parity for FastAPI and Django plugins, with a Django dependency-policy eval fixture (`eval/repos/milestone8_django_dependency`).
+- Added stack expansion readiness artifact `eval/results/expansion_gate.json` driven by consecutive trust-gate passes and required Django parity eval cases.
 
 ### Changed
 - `block-new-critical` guardrails now trigger only for `new + critical + high confidence + verified evidence` findings.
@@ -31,6 +32,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Exit-code gating (`--fail-on-severity`, `ci_mode`) now respects `.airiskpolicy` per-rule blocking overrides (`gate=never_block`).
 - Auto support level for `django_drf` now defaults to `l2` (full CI-mode matrix behavior).
 - In `support_level=auto`, preflight warnings now downgrade support level by one step to keep blocking behavior conservative.
+- Stack expansion gate criteria are now completion-based (consecutive trust-pass runs) instead of calendar-tied wording.
 
 ### Fixed
 - Pipeline/report consistency: `effective_ci_mode` and CI/fail notes are now computed before markdown artifact generation.

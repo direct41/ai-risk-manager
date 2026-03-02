@@ -16,6 +16,11 @@ HISTORY_ROOT = REPO_ROOT / "eval" / ".history"
 TRUST_THRESHOLDS_PATH = REPO_ROOT / "eval" / "trust_thresholds.json"
 DEFAULT_HISTORY_PATH = HISTORY_ROOT / "trust_gate_history.jsonl"
 DEFAULT_TREND_WINDOW = 12
+DEFAULT_EXPANSION_GATE_CONSECUTIVE_RUNS = 4
+EXPANSION_REQUIRED_CASES = {
+    "milestone7_django_viewset",
+    "milestone8_django_dependency",
+}
 PERCENT_METRICS = {
     "avg_precision_proxy",
     "avg_recall_proxy",
@@ -247,6 +252,66 @@ def write_trend_artifacts(
     )
 
 
+def _count_consecutive_trust_passes(history: list[dict]) -> int:
+    count = 0
+    for row in reversed(history):
+        if str(row.get("gate_status")) != "passed":
+            break
+        count += 1
+    return count
+
+
+def build_expansion_gate_payload(
+    results: list[dict],
+    history: list[dict],
+    *,
+    required_consecutive_passes: int | None = None,
+) -> dict[str, object]:
+    required_runs = required_consecutive_passes or _parse_positive_int_env(
+        "AIRISK_EXPANSION_GATE_CONSECUTIVE_RUNS",
+        DEFAULT_EXPANSION_GATE_CONSECUTIVE_RUNS,
+    )
+    result_by_case = {str(row.get("case")): row for row in results}
+    required_cases = sorted(EXPANSION_REQUIRED_CASES)
+    missing_required_cases = sorted(case for case in required_cases if case not in result_by_case)
+    failing_required_cases = sorted(
+        case for case in required_cases if case in result_by_case and str(result_by_case[case].get("status")) != "passed"
+    )
+
+    latest_gate_status = str(history[-1].get("gate_status")) if history else "unknown"
+    consecutive_passes = _count_consecutive_trust_passes(history)
+    ready_by_consecutive_passes = consecutive_passes >= required_runs
+    expansion_gate_open = (
+        latest_gate_status == "passed"
+        and ready_by_consecutive_passes
+        and not missing_required_cases
+        and not failing_required_cases
+    )
+
+    reasons: list[str] = []
+    if latest_gate_status != "passed":
+        reasons.append("latest trust gate status is not passed")
+    if not ready_by_consecutive_passes:
+        reasons.append(
+            f"consecutive passed trust runs is {consecutive_passes}, requires >= {required_runs}"
+        )
+    if missing_required_cases:
+        reasons.append(f"missing required expansion eval cases: {missing_required_cases}")
+    if failing_required_cases:
+        reasons.append(f"required expansion eval cases are not passed: {failing_required_cases}")
+
+    return {
+        "status": "open" if expansion_gate_open else "closed",
+        "required_consecutive_passes": required_runs,
+        "consecutive_passes": consecutive_passes,
+        "latest_trust_gate_status": latest_gate_status,
+        "required_cases": required_cases,
+        "missing_required_cases": missing_required_cases,
+        "failing_required_cases": failing_required_cases,
+        "reasons": reasons,
+    }
+
+
 def load_trust_thresholds(path: Path = TRUST_THRESHOLDS_PATH) -> dict[str, float]:
     thresholds = dict(DEFAULT_TRUST_THRESHOLDS)
     if not path.is_file():
@@ -467,6 +532,12 @@ def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_
     }
     (OUTPUT_ROOT / "trust_gate.json").write_text(json.dumps(gate_payload, ensure_ascii=False, indent=2), encoding="utf-8")
     write_trend_artifacts(aggregates=aggregates, gate_payload=gate_payload)
+    trend_history = load_trend_history(OUTPUT_ROOT / "trust_history.jsonl")
+    expansion_gate_payload = build_expansion_gate_payload(results, trend_history)
+    (OUTPUT_ROOT / "expansion_gate.json").write_text(
+        json.dumps(expansion_gate_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
     lines = [
         "# Eval Suite Summary",
@@ -497,6 +568,21 @@ def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_
         lines.append("- Gate errors:")
         for err in gate_errors:
             lines.append(f"  - {err}")
+    lines.extend(
+        [
+            "",
+            "## Expansion Gate",
+            "",
+            f"- Gate status: `{str(expansion_gate_payload['status']).upper()}`",
+            f"- Required consecutive trust-pass runs: `{expansion_gate_payload['required_consecutive_passes']}`",
+            f"- Current consecutive trust-pass runs: `{expansion_gate_payload['consecutive_passes']}`",
+            f"- Required expansion eval cases: `{', '.join(expansion_gate_payload['required_cases'])}`",
+        ]
+    )
+    if expansion_gate_payload["reasons"]:
+        lines.append("- Gate reasons:")
+        for reason in expansion_gate_payload["reasons"]:
+            lines.append(f"  - {reason}")
     lines.append("")
 
     lines.extend(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 from unittest.mock import patch
@@ -179,3 +180,85 @@ def test_write_trend_artifacts_applies_window_limit(tmp_path: Path) -> None:
     assert len(history_payload) == 2
     assert history_payload[0]["generated_at_utc"] == "2026-01-08T00:00:00Z"
     assert history_payload[1]["generated_at_utc"] == "2026-01-15T00:00:00Z"
+
+
+def test_count_consecutive_trust_passes_uses_trailing_window() -> None:
+    history = [
+        {"gate_status": "passed"},
+        {"gate_status": "failed"},
+        {"gate_status": "passed"},
+        {"gate_status": "passed"},
+    ]
+
+    count = run_eval_suite._count_consecutive_trust_passes(history)
+
+    assert count == 2
+
+
+def test_build_expansion_gate_payload_closes_when_required_case_fails() -> None:
+    results = [
+        {"case": "milestone7_django_viewset", "status": "passed"},
+        {"case": "milestone8_django_dependency", "status": "failed"},
+    ]
+    history = [
+        {"gate_status": "passed"},
+        {"gate_status": "passed"},
+        {"gate_status": "passed"},
+        {"gate_status": "passed"},
+    ]
+
+    payload = run_eval_suite.build_expansion_gate_payload(results, history, required_consecutive_passes=4)
+
+    assert payload["status"] == "closed"
+    assert payload["consecutive_passes"] == 4
+    assert payload["failing_required_cases"] == ["milestone8_django_dependency"]
+    assert payload["reasons"]
+
+
+def test_write_summary_writes_expansion_gate_artifact(tmp_path: Path) -> None:
+    output_root = tmp_path / "results"
+    thresholds = dict(run_eval_suite.DEFAULT_TRUST_THRESHOLDS)
+    results = [
+        {
+            "case": "milestone7_django_viewset",
+            "status": "passed",
+            "exit_code": 0,
+            "found_rules": [],
+            "precision_proxy": 1.0,
+            "recall_proxy": 1.0,
+            "actionability_proxy": 1.0,
+            "evidence_completeness": 1.0,
+            "verification_pass_rate": 1.0,
+            "fallback_rate": 0.0,
+            "triage_time_proxy_min": 1.0,
+            "flaky": False,
+            "errors": [],
+        },
+        {
+            "case": "milestone8_django_dependency",
+            "status": "passed",
+            "exit_code": 0,
+            "found_rules": ["dependency_risk_policy_violation"],
+            "precision_proxy": 1.0,
+            "recall_proxy": 1.0,
+            "actionability_proxy": 1.0,
+            "evidence_completeness": 1.0,
+            "verification_pass_rate": 1.0,
+            "fallback_rate": 0.0,
+            "triage_time_proxy_min": 1.0,
+            "flaky": False,
+            "errors": [],
+        },
+    ]
+
+    with patch.dict(os.environ, {"AIRISK_EVAL_HISTORY_PATH": str(tmp_path / "history" / "trust_gate_history.jsonl")}):
+        with patch.object(run_eval_suite, "OUTPUT_ROOT", output_root):
+            with patch.object(run_eval_suite, "_utc_now_iso", return_value="2026-01-22T00:00:00Z"):
+                failures = run_eval_suite.write_summary(results, thresholds=thresholds, enforce_gates=True)
+
+    assert failures == 0
+    expansion_payload = json.loads((output_root / "expansion_gate.json").read_text(encoding="utf-8"))
+    assert expansion_payload["status"] in {"open", "closed"}
+    assert expansion_payload["required_consecutive_passes"] >= 1
+    summary_md = (output_root / "summary.md").read_text(encoding="utf-8")
+    assert "## Expansion Gate" in summary_md
