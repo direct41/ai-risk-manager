@@ -42,8 +42,16 @@ AIRISK_SAMPLE_REPO=/path/to/local/sample riskmap analyze --sample --no-llm
 1. На `main` создайте baseline:
 
 ```bash
-riskmap analyze --no-llm --output-dir ./.riskmap/baseline
+riskmap analyze \
+  --mode full \
+  --no-llm \
+  --analysis-engine deterministic \
+  --output-dir ./.riskmap/baseline
 ```
+
+Для корректного PR-delta baseline должен содержать оба файла:
+- `.riskmap/baseline/graph.json`
+- `.riskmap/baseline/findings.json`
 
 2. В feature-ветке запустите PR-анализ:
 

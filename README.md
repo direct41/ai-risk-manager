@@ -1,24 +1,24 @@
 # AI Risk Manager
 
-AI Risk Manager is an OSS QA risk-mapping tool for Python backend services (FastAPI and Django/DRF).
+AI Risk Manager is a QA risk-mapping tool for Python backends (FastAPI and Django/DRF).
 
-It helps answer two questions before merge/release:
-
-- Which backend flows are risky right now?
+It answers two practical questions before merge/release:
+- Which backend flows are risky now?
 - Which tests should we add first?
 
-## Start Here (5 Minutes)
+## Quick Start
 
-1. Install:
+Install:
 
 ```bash
 pip install -e '.[dev]'
 ```
 
-2. Run on bundled sample:
+Run on bundled sample:
 
 ```bash
 riskmap analyze --sample --no-llm --output-dir ./.riskmap
+cat ./.riskmap/report.md
 ```
 
 Optional sample override:
@@ -27,23 +27,19 @@ Optional sample override:
 AIRISK_SAMPLE_REPO=/path/to/local/sample riskmap analyze --sample --no-llm
 ```
 
-3. Open the main output:
+## PR Workflow (Recommended)
+
+1. Build deterministic baseline on `main`:
 
 ```bash
-cat ./.riskmap/report.md
+riskmap analyze \
+  --mode full \
+  --no-llm \
+  --analysis-engine deterministic \
+  --output-dir ./.riskmap/baseline
 ```
 
-If this looks useful, run it on your repo.
-
-## Run On Your Repository
-
-1. Create baseline from `main`:
-
-```bash
-riskmap analyze --no-llm --output-dir ./.riskmap/baseline
-```
-
-2. Run PR-scoped analysis on your branch:
+2. Run PR-scoped analysis on feature branch:
 
 ```bash
 riskmap analyze \
@@ -54,100 +50,97 @@ riskmap analyze \
   --output-dir ./.riskmap
 ```
 
-3. Review:
+Important for PR delta (`new/resolved/unchanged`):
+- baseline folder must contain both `graph.json` and `findings.json`.
 
-- `./.riskmap/pr_summary.md`
-- `./.riskmap/findings.json`
-
-## What To Read First In Outputs
+## Key Outputs
 
 - `report.md`: human-readable summary and top actions.
-- `pr_summary.md`: compact PR comment style view (PR mode).
-- `graph.json` / `graph.analysis.json`: analysis graph used for findings (may include semantic enrichment).
-- `graph.deterministic.json`: deterministic graph snapshot before semantic enrichment.
-- `findings.json`: machine-readable findings for automation.
-- `test_plan.json`: prioritized recommended tests.
-
-## Who This Is For Right Now
-
-- FastAPI teams using pytest.
-- Django/DRF teams.
-- Teams that want release-risk visibility in PR/CI.
-- Teams that need actionable test recommendations, not generic warnings.
+- `pr_summary.md`: compact PR view (PR mode).
+- `findings.json`: machine-readable findings.
+- `test_plan.json`: prioritized test recommendations.
+- `graph.json` and `graph.analysis.json`: analysis graph used for findings (may include semantic enrichment).
+- `graph.deterministic.json`: deterministic graph before semantic enrichment.
+- `run_metrics.json`: quality and run metrics.
 
 ## Current Scope (v0.1.x)
 
-- Current stack plugins:
-  - `fastapi_pytest` (mature path)
-  - `django_drf` (verified path, default auto support level `l2` on clean preflight)
-- Local/CI assistant for QA risk mapping.
+- Stack plugins:
+  - `fastapi_pytest`
+  - `django_drf`
+- Local/CI assistant for risk mapping.
 - Not a generic multi-language SAST replacement.
-- API adapter is local/internal oriented (no auth, no multi-tenant guarantees).
-- Universal/mixed-stack strategy is roadmap direction, not current shipped behavior.
+- API is local/internal oriented (no auth, no multi-tenant guarantees).
 
-## What It Analyzes
-
-Extractor focus:
-
-- write endpoints (`POST|PUT|PATCH|DELETE`)
-- endpoint-model links (Pydantic request/response models)
-- declared vs handled state transitions
-- pytest tests and test HTTP calls mapped to endpoints
-
-Deterministic rules include:
-
+Deterministic rules:
 - `critical_path_no_tests`
 - `missing_transition_handler`
 - `broken_invariant_on_transition`
 - `dependency_risk_policy_violation`
 
-Optional semantic AI stage can add extra grounded findings with evidence refs.
-
-## CI Rollout (Safe By Default)
+## CI Rollout Controls
 
 `ci_mode`:
-
-- `advisory` (default): report only, never fail on new findings.
-- `soft`: fail when new `high|critical` findings exist.
-- `block-new-critical`: fail only for `new + critical + high confidence + verified evidence`.
+- `advisory` (default): never fails build.
+- `soft`: fails on new `high|critical`.
+- `block-new-critical`: fails only on `new + critical + high confidence + verified evidence`.
 
 `support_level`:
-
-- `auto` (default): `unknown -> l0`, known plugin stacks -> `l2`.
-- In `auto`, preflight warnings downgrade support level by one step (`l2 -> l1`, `l1 -> l0`).
-- `l0`: block modes downgraded to advisory.
+- `auto` (default): `unknown -> l0`, known stacks -> `l2`.
+- preflight warnings in `auto` downgrade one step (`l2 -> l1`, `l1 -> l0`).
+- `l0`: blocking modes downgraded to advisory.
 - `l1`: `block-new-critical` downgraded to `soft`.
-- `l2`: full mode behavior.
+- `l2`: full behavior.
 
-## Most Useful CLI Flags
+## Useful CLI Flags
 
 ```bash
 riskmap analyze [PATH]
 riskmap analyze --sample
 riskmap analyze --mode pr --base main --baseline-graph ./.riskmap/baseline/graph.json
-riskmap analyze --only-new
-riskmap analyze --ci-mode advisory|soft|block-new-critical
-riskmap analyze --support-level auto|l0|l1|l2
-riskmap analyze --risk-policy conservative|balanced|aggressive
 riskmap analyze --analysis-engine deterministic|hybrid|ai-first
 riskmap analyze --provider auto|api|cli
 riskmap analyze --no-llm
-riskmap analyze --fail-on-severity high
+riskmap analyze --only-new
+riskmap analyze --min-confidence high|medium|low
+riskmap analyze --ci-mode advisory|soft|block-new-critical
+riskmap analyze --support-level auto|l0|l1|l2
+riskmap analyze --risk-policy conservative|balanced|aggressive
+riskmap analyze --fail-on-severity critical|high|medium|low
 riskmap analyze --suppress-file .airiskignore
 ```
 
 Dependency policy profiles:
-
 - `conservative`: `direct_reference`, `wildcard_version`
 - `balanced` (default): conservative + `range_not_pinned`
 - `aggressive`: balanced + `unpinned_version`
 
-Severity by dependency scope:
+## Suppressions and Policy
 
-- `runtime`: direct/wildcard -> `high`, range/unpinned -> `medium`
-- `development`: direct/wildcard -> `medium`, range/unpinned -> `low`
+Suppressions (`.airiskignore`):
 
-## API Quick Start (Sync)
+```yaml
+- key: "critical_path_no_tests:api:app:api.py:create_order"
+- rule: "missing_transition_handler"
+  file: "app/orders.py"
+```
+
+Policy overrides (`.airiskpolicy`):
+
+```json
+{
+  "version": 1,
+  "rules": {
+    "critical_path_no_tests": {
+      "enabled": true,
+      "severity": "medium",
+      "gate": "never_block"
+    }
+  }
+}
+```
+
+## API Quick Start
 
 Install API extras:
 
@@ -155,7 +148,7 @@ Install API extras:
 pip install -e '.[api]'
 ```
 
-Start server:
+Run server:
 
 ```bash
 riskmap-api
@@ -188,64 +181,29 @@ curl -s -X POST http://127.0.0.1:8000/v1/analyze \
 |---|---|
 | 0 | Success |
 | 1 | Explicit provider unavailable (`--provider api|cli`) |
-| 2 | Unsupported repository for current extractor plugins |
+| 2 | Unsupported repository for strict extractor modes |
 | 3 | `--fail-on-severity` or `--ci-mode` threshold reached |
 
-## Suppressions (`.airiskignore`)
-
-```yaml
-- key: "critical_path_no_tests:api:app:api.py:create_order"
-- rule: "missing_transition_handler"
-  file: "app/orders.py"
-```
-
-## Policy Overrides (`.airiskpolicy`)
-
-Use `.airiskpolicy` (JSON) to tune per-rule behavior without code forks.
-
-```json
-{
-  "version": 1,
-  "rules": {
-    "critical_path_no_tests": {
-      "enabled": true,
-      "severity": "medium",
-      "gate": "never_block"
-    }
-  }
-}
-```
-
-Rule fields:
-
-- `enabled` (`true|false`): include or disable findings for this rule.
-- `severity` (`critical|high|medium|low`): override severity in outputs and threshold checks.
-- `gate`:
-  - `default`: finding participates in `--fail-on-severity` and CI blocking modes.
-  - `never_block`: finding is reported but ignored for exit-code blocking decisions.
-
-## Trust-First Eval Artifacts
+## Eval Artifacts
 
 Weekly eval workflow publishes:
-
 - `eval/results/trust_gate.json`
 - `eval/results/trust_history.jsonl`
 - `eval/results/trust_trend.json`
 - `eval/results/trust_trend.md`
 - `eval/results/expansion_gate.json`
 
-Thresholds are versioned in `eval/trust_thresholds.json`.
-Expansion gate readiness uses consecutive trust-pass runs (`AIRISK_EXPANSION_GATE_CONSECUTIVE_RUNS`, default `4`).
+Use `make eval` locally.
+Use `AIRISK_EVAL_ENFORCE_THRESHOLDS=0 make eval` for non-blocking local runs.
 
 ## Troubleshooting
 
-- `exit 1`: choose another provider or run with `--no-llm`.
-- `exit 2`: repository does not match supported plugin patterns in strict levels (`--support-level l1|l2`).
-- Empty PR findings: check baseline graph and changed file detection.
-- Unknown stack with default `--support-level auto`: run continues in L0 advisory mode.
-- `--sample` cannot find bundled sample: set `AIRISK_SAMPLE_REPO`.
+- `exit 1`: choose another provider or use `--no-llm`.
+- `exit 2`: repository does not match supported plugin patterns in strict levels.
+- Empty PR findings: verify baseline files and changed-files detection.
+- Unknown stack with `--support-level auto`: run continues in L0 advisory mode.
 
-## Development Commands
+## Development
 
 ```bash
 make install
@@ -256,16 +214,13 @@ make serve-api
 make eval
 ```
 
-`make eval` enforces trust gates by default.
-Use `AIRISK_EVAL_ENFORCE_THRESHOLDS=0 make eval` for non-blocking eval runs.
-
 ## Docs Map
 
 - `docs/ru.md`: Russian quick guide
 - `docs/compatibility.md`: CLI/API/JSON compatibility policy
-- `docs/capability-signals.md`: stack-agnostic capability signal model and coverage map
-- `ROADMAP.md`: MVP now / next
-- `BACKLOG_TRUST_FIRST.md`: trust-first delivery backlog and KPI gates
+- `docs/capability-signals.md`: stack-agnostic signal model
+- `ROADMAP.md`: product roadmap
+- `BACKLOG_TRUST_FIRST.md`: trust-first backlog and KPI gates
 - `SUPPORT.md`: support channels
 
 ## Open Source

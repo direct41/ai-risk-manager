@@ -23,6 +23,12 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added Django viewset eval fixture `eval/repos/milestone7_django_viewset` and included it in eval-suite cases.
 - Added shared dependency extraction parity for FastAPI and Django plugins, with a Django dependency-policy eval fixture (`eval/repos/milestone8_django_dependency`).
 - Added stack expansion readiness artifact `eval/results/expansion_gate.json` driven by consecutive trust-gate passes and required Django parity eval cases.
+- Added explicit graph artifacts split:
+  - `graph.analysis.json` (analysis graph)
+  - `graph.deterministic.json` (deterministic pre-enrichment graph)
+- Added run summary metadata for graph transparency:
+  - `graph_mode_applied`
+  - `semantic_signal_count`
 
 ### Changed
 - `block-new-critical` guardrails now trigger only for `new + critical + high confidence + verified evidence` findings.
@@ -33,6 +39,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Auto support level for `django_drf` now defaults to `l2` (full CI-mode matrix behavior).
 - In `support_level=auto`, preflight warnings now downgrade support level by one step to keep blocking behavior conservative.
 - Stack expansion gate criteria are now completion-based (consecutive trust-pass runs) instead of calendar-tied wording.
+- README was streamlined for faster onboarding and updated baseline guidance.
+- CI risk-analysis baseline now uses deterministic/no-llm mode and caches both `graph.json` and `findings.json` for correct PR delta status.
 
 ### Fixed
 - Pipeline/report consistency: `effective_ci_mode` and CI/fail notes are now computed before markdown artifact generation.
@@ -42,6 +50,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Refactored
 - Removed unused `risk_agent` layer.
 - Unified bundled sample repository resolution for both CLI and API via shared helper (`sample_repo.py`).
+- Extracted PR scope and baseline helper logic from `pipeline/run.py` into `pipeline/pr_scope.py` to reduce orchestrator complexity.
 
 ## [0.1.0] - 2026-02-19
 

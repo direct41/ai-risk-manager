@@ -23,8 +23,8 @@ jobs:
         run: |
           riskmap analyze \
             --mode full \
-            --provider auto \
-            --analysis-engine ai-first \
+            --no-llm \
+            --analysis-engine deterministic \
             --ci-mode advisory \
             --output-dir ./.riskmap || {
             rc=$?
@@ -36,15 +36,16 @@ jobs:
 
       - name: Prepare baseline
         run: |
-          if [ -f ./.riskmap/graph.json ]; then
+          if [ -f ./.riskmap/graph.json ] && [ -f ./.riskmap/findings.json ]; then
             mkdir -p ./.riskmap/baseline
             cp ./.riskmap/graph.json ./.riskmap/baseline/graph.json
+            cp ./.riskmap/findings.json ./.riskmap/baseline/findings.json
           else
-            echo "No graph.json generated; baseline not prepared."
+            echo "Missing baseline artifacts (graph.json/findings.json); baseline not prepared."
           fi
 
       - name: Save baseline cache
-        if: hashFiles('./.riskmap/baseline/graph.json') != ''
+        if: hashFiles('./.riskmap/baseline/graph.json') != '' && hashFiles('./.riskmap/baseline/findings.json') != ''
         uses: actions/cache/save@v4
         with:
           path: ./.riskmap/baseline
