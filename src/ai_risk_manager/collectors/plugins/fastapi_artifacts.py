@@ -210,6 +210,138 @@ def _constant_str(node: ast.AST) -> str | None:
     return None
 
 
+def _resolve_string_expr(node: ast.AST | None, aliases: dict[str, str]) -> str | None:
+    if node is None:
+        return None
+
+    const = _constant_str(node)
+    if const is not None:
+        return const
+
+    if isinstance(node, ast.Name):
+        return aliases.get(node.id)
+
+    if isinstance(node, ast.JoinedStr):
+        parts: list[str] = []
+        for value in node.values:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                parts.append(value.value)
+                continue
+            if isinstance(value, ast.FormattedValue):
+                inner = _resolve_string_expr(value.value, aliases)
+                parts.append(inner if inner is not None else "{param}")
+                continue
+            return None
+        return "".join(parts)
+
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left = _resolve_string_expr(node.left, aliases)
+        right = _resolve_string_expr(node.right, aliases)
+        if left is None or right is None:
+            return None
+        return f"{left}{right}"
+
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "format":
+        template = _resolve_string_expr(node.func.value, aliases)
+        if template is None:
+            return None
+        rendered = template
+        for kw in node.keywords:
+            if kw.arg is None:
+                continue
+            replacement = _resolve_string_expr(kw.value, aliases) or "{param}"
+            rendered = rendered.replace("{" + kw.arg + "}", replacement)
+        for arg in node.args:
+            replacement = _resolve_string_expr(arg, aliases) or "{param}"
+            if "{}" in rendered:
+                rendered = rendered.replace("{}", replacement, 1)
+        return rendered
+
+    return None
+
+
+def _normalize_test_route(path: str) -> str | None:
+    raw = path.strip()
+    if not raw:
+        return None
+
+    # Handle absolute URLs from test clients.
+    raw = re.sub(r"^[a-zA-Z][a-zA-Z0-9+.-]*://[^/]+", "", raw)
+    raw = raw.split("?", 1)[0].split("#", 1)[0].strip()
+    if not raw:
+        return None
+    if not raw.startswith("/"):
+        raw = f"/{raw}"
+    raw = re.sub(r"/{2,}", "/", raw)
+    if len(raw) > 1:
+        raw = raw.rstrip("/")
+    return raw
+
+
+def _collect_string_aliases(node: ast.AST, *, base_aliases: dict[str, str] | None = None) -> dict[str, str]:
+    aliases: dict[str, str] = dict(base_aliases or {})
+    assignments: list[tuple[str, ast.AST]] = []
+    for child in ast.walk(node):
+        if isinstance(child, ast.Assign):
+            for target in child.targets:
+                if isinstance(target, ast.Name):
+                    assignments.append((target.id, child.value))
+        elif isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name) and child.value is not None:
+            assignments.append((child.target.id, child.value))
+
+    changed = True
+    while changed:
+        changed = False
+        for name, value_node in assignments:
+            if name in aliases:
+                continue
+            resolved = _resolve_string_expr(value_node, aliases)
+            if resolved is None:
+                continue
+            aliases[name] = resolved
+            changed = True
+    return aliases
+
+
+def _is_fixture_decorator(decorator: ast.AST) -> bool:
+    node = decorator
+    if isinstance(node, ast.Call):
+        node = node.func
+    if isinstance(node, ast.Name):
+        return node.id == "fixture"
+    if isinstance(node, ast.Attribute):
+        return node.attr == "fixture"
+    return False
+
+
+def _extract_fixture_path_aliases(tree: ast.AST) -> dict[str, str]:
+    fixture_aliases: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not any(_is_fixture_decorator(decorator) for decorator in node.decorator_list):
+            continue
+
+        local_aliases = _collect_string_aliases(node)
+        fixture_path: str | None = None
+        for child in ast.walk(node):
+            if isinstance(child, ast.Return):
+                fixture_path = _resolve_string_expr(child.value, local_aliases)
+                if fixture_path is not None:
+                    break
+            if isinstance(child, ast.Yield):
+                fixture_path = _resolve_string_expr(child.value, local_aliases)
+                if fixture_path is not None:
+                    break
+
+        if fixture_path is None:
+            continue
+        normalized = _normalize_test_route(fixture_path)
+        if normalized:
+            fixture_aliases[node.name] = normalized
+    return fixture_aliases
+
+
 def _extract_declared_transitions(tree: ast.AST, source_lines: list[str]) -> list[tuple[str, str, str, int, str]]:
     declared: list[tuple[str, str, str, int, str]] = []
     for node in ast.walk(tree):
@@ -376,10 +508,13 @@ def _extract_test_cases(tree: ast.AST, source_lines: list[str]) -> list[tuple[st
 
 def _extract_test_http_calls(tree: ast.AST, source_lines: list[str]) -> list[tuple[str, str, str, int, str]]:
     calls: list[tuple[str, str, str, int, str]] = []
+    fixture_aliases = _extract_fixture_path_aliases(tree)
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or not node.name.startswith("test_"):
             continue
         test_name = node.name
+        arg_aliases = {arg.arg: fixture_aliases[arg.arg] for arg in node.args.args if arg.arg in fixture_aliases}
+        aliases = _collect_string_aliases(node, base_aliases=arg_aliases)
         for child in ast.walk(node):
             if not isinstance(child, ast.Call) or not isinstance(child.func, ast.Attribute):
                 continue
@@ -387,20 +522,24 @@ def _extract_test_http_calls(tree: ast.AST, source_lines: list[str]) -> list[tup
             if method not in ROUTE_METHODS:
                 continue
 
-            route_path: str | None = None
+            route_expr: ast.AST | None = None
             if child.args:
-                route_path = _constant_str(child.args[0])
-            if route_path is None:
+                route_expr = child.args[0]
+            if route_expr is None:
                 for kw in child.keywords:
                     if kw.arg in {"path", "url"}:
-                        route_path = _constant_str(kw.value)
-                        if route_path is not None:
+                        route_expr = kw.value
+                        if route_expr is not None:
                             break
+            route_path = _resolve_string_expr(route_expr, aliases)
             if route_path is None:
+                continue
+            normalized_route = _normalize_test_route(route_path)
+            if normalized_route is None:
                 continue
 
             line = getattr(child, "lineno", getattr(node, "lineno", 1))
-            calls.append((test_name, method.upper(), route_path, line, _line_snippet(source_lines, line)))
+            calls.append((test_name, method.upper(), normalized_route, line, _line_snippet(source_lines, line)))
     return calls
 
 

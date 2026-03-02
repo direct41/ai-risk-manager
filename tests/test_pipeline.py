@@ -248,6 +248,105 @@ def test_collector_supports_chained_router_access(tmp_path: Path, write_file) ->
     assert any(node.name == "create_order" for node in result.graph.nodes if node.type == "API")
 
 
+def test_pipeline_matches_concrete_test_path_to_parametrized_endpoint(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/orders/{order_id}/pay')\n"
+        "def pay_order(order_id: str):\n"
+        "    return {'order_id': order_id, 'status': 'paid'}\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_api.py",
+        "from fastapi.testclient import TestClient\n"
+        "def test_pay_order(client: TestClient):\n"
+        "    response = client.post('/orders/123/pay')\n"
+        "    assert response.status_code in {200, 201, 202}\n",
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+    result, code, _ = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    assert not any(f.rule_id == "critical_path_no_tests" for f in result.findings.findings)
+
+
+def test_pipeline_matches_test_path_from_local_alias(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/orders')\n"
+        "def create_order():\n"
+        "    return {'status': 'created'}\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_api.py",
+        "from fastapi.testclient import TestClient\n"
+        "def test_create_order(client: TestClient):\n"
+        "    orders_path = '/orders'\n"
+        "    response = client.post(orders_path)\n"
+        "    assert response.status_code in {200, 201, 202}\n",
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+    result, code, _ = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    assert not any(f.rule_id == "critical_path_no_tests" for f in result.findings.findings)
+
+
+def test_pipeline_matches_fixture_path_alias(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/orders/{order_id}/pay')\n"
+        "def pay_order(order_id: str):\n"
+        "    return {'order_id': order_id, 'status': 'paid'}\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_api.py",
+        "import pytest\n"
+        "from fastapi.testclient import TestClient\n"
+        "@pytest.fixture\n"
+        "def order_pay_path() -> str:\n"
+        "    order_id = 'ord_42'\n"
+        "    return f'/orders/{order_id}/pay'\n\n"
+        "def test_pay_order(client: TestClient, order_pay_path: str):\n"
+        "    response = client.post(order_pay_path)\n"
+        "    assert response.status_code in {200, 201, 202}\n",
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+    result, code, _ = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    assert not any(f.rule_id == "critical_path_no_tests" for f in result.findings.findings)
+
+
 def test_explicit_provider_unavailable_returns_exit_1(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",

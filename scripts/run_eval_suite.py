@@ -63,6 +63,12 @@ CASES = [
         required_rules={"missing_transition_handler"},
         forbidden_rules={"critical_path_no_tests"},
     ),
+    EvalCase(
+        name="milestone6_coverage_aliases",
+        repo_rel="eval/repos/milestone6_coverage_aliases",
+        required_rules=set(),
+        forbidden_rules={"critical_path_no_tests"},
+    ),
 ]
 
 
