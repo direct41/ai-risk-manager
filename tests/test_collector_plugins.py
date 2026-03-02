@@ -300,3 +300,31 @@ def test_django_plugin_collects_viewset_routes_and_reverse_calls(tmp_path: Path,
     calls = {(row[1], row[2], row[3]) for row in bundle.test_http_calls}
     assert ("test_create_order", "POST", "/api/orders") in calls
     assert ("test_pay_order", "POST", "/api/orders/ord_1/pay") in calls
+
+
+def test_django_plugin_collects_dependency_specs_from_requirements(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "views.py",
+        "from rest_framework.views import APIView\n"
+        "from rest_framework.response import Response\n"
+        "class HealthView(APIView):\n"
+        "    def post(self, request):\n"
+        "        return Response({'ok': True})\n",
+    )
+    write_file(
+        tmp_path / "app" / "urls.py",
+        "from django.urls import path\n"
+        "from .views import HealthView\n"
+        "urlpatterns = [path('health/', HealthView.as_view(), name='health')]\n",
+    )
+    write_file(tmp_path / "requirements.txt", "Django==5.0.0\nrequests>=2.31.0\n")
+    write_file(tmp_path / "requirements-dev.txt", "pytest>=8.0\n")
+
+    plugin = get_plugin_for_stack("django_drf")
+    assert plugin is not None
+    bundle = plugin.collect(tmp_path)
+
+    violations = {(name, violation, scope) for _, name, _, _, violation, scope in bundle.dependency_specs}
+    assert ("django", None, "runtime") in violations
+    assert ("requests", "range_not_pinned", "runtime") in violations
+    assert ("pytest", "range_not_pinned", "development") in violations

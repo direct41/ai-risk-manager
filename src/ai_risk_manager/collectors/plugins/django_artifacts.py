@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle
+from ai_risk_manager.collectors.plugins.dependency_artifacts import extract_dependency_specs
 
 WRITE_METHODS = ("post", "put", "patch", "delete")
 ROUTE_METHODS = WRITE_METHODS + ("get",)
@@ -704,6 +705,7 @@ def collect_django_artifacts(repo_path: Path) -> ArtifactBundle:
     bundle = ArtifactBundle()
     bundle.all_files = _iter_files(repo_path)
     bundle.python_files = [path for path in bundle.all_files if path.suffix == ".py"]
+    bundle.dependency_specs.extend(extract_dependency_specs(repo_path, bundle.all_files))
     bundle.test_files = [path for path in bundle.python_files if _is_test_file(path)]
 
     parsed: list[tuple[Path, ast.AST, str, list[str]]] = []

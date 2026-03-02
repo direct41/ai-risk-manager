@@ -1169,6 +1169,42 @@ def test_pipeline_reports_dependency_policy_violation(tmp_path: Path, write_file
     assert "dependency_risk_policy_violation" in rule_ids
 
 
+def test_django_pipeline_reports_dependency_policy_violation(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "views.py",
+        "from rest_framework.views import APIView\n"
+        "from rest_framework.response import Response\n"
+        "class HealthView(APIView):\n"
+        "    def post(self, request):\n"
+        "        return Response({'ok': True})\n",
+    )
+    write_file(
+        tmp_path / "app" / "urls.py",
+        "from django.urls import path\n"
+        "from .views import HealthView\n"
+        "urlpatterns = [path('health/', HealthView.as_view(), name='health')]\n",
+    )
+    write_file(tmp_path / "tests" / "test_health.py", "def test_health(client):\n    assert True\n")
+    write_file(tmp_path / "requirements.txt", "Django==5.0.0\nrequests>=2.31.0\n")
+
+    result, code, _ = run_pipeline(
+        RunContext(
+            repo_path=tmp_path,
+            mode="full",
+            base=None,
+            output_dir=tmp_path / ".riskmap",
+            provider="auto",
+            no_llm=True,
+            risk_policy="balanced",
+        )
+    )
+    assert code == 0
+    assert result is not None
+    assert result.summary.support_level_applied == "l1"
+    rule_ids = {finding.rule_id for finding in result.findings.findings}
+    assert "dependency_risk_policy_violation" in rule_ids
+
+
 def test_pipeline_skips_dependency_policy_when_versions_are_pinned(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",
