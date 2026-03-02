@@ -3,6 +3,14 @@
 ## Goal
 Build and scale AI Risk Manager through high-trust signal quality first, then stack expansion.
 
+## Execution Mode
+- This backlog is executed by stage-gates, not fixed calendar dates.
+- Epic transition gates:
+  - implementation for the current epic is complete
+  - `pytest` is green
+  - trust/eval gates pass for changed behavior
+  - docs/compatibility/changelog are updated when contracts change
+
 ## North-Star KPIs
 - Precision@5 in PR summary: >= 75%
 - Evidence completeness: >= 95%
@@ -87,7 +95,7 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 ### Definition of Done
 - Trust KPIs remain above threshold for 4 weeks on FastAPI before expansion gate opens.
 
-## Delivery Order
+## Delivery Sequence (Gate-Based)
 1. Epic 1
 2. Epic 2
 3. Epic 3

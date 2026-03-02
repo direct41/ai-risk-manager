@@ -1,19 +1,20 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
 import time
 from typing import Literal
 
-from ai_risk_manager.agents.provider import resolve_provider
+from ai_risk_manager.agents.provider import ProviderResolution, resolve_provider
 from ai_risk_manager.agents.qa_strategy_agent import generate_test_plan
 from ai_risk_manager.agents.semantic_risk_agent import generate_semantic_findings
-from ai_risk_manager.collectors.plugins.base import ArtifactBundle
+from ai_risk_manager.collectors.plugins.base import ArtifactBundle, CollectorPlugin
 from ai_risk_manager.collectors.plugins.registry import get_plugin_for_stack
-from ai_risk_manager.pipeline.sinks import PipelineSinks
 from ai_risk_manager.graph.builder import build_graph, low_confidence_ratio
 from ai_risk_manager.pipeline.merge_findings import ensure_fingerprint, merge_findings
+from ai_risk_manager.pipeline.sinks import PipelineSinks
 from ai_risk_manager.rules.engine import run_rules
 from ai_risk_manager.rules.suppressions import apply_suppressions, load_suppressions
 from ai_risk_manager.schemas.types import (
@@ -28,6 +29,7 @@ from ai_risk_manager.schemas.types import (
     RunContext,
     RunMetrics,
     RunSummary,
+    TestPlan,
 )
 from ai_risk_manager.stacks.discovery import detect_stack
 
@@ -302,14 +304,39 @@ def _compute_run_metrics(
     )
 
 
-def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tuple[PipelineResult | None, int, list[str]]:
-    active_sinks = sinks or PipelineSinks()
-    pipeline_started = time.perf_counter()
-    total_steps = 6
-    notes: list[str] = []
-    fallback_reason: str | None = None
+@dataclass
+class _PreflightStage:
+    preflight: PreflightResult
+    plugin: CollectorPlugin | None
+    support_level_applied: AppliedSupportLevel
+    competitive_mode: CompetitiveMode
 
-    t = active_sinks.progress.start(1, total_steps, "Stack detection and pre-flight")
+
+@dataclass
+class _ScopeStage:
+    analysis_scope: AnalysisScope
+    analysis_graph: Graph
+    fallback_reason: str | None
+
+
+@dataclass
+class _AnalysisStage:
+    findings_raw: FindingsReport
+    findings: FindingsReport
+    summary: RunSummary
+    test_plan: TestPlan
+    suppressed_count: int
+    verified_fingerprints: set[str]
+
+
+def _stage_preflight(
+    ctx: RunContext,
+    *,
+    sinks: PipelineSinks,
+    total_steps: int,
+    notes: list[str],
+) -> tuple[_PreflightStage | None, int | None]:
+    t = sinks.progress.start(1, total_steps, "Stack detection and pre-flight")
     detection = detect_stack(ctx.repo_path)
     notes.append(f"Detected stack: {detection.stack_id} (confidence: {detection.confidence}).")
     support_level_applied = _resolve_support_level(ctx.support_level, detection.stack_id)
@@ -320,10 +347,10 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
 
     plugin = get_plugin_for_stack(detection.stack_id)
     if plugin is None and support_level_applied != "l0":
-        active_sinks.progress.finish(1, total_steps, "Stack detection and pre-flight", t)
+        sinks.progress.finish(1, total_steps, "Stack detection and pre-flight", t)
         notes.extend(detection.reasons)
         notes.append(f"No collector plugin is registered for stack '{detection.stack_id}'.")
-        return None, 2, notes
+        return None, 2
 
     if plugin is None:
         preflight = PreflightResult(
@@ -332,30 +359,63 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
         )
     else:
         preflight = plugin.preflight(ctx.repo_path, probe_data=detection.probe_data)
-    active_sinks.progress.finish(1, total_steps, "Stack detection and pre-flight", t)
+    sinks.progress.finish(1, total_steps, "Stack detection and pre-flight", t)
 
     if preflight.status == "FAIL":
         notes.extend(preflight.reasons)
-        return None, 2, notes
+        return None, 2
     if preflight.status == "WARN":
         notes.extend(preflight.reasons)
 
-    t = active_sinks.progress.start(2, total_steps, "Collecting artifacts")
-    if plugin is None:
-        artifacts = ArtifactBundle()
-    else:
-        artifacts = plugin.collect(ctx.repo_path)
-    active_sinks.progress.finish(2, total_steps, "Collecting artifacts", t)
+    return (
+        _PreflightStage(
+            preflight=preflight,
+            plugin=plugin,
+            support_level_applied=support_level_applied,
+            competitive_mode=competitive_mode,
+        ),
+        None,
+    )
 
-    t = active_sinks.progress.start(3, total_steps, "Building graph")
+
+def _stage_collect_artifacts(
+    ctx: RunContext,
+    *,
+    plugin: CollectorPlugin | None,
+    sinks: PipelineSinks,
+    total_steps: int,
+) -> ArtifactBundle:
+    t = sinks.progress.start(2, total_steps, "Collecting artifacts")
+    artifacts = ArtifactBundle() if plugin is None else plugin.collect(ctx.repo_path)
+    sinks.progress.finish(2, total_steps, "Collecting artifacts", t)
+    return artifacts
+
+
+def _stage_build_graph(
+    artifacts: ArtifactBundle,
+    *,
+    sinks: PipelineSinks,
+    total_steps: int,
+) -> Graph:
+    t = sinks.progress.start(3, total_steps, "Building graph")
     graph = build_graph(artifacts)
-    active_sinks.progress.finish(3, total_steps, "Building graph", t)
+    sinks.progress.finish(3, total_steps, "Building graph", t)
+    return graph
 
+
+def _stage_resolve_scope(
+    ctx: RunContext,
+    graph: Graph,
+    *,
+    sinks: PipelineSinks,
+    notes: list[str],
+) -> _ScopeStage:
     analysis_scope: AnalysisScope = "full"
     analysis_graph = graph
+    fallback_reason: str | None = None
     if ctx.mode == "pr":
         if _baseline_graph_is_valid(ctx.baseline_graph):
-            changed_files = _resolve_changed_files(ctx.repo_path, ctx.base, sinks=active_sinks)
+            changed_files = _resolve_changed_files(ctx.repo_path, ctx.base, sinks=sinks)
             if changed_files is None:
                 analysis_scope = "full_fallback"
                 fallback_reason = "changed_files_unresolved"
@@ -379,9 +439,41 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
             fallback_reason = "baseline_graph_missing_or_invalid"
             notes.append("Baseline graph not found or invalid; using full_fallback scan.")
 
-    t = active_sinks.progress.start(4, total_steps, "Running deterministic rules")
-    findings_raw = run_rules(analysis_graph, risk_policy=ctx.risk_policy)
-    active_sinks.progress.finish(4, total_steps, "Running deterministic rules", t)
+    return _ScopeStage(
+        analysis_scope=analysis_scope,
+        analysis_graph=analysis_graph,
+        fallback_reason=fallback_reason,
+    )
+
+
+def _resolve_provider_for_analysis(
+    ctx: RunContext,
+    *,
+    sinks: PipelineSinks,
+    notes: list[str],
+) -> tuple[ProviderResolution | None, int | None]:
+    ci = sinks.environment.is_ci()
+    force_no_llm = ctx.no_llm or ctx.analysis_engine == "deterministic"
+    provider_resolution = resolve_provider(ctx.provider, no_llm=force_no_llm, ci=ci)
+    notes.extend(provider_resolution.notes)
+    if not force_no_llm and ctx.provider in {"api", "cli"} and provider_resolution.provider == "none":
+        return None, 1
+    return provider_resolution, None
+
+
+def _stage_analysis(
+    ctx: RunContext,
+    *,
+    scope: _ScopeStage,
+    support_level_applied: AppliedSupportLevel,
+    competitive_mode: CompetitiveMode,
+    sinks: PipelineSinks,
+    total_steps: int,
+    notes: list[str],
+) -> tuple[_AnalysisStage | None, int | None]:
+    t = sinks.progress.start(4, total_steps, "Running deterministic rules")
+    findings_raw = run_rules(scope.analysis_graph, risk_policy=ctx.risk_policy)
+    sinks.progress.finish(4, total_steps, "Running deterministic rules", t)
 
     suppress_path = ctx.suppress_file
     if suppress_path is None:
@@ -393,25 +485,22 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
     if suppressed_count:
         notes.append(f"Suppressed findings: {suppressed_count}.")
 
-    ci = active_sinks.environment.is_ci()
-    force_no_llm = ctx.no_llm or ctx.analysis_engine == "deterministic"
-    provider_resolution = resolve_provider(ctx.provider, no_llm=force_no_llm, ci=ci)
-    notes.extend(provider_resolution.notes)
-    if not force_no_llm and ctx.provider in {"api", "cli"} and provider_resolution.provider == "none":
-        return None, 1, notes
+    provider_resolution, provider_exit = _resolve_provider_for_analysis(ctx, sinks=sinks, notes=notes)
+    if provider_exit is not None or provider_resolution is None:
+        return None, provider_exit
 
-    t = active_sinks.progress.start(5, total_steps, "Semantic AI risk stage")
+    t = sinks.progress.start(5, total_steps, "Semantic AI risk stage")
     semantic_findings = FindingsReport(findings=[], generated_without_llm=True)
     if ctx.analysis_engine != "deterministic":
         semantic_findings, semantic_notes = generate_semantic_findings(
-            analysis_graph,
+            scope.analysis_graph,
             provider=provider_resolution.provider,
             generated_without_llm=provider_resolution.generated_without_llm,
         )
         notes.extend(semantic_notes)
     else:
         notes.append("analysis_engine=deterministic: semantic AI stage skipped.")
-    active_sinks.progress.finish(5, total_steps, "Semantic AI risk stage", t)
+    sinks.progress.finish(5, total_steps, "Semantic AI risk stage", t)
 
     top_limit = RISK_POLICY_TOP_LIMIT[ctx.risk_policy]
     merged_findings = merge_findings(
@@ -429,6 +518,7 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
         suppressed_count += suppressed_after_merge
         notes.append(f"Suppressed merged findings: {suppressed_after_merge}.")
 
+    fallback_reason = scope.fallback_reason
     baseline_fingerprints: set[str] | None = None
     if ctx.mode == "pr":
         baseline_fingerprints, baseline_reason = _load_baseline_fingerprints(ctx.baseline_graph)
@@ -452,47 +542,41 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
     if ci_mode_note:
         notes.append(ci_mode_note)
 
-    t = active_sinks.progress.start(6, total_steps, "QA strategy agent")
+    t = sinks.progress.start(6, total_steps, "QA strategy agent")
     test_plan = generate_test_plan(
         findings,
-        analysis_graph,
+        scope.analysis_graph,
         provider=provider_resolution.provider,
         generated_without_llm=provider_resolution.generated_without_llm or ctx.analysis_engine == "deterministic",
     )
-    active_sinks.progress.finish(6, total_steps, "QA strategy agent", t)
+    sinks.progress.finish(6, total_steps, "QA strategy agent", t)
 
-    duration_ms = int((time.perf_counter() - pipeline_started) * 1000)
-    run_metrics = _compute_run_metrics(
-        findings,
-        summary,
-        support_level_applied=support_level_applied,
-        competitive_mode=competitive_mode,
-        verification_pass_rate=verification_pass_rate,
-        evidence_completeness=evidence_completeness,
-        analysis_scope=analysis_scope,
-        duration_ms=duration_ms,
+    return (
+        _AnalysisStage(
+            findings_raw=findings_raw,
+            findings=findings,
+            summary=summary,
+            test_plan=test_plan,
+            suppressed_count=suppressed_count,
+            verified_fingerprints=verified_fingerprints,
+        ),
+        None,
     )
 
-    result = PipelineResult(
-        preflight=preflight,
-        analysis_scope=analysis_scope,
-        data_quality_low_confidence_ratio=low_confidence_ratio(analysis_graph),
-        suppressed_count=suppressed_count,
-        graph=analysis_graph,
-        findings_raw=findings_raw,
-        findings=findings,
-        test_plan=test_plan,
-        summary=summary,
-        run_metrics=run_metrics,
-    )
 
+def _resolve_exit_code(
+    ctx: RunContext,
+    result: PipelineResult,
+    *,
+    effective_ci_mode: CIMode,
+    verified_fingerprints: set[str],
+    notes: list[str],
+) -> int:
     exit_code = 0
     if ctx.fail_on_severity:
         max_sev = _max_severity([finding.severity for finding in result.findings.findings])
         if max_sev and SEVERITY_RANK.get(max_sev, 0) >= SEVERITY_RANK[ctx.fail_on_severity]:
-            notes.append(
-                f"Fail-on-severity triggered: found '{max_sev}' which is >= threshold '{ctx.fail_on_severity}'."
-            )
+            notes.append(f"Fail-on-severity triggered: found '{max_sev}' which is >= threshold '{ctx.fail_on_severity}'.")
             exit_code = 3
 
     if effective_ci_mode == "soft":
@@ -512,6 +596,72 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
         ):
             notes.append("ci_mode=block_new_critical triggered: verified high-confidence new critical finding exists.")
             exit_code = 3
+
+    return exit_code
+
+
+def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tuple[PipelineResult | None, int, list[str]]:
+    active_sinks = sinks or PipelineSinks()
+    pipeline_started = time.perf_counter()
+    total_steps = 6
+    notes: list[str] = []
+
+    preflight_stage, preflight_exit = _stage_preflight(ctx, sinks=active_sinks, total_steps=total_steps, notes=notes)
+    if preflight_exit is not None or preflight_stage is None:
+        return None, preflight_exit or 2, notes
+
+    artifacts = _stage_collect_artifacts(
+        ctx,
+        plugin=preflight_stage.plugin,
+        sinks=active_sinks,
+        total_steps=total_steps,
+    )
+    graph = _stage_build_graph(artifacts, sinks=active_sinks, total_steps=total_steps)
+    scope_stage = _stage_resolve_scope(ctx, graph, sinks=active_sinks, notes=notes)
+    analysis_stage, analysis_exit = _stage_analysis(
+        ctx,
+        scope=scope_stage,
+        support_level_applied=preflight_stage.support_level_applied,
+        competitive_mode=preflight_stage.competitive_mode,
+        sinks=active_sinks,
+        total_steps=total_steps,
+        notes=notes,
+    )
+    if analysis_exit is not None or analysis_stage is None:
+        return None, analysis_exit or 1, notes
+
+    duration_ms = int((time.perf_counter() - pipeline_started) * 1000)
+    run_metrics = _compute_run_metrics(
+        analysis_stage.findings,
+        analysis_stage.summary,
+        support_level_applied=analysis_stage.summary.support_level_applied,
+        competitive_mode=analysis_stage.summary.competitive_mode,
+        verification_pass_rate=analysis_stage.summary.verification_pass_rate,
+        evidence_completeness=analysis_stage.summary.evidence_completeness,
+        analysis_scope=scope_stage.analysis_scope,
+        duration_ms=duration_ms,
+    )
+
+    result = PipelineResult(
+        preflight=preflight_stage.preflight,
+        analysis_scope=scope_stage.analysis_scope,
+        data_quality_low_confidence_ratio=low_confidence_ratio(scope_stage.analysis_graph),
+        suppressed_count=analysis_stage.suppressed_count,
+        graph=scope_stage.analysis_graph,
+        findings_raw=analysis_stage.findings_raw,
+        findings=analysis_stage.findings,
+        test_plan=analysis_stage.test_plan,
+        summary=analysis_stage.summary,
+        run_metrics=run_metrics,
+    )
+
+    exit_code = _resolve_exit_code(
+        ctx,
+        result,
+        effective_ci_mode=analysis_stage.summary.effective_ci_mode,
+        verified_fingerprints=analysis_stage.verified_fingerprints,
+        notes=notes,
+    )
 
     output_notes = active_sinks.artifacts.write(ctx=ctx, result=result, notes=notes)
     notes.extend(output_notes)

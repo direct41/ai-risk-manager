@@ -29,3 +29,19 @@
 - Policy externalization (`.airiskpolicy`) for per-rule severity/gating tuning
 - Additional rules for authorization and critical-path behavior patterns
 - Hardening for service deployment scenarios (auth, rate limits) after local/internal maturity
+
+## Delivery Model (Stage-Gate)
+
+- Development progresses by completion gates, not fixed calendar dates.
+- Transition to the next stage is allowed only when all gates pass:
+  - implementation is complete for the current stage
+  - `pytest` is green
+  - trust/eval gates pass for touched behavior
+  - docs/contracts are updated when interfaces or semantics change
+
+## Execution Sequence (By Completion)
+
+1. Stage 1: pipeline contract stabilization and stage decomposition.
+2. Stage 2: coverage mapping quality improvements.
+3. Stage 3: policy engine externalization (`.airiskpolicy`).
+4. Stage 4: next stack expansion behind trust gates.
