@@ -5,9 +5,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from ai_risk_manager import __version__
+from ai_risk_manager.pipeline.context_builder import build_run_context
 from ai_risk_manager.pipeline.run import run_pipeline
 from ai_risk_manager.sample_repo import resolve_sample_repo_path
-from ai_risk_manager.schemas.types import RunContext, to_dict
+from ai_risk_manager.schemas.types import to_dict
 
 _API_INSTALL_HINT = "Install API dependencies with: pip install -e '.[api]'."
 _API_IMPORT_ERROR: Exception | None = None
@@ -91,10 +92,10 @@ def create_app() -> FastAPIApp:
         baseline_graph = Path(request.baseline_graph).resolve() if request.baseline_graph else None
         suppress_file = Path(request.suppress_file).resolve() if request.suppress_file else None
 
-        ctx = RunContext(
+        ctx = build_run_context(
             repo_path=repo_path,
             mode=request.mode,
-            base=request.base if request.mode == "pr" else None,
+            base=request.base,
             output_dir=output_dir,
             provider=request.provider,
             no_llm=request.no_llm,

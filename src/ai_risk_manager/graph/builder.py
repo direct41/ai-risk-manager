@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from ai_risk_manager.collectors.collector import ArtifactBundle
+from ai_risk_manager.collectors.plugins.base import ArtifactBundle
 from ai_risk_manager.schemas.types import Edge, Graph, Node, TransitionSpec
 
 

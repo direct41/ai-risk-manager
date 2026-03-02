@@ -3,9 +3,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from ai_risk_manager.pipeline.context_builder import build_run_context, normalize_cli_choice
 from ai_risk_manager.pipeline.run import run_pipeline
 from ai_risk_manager.sample_repo import resolve_sample_repo_path
-from ai_risk_manager.schemas.types import RunContext
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -77,10 +77,10 @@ def _run_analyze(args: argparse.Namespace) -> int:
     baseline_graph = Path(args.baseline_graph).resolve() if args.baseline_graph else None
     suppress_file = Path(args.suppress_file).resolve() if args.suppress_file else None
 
-    ctx = RunContext(
+    ctx = build_run_context(
         repo_path=repo_path,
         mode=args.mode,
-        base=args.base if args.mode == "pr" else None,
+        base=args.base,
         output_dir=output_dir,
         provider=args.provider,
         no_llm=args.no_llm,
@@ -88,10 +88,10 @@ def _run_analyze(args: argparse.Namespace) -> int:
         fail_on_severity=args.fail_on_severity,
         suppress_file=suppress_file,
         baseline_graph=baseline_graph,
-        analysis_engine=args.analysis_engine.replace("-", "_"),
+        analysis_engine=normalize_cli_choice(args.analysis_engine),
         only_new=args.only_new,
         min_confidence=args.min_confidence,
-        ci_mode=args.ci_mode.replace("-", "_"),
+        ci_mode=normalize_cli_choice(args.ci_mode),
         support_level=args.support_level,
         risk_policy=args.risk_policy,
     )

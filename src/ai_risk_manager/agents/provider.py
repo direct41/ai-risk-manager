@@ -18,8 +18,8 @@ class ProviderResolution:
 
 def _has_api_credentials() -> bool:
     keys = [
+        "AIRISK_API_KEY",
         "OPENAI_API_KEY",
-        "ANTHROPIC_API_KEY",
         "LITELLM_API_KEY",
     ]
     return any(bool(os.getenv(key)) for key in keys)

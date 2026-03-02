@@ -2,21 +2,18 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from pathlib import Path
-import subprocess
 import time
 from typing import Literal
 
-from ai_risk_manager import __version__
 from ai_risk_manager.agents.provider import resolve_provider
 from ai_risk_manager.agents.qa_strategy_agent import generate_test_plan
 from ai_risk_manager.agents.semantic_risk_agent import generate_semantic_findings
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle
 from ai_risk_manager.collectors.plugins.registry import get_plugin_for_stack
+from ai_risk_manager.pipeline.sinks import PipelineSinks
 from ai_risk_manager.graph.builder import build_graph, low_confidence_ratio
 from ai_risk_manager.pipeline.merge_findings import ensure_fingerprint, merge_findings
-from ai_risk_manager.reports.generator import render_pr_summary_md, render_report_md, write_report
 from ai_risk_manager.rules.engine import run_rules
 from ai_risk_manager.rules.suppressions import apply_suppressions, load_suppressions
 from ai_risk_manager.schemas.types import (
@@ -31,8 +28,6 @@ from ai_risk_manager.schemas.types import (
     RunContext,
     RunMetrics,
     RunSummary,
-    to_dict,
-    write_json,
 )
 from ai_risk_manager.stacks.discovery import detect_stack
 
@@ -81,15 +76,6 @@ def _resolve_effective_ci_mode(requested: CIMode, support_level_applied: Applied
     if support_level_applied == "l1":
         return effective, f"ci_mode downgraded to soft for support_level=l1 (requested: {requested})."
     return effective, None
-
-
-def _progress(step: int, total: int, label: str, start_ts: float | None = None) -> float:
-    if start_ts is None:
-        print(f"[{step}/{total}] {label} ...", flush=True)
-        return time.perf_counter()
-    elapsed = time.perf_counter() - start_ts
-    print(f"[{step}/{total}] {label} ... done ({elapsed:.1f}s)", flush=True)
-    return elapsed
 
 
 def _normalize_path(path: str) -> str:
@@ -151,30 +137,9 @@ def _load_baseline_fingerprints(baseline_graph: Path | None) -> tuple[set[str] |
     return fingerprints, None
 
 
-def _resolve_changed_files(repo_path: Path, base: str | None) -> set[str] | None:
-    env_override = os.getenv("AIRISK_CHANGED_FILES", "").strip()
-    if env_override:
-        return {_normalize_path(part.strip()) for part in env_override.split(",") if part.strip()}
-
-    if not base:
-        return None
-
-    candidate_refs = [f"{base}...HEAD", f"origin/{base}...HEAD"]
-    for ref in candidate_refs:
-        try:
-            proc = subprocess.run(
-                ["git", "-C", str(repo_path), "diff", "--name-only", "--diff-filter=ACMRTUXB", ref],
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=20,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            continue
-        if proc.returncode == 0:
-            lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
-            return {_normalize_path(line) for line in lines}
-    return None
+def _resolve_changed_files(repo_path: Path, base: str | None, *, sinks: PipelineSinks | None = None) -> set[str] | None:
+    active_sinks = sinks or PipelineSinks()
+    return active_sinks.changed_files.resolve(repo_path, base)
 
 
 def _filter_graph_to_impacted(graph: Graph, changed_files: set[str]) -> Graph:
@@ -196,15 +161,6 @@ def _filter_graph_to_impacted(graph: Graph, changed_files: set[str]) -> Graph:
     declared = [transition for transition in graph.declared_transitions if _source_file_ref(transition.source_ref) in changed]
     handled = [transition for transition in graph.handled_transitions if _source_file_ref(transition.source_ref) in changed]
     return Graph(nodes=nodes, edges=edges, declared_transitions=declared, handled_transitions=handled)
-
-
-def _with_metadata(payload: dict, generated_at: str) -> dict:
-    return {
-        **payload,
-        "schema_version": "1.1",
-        "generated_at": generated_at,
-        "tool_version": __version__,
-    }
 
 
 def _max_severity(findings_count: list[str]) -> str | None:
@@ -346,13 +302,14 @@ def _compute_run_metrics(
     )
 
 
-def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]]:
+def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tuple[PipelineResult | None, int, list[str]]:
+    active_sinks = sinks or PipelineSinks()
     pipeline_started = time.perf_counter()
     total_steps = 6
     notes: list[str] = []
     fallback_reason: str | None = None
 
-    t = _progress(1, total_steps, "Stack detection and pre-flight")
+    t = active_sinks.progress.start(1, total_steps, "Stack detection and pre-flight")
     detection = detect_stack(ctx.repo_path)
     notes.append(f"Detected stack: {detection.stack_id} (confidence: {detection.confidence}).")
     support_level_applied = _resolve_support_level(ctx.support_level, detection.stack_id)
@@ -363,7 +320,7 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
 
     plugin = get_plugin_for_stack(detection.stack_id)
     if plugin is None and support_level_applied != "l0":
-        _progress(1, total_steps, "Stack detection and pre-flight", t)
+        active_sinks.progress.finish(1, total_steps, "Stack detection and pre-flight", t)
         notes.extend(detection.reasons)
         notes.append(f"No collector plugin is registered for stack '{detection.stack_id}'.")
         return None, 2, notes
@@ -375,7 +332,7 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
         )
     else:
         preflight = plugin.preflight(ctx.repo_path, probe_data=detection.probe_data)
-    _progress(1, total_steps, "Stack detection and pre-flight", t)
+    active_sinks.progress.finish(1, total_steps, "Stack detection and pre-flight", t)
 
     if preflight.status == "FAIL":
         notes.extend(preflight.reasons)
@@ -383,22 +340,22 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
     if preflight.status == "WARN":
         notes.extend(preflight.reasons)
 
-    t = _progress(2, total_steps, "Collecting artifacts")
+    t = active_sinks.progress.start(2, total_steps, "Collecting artifacts")
     if plugin is None:
         artifacts = ArtifactBundle()
     else:
         artifacts = plugin.collect(ctx.repo_path)
-    _progress(2, total_steps, "Collecting artifacts", t)
+    active_sinks.progress.finish(2, total_steps, "Collecting artifacts", t)
 
-    t = _progress(3, total_steps, "Building graph")
+    t = active_sinks.progress.start(3, total_steps, "Building graph")
     graph = build_graph(artifacts)
-    _progress(3, total_steps, "Building graph", t)
+    active_sinks.progress.finish(3, total_steps, "Building graph", t)
 
     analysis_scope: AnalysisScope = "full"
     analysis_graph = graph
     if ctx.mode == "pr":
         if _baseline_graph_is_valid(ctx.baseline_graph):
-            changed_files = _resolve_changed_files(ctx.repo_path, ctx.base)
+            changed_files = _resolve_changed_files(ctx.repo_path, ctx.base, sinks=active_sinks)
             if changed_files is None:
                 analysis_scope = "full_fallback"
                 fallback_reason = "changed_files_unresolved"
@@ -422,9 +379,9 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
             fallback_reason = "baseline_graph_missing_or_invalid"
             notes.append("Baseline graph not found or invalid; using full_fallback scan.")
 
-    t = _progress(4, total_steps, "Running deterministic rules")
+    t = active_sinks.progress.start(4, total_steps, "Running deterministic rules")
     findings_raw = run_rules(analysis_graph, risk_policy=ctx.risk_policy)
-    _progress(4, total_steps, "Running deterministic rules", t)
+    active_sinks.progress.finish(4, total_steps, "Running deterministic rules", t)
 
     suppress_path = ctx.suppress_file
     if suppress_path is None:
@@ -436,14 +393,14 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
     if suppressed_count:
         notes.append(f"Suppressed findings: {suppressed_count}.")
 
-    ci = bool(os.getenv("CI") or os.getenv("GITHUB_ACTIONS"))
+    ci = active_sinks.environment.is_ci()
     force_no_llm = ctx.no_llm or ctx.analysis_engine == "deterministic"
     provider_resolution = resolve_provider(ctx.provider, no_llm=force_no_llm, ci=ci)
     notes.extend(provider_resolution.notes)
     if not force_no_llm and ctx.provider in {"api", "cli"} and provider_resolution.provider == "none":
         return None, 1, notes
 
-    t = _progress(5, total_steps, "Semantic AI risk stage")
+    t = active_sinks.progress.start(5, total_steps, "Semantic AI risk stage")
     semantic_findings = FindingsReport(findings=[], generated_without_llm=True)
     if ctx.analysis_engine != "deterministic":
         semantic_findings, semantic_notes = generate_semantic_findings(
@@ -454,7 +411,7 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
         notes.extend(semantic_notes)
     else:
         notes.append("analysis_engine=deterministic: semantic AI stage skipped.")
-    _progress(5, total_steps, "Semantic AI risk stage", t)
+    active_sinks.progress.finish(5, total_steps, "Semantic AI risk stage", t)
 
     top_limit = RISK_POLICY_TOP_LIMIT[ctx.risk_policy]
     merged_findings = merge_findings(
@@ -495,14 +452,14 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
     if ci_mode_note:
         notes.append(ci_mode_note)
 
-    t = _progress(6, total_steps, "QA strategy agent")
+    t = active_sinks.progress.start(6, total_steps, "QA strategy agent")
     test_plan = generate_test_plan(
         findings,
         analysis_graph,
         provider=provider_resolution.provider,
         generated_without_llm=provider_resolution.generated_without_llm or ctx.analysis_engine == "deterministic",
     )
-    _progress(6, total_steps, "QA strategy agent", t)
+    active_sinks.progress.finish(6, total_steps, "QA strategy agent", t)
 
     duration_ms = int((time.perf_counter() - pipeline_started) * 1000)
     run_metrics = _compute_run_metrics(
@@ -556,22 +513,7 @@ def run_pipeline(ctx: RunContext) -> tuple[PipelineResult | None, int, list[str]
             notes.append("ci_mode=block_new_critical triggered: verified high-confidence new critical finding exists.")
             exit_code = 3
 
-    ctx.output_dir.mkdir(parents=True, exist_ok=True)
-    generated_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    if ctx.output_format in {"json", "both"}:
-        write_json(ctx.output_dir / "graph.json", _with_metadata(to_dict(analysis_graph), generated_at))
-        if analysis_scope != "full":
-            notes.append("graph.json contains analysis graph for current scope (not full repository graph).")
-        write_json(ctx.output_dir / "findings.raw.json", _with_metadata(to_dict(findings_raw), generated_at))
-        write_json(ctx.output_dir / "findings.json", _with_metadata(to_dict(findings), generated_at))
-        write_json(ctx.output_dir / "test_plan.json", _with_metadata(to_dict(test_plan), generated_at))
-        write_json(ctx.output_dir / "run_metrics.json", _with_metadata(to_dict(run_metrics), generated_at))
-
-    if ctx.output_format in {"md", "both"}:
-        report = render_report_md(result, notes)
-        write_report(ctx.output_dir / "report.md", report)
-        if ctx.mode == "pr":
-            pr_summary = render_pr_summary_md(result, notes, only_new=ctx.only_new)
-            write_report(ctx.output_dir / "pr_summary.md", pr_summary)
+    output_notes = active_sinks.artifacts.write(ctx=ctx, result=result, notes=notes)
+    notes.extend(output_notes)
 
     return result, exit_code, notes
