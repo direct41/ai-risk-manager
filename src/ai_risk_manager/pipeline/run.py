@@ -18,6 +18,8 @@ from ai_risk_manager.pipeline.sinks import PipelineSinks
 from ai_risk_manager.rules.engine import run_rules
 from ai_risk_manager.rules.policy import PolicyConfig, apply_policy, is_blocking_enabled_for_finding, load_policy
 from ai_risk_manager.rules.suppressions import apply_suppressions, load_suppressions
+from ai_risk_manager.signals.adapters import artifact_bundle_to_signal_bundle
+from ai_risk_manager.signals.types import SignalBundle
 from ai_risk_manager.schemas.types import (
     AnalysisScope,
     AppliedSupportLevel,
@@ -326,6 +328,12 @@ class _PreflightStage:
 
 
 @dataclass
+class _CollectStage:
+    artifacts: ArtifactBundle
+    signals: SignalBundle
+
+
+@dataclass
 class _ScopeStage:
     analysis_scope: AnalysisScope
     analysis_graph: Graph
@@ -408,21 +416,22 @@ def _stage_collect_artifacts(
     plugin: CollectorPlugin | None,
     sinks: PipelineSinks,
     total_steps: int,
-) -> ArtifactBundle:
+) -> _CollectStage:
     t = sinks.progress.start(2, total_steps, "Collecting artifacts")
     artifacts = ArtifactBundle() if plugin is None else plugin.collect(ctx.repo_path)
+    signals = artifact_bundle_to_signal_bundle(artifacts)
     sinks.progress.finish(2, total_steps, "Collecting artifacts", t)
-    return artifacts
+    return _CollectStage(artifacts=artifacts, signals=signals)
 
 
 def _stage_build_graph(
-    artifacts: ArtifactBundle,
+    signals: SignalBundle,
     *,
     sinks: PipelineSinks,
     total_steps: int,
 ) -> Graph:
     t = sinks.progress.start(3, total_steps, "Building graph")
-    graph = build_graph(artifacts)
+    graph = build_graph(signals)
     sinks.progress.finish(3, total_steps, "Building graph", t)
     return graph
 
@@ -646,13 +655,13 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
     if preflight_exit is not None or preflight_stage is None:
         return None, preflight_exit or 2, notes
 
-    artifacts = _stage_collect_artifacts(
+    collected_stage = _stage_collect_artifacts(
         ctx,
         plugin=preflight_stage.plugin,
         sinks=active_sinks,
         total_steps=total_steps,
     )
-    graph = _stage_build_graph(artifacts, sinks=active_sinks, total_steps=total_steps)
+    graph = _stage_build_graph(collected_stage.signals, sinks=active_sinks, total_steps=total_steps)
     scope_stage = _stage_resolve_scope(ctx, graph, sinks=active_sinks, notes=notes)
     analysis_stage, analysis_exit = _stage_analysis(
         ctx,

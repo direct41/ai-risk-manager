@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ai_risk_manager.graph.builder import build_graph
+from ai_risk_manager.signals.types import SignalBundle
 from ai_risk_manager.schemas.types import Finding, FindingsReport, Graph, RiskPolicy
 
 DEPENDENCY_VIOLATIONS_BY_POLICY: dict[RiskPolicy, set[str]] = {
@@ -23,7 +25,7 @@ DEPENDENCY_SEVERITY_BY_SCOPE: dict[str, dict[str, str]] = {
 }
 
 
-def run_rules(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -> FindingsReport:
+def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -> FindingsReport:
     findings: list[Finding] = []
     api_nodes = [n for n in graph.nodes if n.type == "API"]
     dependency_nodes = [n for n in graph.nodes if n.type == "Dependency"]
@@ -146,3 +148,9 @@ def run_rules(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -> Findings
         )
 
     return FindingsReport(findings=findings, generated_without_llm=True)
+
+
+def run_rules(graph: Graph | SignalBundle, *, risk_policy: RiskPolicy = "balanced") -> FindingsReport:
+    if isinstance(graph, SignalBundle):
+        return _run_rules_on_graph(build_graph(graph), risk_policy=risk_policy)
+    return _run_rules_on_graph(graph, risk_policy=risk_policy)

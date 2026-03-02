@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle
+from ai_risk_manager.signals.types import SignalBundle
 from ai_risk_manager.schemas.types import Edge, Graph, Node, TransitionSpec
 
 
@@ -61,7 +62,109 @@ def _route_paths_match(api_path: str, observed_path: str) -> bool:
     return True
 
 
-def build_graph(artifacts: ArtifactBundle) -> Graph:
+def _artifact_bundle_from_signals(signals: SignalBundle) -> ArtifactBundle:
+    artifacts = ArtifactBundle()
+    pydantic_seen: set[tuple[str, str]] = set()
+
+    for signal in signals.signals:
+        attrs = signal.attributes
+        if signal.kind == "http_write_surface":
+            artifacts.write_endpoints.append(
+                (
+                    str(signal.source_ref.rsplit(":", 1)[0] if ":" in signal.source_ref else signal.source_ref),
+                    str(attrs.get("endpoint_name", "")),
+                    str(attrs.get("method", "")).upper(),
+                    str(attrs.get("path", "")),
+                    int(signal.source_ref.rsplit(":", 1)[1]) if signal.source_ref.rsplit(":", 1)[-1].isdigit() else 1,
+                    str(attrs.get("snippet", "")),
+                )
+            )
+            continue
+
+        if signal.kind == "request_contract_binding":
+            endpoint_name = str(attrs.get("endpoint_name", ""))
+            model_name = str(attrs.get("model_name", ""))
+            if not endpoint_name or not model_name:
+                continue
+            file_path = str(signal.source_ref.rsplit(":", 1)[0] if ":" in signal.source_ref else signal.source_ref)
+            artifacts.endpoint_models.append((file_path, endpoint_name, model_name))
+            model_source = attrs.get("model_source")
+            if isinstance(model_source, str):
+                key = (model_source, model_name)
+                if key not in pydantic_seen:
+                    pydantic_seen.add(key)
+                    artifacts.pydantic_models.append(key)
+            continue
+
+        if signal.kind == "state_transition_declared":
+            file_path = str(signal.source_ref.rsplit(":", 1)[0] if ":" in signal.source_ref else signal.source_ref)
+            line = int(signal.source_ref.rsplit(":", 1)[1]) if signal.source_ref.rsplit(":", 1)[-1].isdigit() else 1
+            artifacts.declared_transitions.append(
+                (
+                    file_path,
+                    str(attrs.get("machine", "")),
+                    str(attrs.get("source_state", "")),
+                    str(attrs.get("target_state", "")),
+                    line,
+                    str(attrs.get("snippet", "")),
+                )
+            )
+            continue
+
+        if signal.kind == "state_transition_handled_guarded":
+            file_path = str(signal.source_ref.rsplit(":", 1)[0] if ":" in signal.source_ref else signal.source_ref)
+            line = int(signal.source_ref.rsplit(":", 1)[1]) if signal.source_ref.rsplit(":", 1)[-1].isdigit() else 1
+            artifacts.handled_transitions.append(
+                (
+                    file_path,
+                    str(attrs.get("machine", "")),
+                    str(attrs.get("source_state", "")),
+                    str(attrs.get("target_state", "")),
+                    line,
+                    str(attrs.get("snippet", "")),
+                    bool(attrs.get("invariant_guarded", False)),
+                )
+            )
+            continue
+
+        if signal.kind == "test_to_endpoint_coverage":
+            file_path = str(signal.source_ref.rsplit(":", 1)[0] if ":" in signal.source_ref else signal.source_ref)
+            line = int(signal.source_ref.rsplit(":", 1)[1]) if signal.source_ref.rsplit(":", 1)[-1].isdigit() else 1
+            test_name = str(attrs.get("test_name", ""))
+            coverage_mode = str(attrs.get("coverage_mode", ""))
+            if coverage_mode == "name_fallback_candidate":
+                artifacts.test_cases.append((file_path, test_name, line, str(attrs.get("snippet", ""))))
+            else:
+                artifacts.test_http_calls.append(
+                    (
+                        file_path,
+                        test_name,
+                        str(attrs.get("method", "")).upper(),
+                        str(attrs.get("path", "")),
+                        line,
+                        str(attrs.get("snippet", "")),
+                    )
+                )
+            continue
+
+        if signal.kind == "dependency_version_policy":
+            file_path = str(signal.source_ref.rsplit(":", 1)[0] if ":" in signal.source_ref else signal.source_ref)
+            line = int(signal.source_ref.rsplit(":", 1)[1]) if signal.source_ref.rsplit(":", 1)[-1].isdigit() else None
+            artifacts.dependency_specs.append(
+                (
+                    file_path,
+                    str(attrs.get("dependency_name", "")),
+                    str(attrs.get("spec", "")),
+                    line,
+                    str(attrs.get("policy_violation", "")) or None,
+                    str(attrs.get("scope", "runtime")),
+                )
+            )
+
+    return artifacts
+
+
+def _build_graph_from_artifacts(artifacts: ArtifactBundle) -> Graph:
     graph = Graph()
 
     for file_path, dep_name, raw_spec, line, policy_violation, scope in artifacts.dependency_specs:
@@ -268,6 +371,12 @@ def build_graph(artifacts: ArtifactBundle) -> Graph:
         )
 
     return graph
+
+
+def build_graph(artifacts: ArtifactBundle | SignalBundle) -> Graph:
+    if isinstance(artifacts, SignalBundle):
+        return _build_graph_from_artifacts(_artifact_bundle_from_signals(artifacts))
+    return _build_graph_from_artifacts(artifacts)
 
 
 def low_confidence_ratio(graph: Graph) -> float:
