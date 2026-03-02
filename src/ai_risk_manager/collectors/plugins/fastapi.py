@@ -8,6 +8,7 @@ from ai_risk_manager.collectors.plugins.fastapi_artifacts import (
     collect_fastapi_artifacts,
     scan_fastapi_signals,
 )
+from ai_risk_manager.collectors.plugins.sdk import CapabilitySignalPluginMixin
 from ai_risk_manager.schemas.types import PreflightResult
 
 
@@ -35,8 +36,16 @@ def _preflight_from_signals(signals: FastAPISignals) -> PreflightResult:
     return PreflightResult(status="PASS", reasons=[])
 
 
-class FastAPICollectorPlugin:
+class FastAPICollectorPlugin(CapabilitySignalPluginMixin):
     stack_id = "fastapi_pytest"
+    supported_signal_kinds = {
+        "http_write_surface",
+        "request_contract_binding",
+        "state_transition_declared",
+        "state_transition_handled_guarded",
+        "test_to_endpoint_coverage",
+        "dependency_version_policy",
+    }
 
     def probe(self, repo_path: Path) -> StackProbeResult | None:
         signals = scan_fastapi_signals(repo_path)

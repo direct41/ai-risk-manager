@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ai_risk_manager.collectors.plugins.registry import get_plugin_for_stack
+from ai_risk_manager.collectors.plugins.registry import get_plugin_for_stack, get_signal_plugin_for_stack
 
 
 def test_registry_returns_fastapi_plugin() -> None:
@@ -19,6 +19,38 @@ def test_registry_returns_django_plugin() -> None:
 
 def test_registry_returns_none_for_unknown_stack() -> None:
     assert get_plugin_for_stack("unknown") is None
+
+
+def test_registry_returns_signal_plugin_for_fastapi() -> None:
+    plugin = get_signal_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+    assert "http_write_surface" in plugin.supported_signal_kinds
+
+
+def test_fastapi_plugin_collect_signals_from_artifacts(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_api.py", "def test_create_order(client):\n    client.post('/orders')\n")
+
+    plugin = get_signal_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+
+    bundle = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(bundle)
+    kinds = {signal.kind for signal in signals.signals}
+
+    assert "http_write_surface" in kinds
+    assert "test_to_endpoint_coverage" in kinds
+    assert "dependency_version_policy" in signals.supported_kinds
+
+
+def test_registry_returns_signal_plugin_for_django() -> None:
+    plugin = get_signal_plugin_for_stack("django_drf")
+    assert plugin is not None
+    assert "http_write_surface" in plugin.supported_signal_kinds
+    assert "dependency_version_policy" in plugin.supported_signal_kinds
 
 
 def test_fastapi_plugin_collects_write_endpoint_and_warns_without_pytest(tmp_path: Path, write_file) -> None:

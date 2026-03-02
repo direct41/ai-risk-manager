@@ -435,7 +435,11 @@ def _stage_collect_artifacts(
 ) -> _CollectStage:
     t = sinks.progress.start(2, total_steps, "Collecting artifacts")
     artifacts = ArtifactBundle() if plugin is None else plugin.collect(ctx.repo_path)
-    signals = artifact_bundle_to_signal_bundle(artifacts)
+    collect_signals_from_artifacts = getattr(plugin, "collect_signals_from_artifacts", None) if plugin is not None else None
+    if callable(collect_signals_from_artifacts):
+        signals = collect_signals_from_artifacts(artifacts)
+    else:
+        signals = artifact_bundle_to_signal_bundle(artifacts)
     sinks.progress.finish(2, total_steps, "Collecting artifacts", t)
     return _CollectStage(artifacts=artifacts, signals=signals)
 

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle, StackProbeResult
 from ai_risk_manager.collectors.plugins.django_artifacts import DjangoSignals, collect_django_artifacts, scan_django_signals
+from ai_risk_manager.collectors.plugins.sdk import CapabilitySignalPluginMixin
 from ai_risk_manager.schemas.types import PreflightResult
 
 
@@ -37,8 +38,13 @@ def _preflight_from_signals(signals: DjangoSignals) -> PreflightResult:
     return PreflightResult(status="PASS", reasons=[])
 
 
-class DjangoCollectorPlugin:
+class DjangoCollectorPlugin(CapabilitySignalPluginMixin):
     stack_id = "django_drf"
+    supported_signal_kinds = {
+        "http_write_surface",
+        "test_to_endpoint_coverage",
+        "dependency_version_policy",
+    }
 
     def probe(self, repo_path: Path) -> StackProbeResult | None:
         signals = scan_django_signals(repo_path)
