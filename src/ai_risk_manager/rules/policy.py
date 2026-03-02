@@ -84,7 +84,7 @@ def load_policy(path: Path | None) -> tuple[PolicyConfig, list[str]]:
             notes.append(f"Ignoring policy field rules.{rule_id}.gate in {path}: one of {sorted(_GATES)} is required.")
             gate_raw = "default"
 
-        rules[rule_id] = RulePolicy(enabled=enabled, severity=severity, gate=gate_raw)
+        rules[rule_id] = RulePolicy(enabled=enabled, severity=severity, gate=cast(PolicyGate, gate_raw))
 
     if rules:
         notes.append(f"Loaded policy from {path}: {len(rules)} rule override(s).")
