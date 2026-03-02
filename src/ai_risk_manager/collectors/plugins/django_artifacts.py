@@ -606,7 +606,7 @@ def _derive_route_name(path_suffix: str, basename: str) -> str | None:
 
 
 def _extract_viewset_endpoints(
-    parsed: list[tuple[Path, ast.AST, str, list[str]]],
+    parsed: list[tuple[Path, ast.Module, str, list[str]]],
     router_prefixes: dict[str, list[str]],
 ) -> tuple[list[tuple[str, str, str, str, int, str]], dict[str, str]]:
     registrations: list[RouterRegistration] = []
@@ -708,7 +708,7 @@ def collect_django_artifacts(repo_path: Path) -> ArtifactBundle:
     bundle.dependency_specs.extend(extract_dependency_specs(repo_path, bundle.all_files))
     bundle.test_files = [path for path in bundle.python_files if _is_test_file(path)]
 
-    parsed: list[tuple[Path, ast.AST, str, list[str]]] = []
+    parsed: list[tuple[Path, ast.Module, str, list[str]]] = []
     for path in bundle.python_files:
         text = _read_text(path)
         if not text:

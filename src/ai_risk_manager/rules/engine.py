@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from typing import cast
+
 from ai_risk_manager.graph.builder import build_graph
 from ai_risk_manager.signals.types import SignalBundle
-from ai_risk_manager.schemas.types import Finding, FindingsReport, Graph, RiskPolicy
+from ai_risk_manager.schemas.types import Finding, FindingsReport, Graph, RiskPolicy, Severity
 
 DEPENDENCY_VIOLATIONS_BY_POLICY: dict[RiskPolicy, set[str]] = {
     "conservative": {"direct_reference", "wildcard_version"},
@@ -136,7 +138,7 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
                 description=(
                     "Dependency specification is not pinned to an immutable version and may increase supply-chain risk."
                 ),
-                severity=severity_map.get(violation, "medium"),
+                severity=cast(Severity, severity_map.get(violation, "medium")),
                 confidence="high",
                 evidence=f"Detected dependency spec '{spec or '(none)'}' at {dep.source_ref} (scope: {scope}).",
                 source_ref=dep.source_ref,

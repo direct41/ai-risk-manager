@@ -202,7 +202,7 @@ def _extract_endpoint_models(tree: ast.AST, known_models: set[str]) -> list[tupl
     return endpoint_models
 
 
-def _constant_str(node: ast.AST) -> str | None:
+def _constant_str(node: ast.AST | None) -> str | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
     return None
@@ -595,7 +595,7 @@ def collect_fastapi_artifacts(repo_path: Path) -> ArtifactBundle:
         )
     ]
 
-    parsed: list[tuple[Path, ast.AST, str, list[str]]] = []
+    parsed: list[tuple[Path, ast.Module, str, list[str]]] = []
     for path in bundle.python_files:
         text = _read_text(path)
         if not text:

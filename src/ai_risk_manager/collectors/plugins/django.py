@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal, cast
 
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle, StackProbeResult
 from ai_risk_manager.collectors.plugins.django_artifacts import DjangoSignals, collect_django_artifacts, scan_django_signals
 from ai_risk_manager.collectors.plugins.sdk import CapabilitySignalPluginMixin
-from ai_risk_manager.schemas.types import PreflightResult
+from ai_risk_manager.schemas.types import Confidence, PreflightResult
 
 
 def _probe_reasons(signals: DjangoSignals) -> list[str]:
@@ -39,7 +40,7 @@ def _preflight_from_signals(signals: DjangoSignals) -> PreflightResult:
 
 
 class DjangoCollectorPlugin(CapabilitySignalPluginMixin):
-    stack_id = "django_drf"
+    stack_id: Literal["django_drf"] = "django_drf"
     supported_signal_kinds = {
         "http_write_surface",
         "test_to_endpoint_coverage",
@@ -51,7 +52,7 @@ class DjangoCollectorPlugin(CapabilitySignalPluginMixin):
         if not (signals.has_django_import or signals.has_drf_import or signals.has_urlpatterns):
             return None
 
-        confidence = "high" if signals.has_django_import and signals.has_urlpatterns else "medium"
+        confidence = cast(Confidence, "high" if signals.has_django_import and signals.has_urlpatterns else "medium")
         reasons = _probe_reasons(signals)
         if not signals.has_pytest:
             reasons.append("pytest patterns were not detected.")

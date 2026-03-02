@@ -5,7 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import time
-from typing import Literal
+from typing import Literal, cast
 
 from ai_risk_manager.agents.provider import ProviderResolution, resolve_provider
 from ai_risk_manager.agents.qa_strategy_agent import generate_test_plan
@@ -73,8 +73,8 @@ _SUPPORT_LEVEL_DOWNGRADE: dict[AppliedSupportLevel, AppliedSupportLevel] = {
 
 def _resolve_support_level(requested: str, detected_stack: str) -> AppliedSupportLevel:
     if requested in {"l0", "l1", "l2"}:
-        return requested
-    return DEFAULT_SUPPORT_LEVEL_BY_STACK.get(detected_stack, "l0")
+        return cast(AppliedSupportLevel, requested)
+    return cast(AppliedSupportLevel, DEFAULT_SUPPORT_LEVEL_BY_STACK.get(detected_stack, "l0"))
 
 
 def _downgrade_support_level(level: AppliedSupportLevel) -> AppliedSupportLevel:

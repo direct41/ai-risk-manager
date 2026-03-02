@@ -45,7 +45,9 @@ class ArtifactBundle:
 
 
 class CollectorPlugin(Protocol):
-    stack_id: StackId
+    @property
+    def stack_id(self) -> StackId:
+        ...
 
     def probe(self, repo_path: Path) -> StackProbeResult | None:
         ...

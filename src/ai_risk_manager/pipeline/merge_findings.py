@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 import hashlib
+from typing import cast
 
-from ai_risk_manager.schemas.types import Confidence, Finding, FindingsReport
+from ai_risk_manager.schemas.types import Confidence, Finding, FindingsReport, FindingOrigin
 
 SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 CONFIDENCE_RANK = {"high": 3, "medium": 2, "low": 1}
@@ -48,7 +49,7 @@ def _merge_two(current: Finding, incoming: Finding) -> Finding:
         else loser.confidence
     )
     merged_refs = sorted(set(winner.evidence_refs + loser.evidence_refs))
-    merged_origin = "ai" if "ai" in {winner.origin, loser.origin} else "deterministic"
+    merged_origin = cast(FindingOrigin, "ai" if "ai" in {winner.origin, loser.origin} else "deterministic")
     merged_generated_without_llm = winner.generated_without_llm and loser.generated_without_llm
     return replace(
         winner,

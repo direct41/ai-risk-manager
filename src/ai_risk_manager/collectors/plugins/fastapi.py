@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal, cast
 
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle, StackProbeResult
 from ai_risk_manager.collectors.plugins.fastapi_artifacts import (
@@ -9,7 +10,7 @@ from ai_risk_manager.collectors.plugins.fastapi_artifacts import (
     scan_fastapi_signals,
 )
 from ai_risk_manager.collectors.plugins.sdk import CapabilitySignalPluginMixin
-from ai_risk_manager.schemas.types import PreflightResult
+from ai_risk_manager.schemas.types import Confidence, PreflightResult
 
 
 def _probe_reasons(signals: FastAPISignals) -> list[str]:
@@ -37,7 +38,7 @@ def _preflight_from_signals(signals: FastAPISignals) -> PreflightResult:
 
 
 class FastAPICollectorPlugin(CapabilitySignalPluginMixin):
-    stack_id = "fastapi_pytest"
+    stack_id: Literal["fastapi_pytest"] = "fastapi_pytest"
     supported_signal_kinds = {
         "http_write_surface",
         "request_contract_binding",
@@ -52,7 +53,7 @@ class FastAPICollectorPlugin(CapabilitySignalPluginMixin):
         if not signals.has_fastapi_import and not signals.has_router:
             return None
 
-        confidence = "high" if signals.has_fastapi_import and signals.has_router else "medium"
+        confidence = cast(Confidence, "high" if signals.has_fastapi_import and signals.has_router else "medium")
         reasons = _probe_reasons(signals)
         if not signals.has_pytest:
             reasons.append("pytest patterns were not detected.")

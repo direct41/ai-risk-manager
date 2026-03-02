@@ -12,19 +12,29 @@ from ai_risk_manager.schemas.types import to_dict
 
 _API_INSTALL_HINT = "Install API dependencies with: pip install -e '.[api]'."
 _API_IMPORT_ERROR: Exception | None = None
+_FastAPI: Any = None
+_HTTPException: Any = None
+_AnalyzeRequest: Any = None
+_AnalyzeResponse: Any = None
+_HealthResponse: Any = None
 
 if TYPE_CHECKING:
     from fastapi import FastAPI as FastAPIApp
+else:
+    FastAPIApp = Any
 
 try:
-    from fastapi import FastAPI, HTTPException
-    from ai_risk_manager.api.models import AnalyzeRequest, AnalyzeResponse, HealthResponse
+    from fastapi import FastAPI as FastAPIImport
+    from fastapi import HTTPException as HTTPExceptionImport
+    from ai_risk_manager.api.models import AnalyzeRequest as AnalyzeRequestImport
+    from ai_risk_manager.api.models import AnalyzeResponse as AnalyzeResponseImport
+    from ai_risk_manager.api.models import HealthResponse as HealthResponseImport
+    _FastAPI = FastAPIImport
+    _HTTPException = HTTPExceptionImport
+    _AnalyzeRequest = AnalyzeRequestImport
+    _AnalyzeResponse = AnalyzeResponseImport
+    _HealthResponse = HealthResponseImport
 except Exception as exc:  # pragma: no cover - exercised in minimal installs without API extras.
-    FastAPI = None  # type: ignore[assignment]
-    HTTPException = None  # type: ignore[assignment]
-    AnalyzeRequest = None  # type: ignore[assignment]
-    AnalyzeResponse = None  # type: ignore[assignment]
-    HealthResponse = None  # type: ignore[assignment]
     _API_IMPORT_ERROR = exc
 
 _ARTIFACT_FILES = (
@@ -51,7 +61,7 @@ def _missing_dependency_error(exc: Exception) -> ApiDependencyError:
 def _load_api_dependencies() -> tuple[Any, Any, Any, Any, Any]:
     if _API_IMPORT_ERROR is not None:
         raise _missing_dependency_error(_API_IMPORT_ERROR) from _API_IMPORT_ERROR
-    return FastAPI, HTTPException, AnalyzeRequest, AnalyzeResponse, HealthResponse
+    return _FastAPI, _HTTPException, _AnalyzeRequest, _AnalyzeResponse, _HealthResponse
 
 
 def _resolve_repo_path(path: str, sample: bool) -> Path:
@@ -80,11 +90,11 @@ def create_app() -> FastAPIApp:
     app = FastAPI(title="AI Risk Manager API", version=__version__)
 
     @app.get("/healthz", response_model=HealthResponse)
-    def healthz() -> HealthResponse:
+    def healthz() -> Any:
         return HealthResponse(status="ok", version=__version__)
 
     @app.post("/v1/analyze", response_model=AnalyzeResponse)
-    def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
+    def analyze(request: Any) -> Any:
         try:
             repo_path = _resolve_repo_path(request.path, request.sample)
         except (FileNotFoundError, ValueError) as exc:
