@@ -32,6 +32,8 @@ AIRISK_SAMPLE_REPO=/path/to/local/sample riskmap analyze --sample --no-llm
 
 - `.riskmap/report.md` — понятный summary + top actions.
 - `.riskmap/pr_summary.md` — короткая PR-выжимка (только PR-режим).
+- `.riskmap/graph.json` и `.riskmap/graph.analysis.json` — граф, по которому считались findings.
+- `.riskmap/graph.deterministic.json` — детерминированный граф до semantic-обогащения.
 - `.riskmap/findings.json` — машинный формат findings.
 - `.riskmap/test_plan.json` — приоритизированные тестовые действия.
 

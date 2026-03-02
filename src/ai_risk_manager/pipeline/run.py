@@ -28,6 +28,7 @@ from ai_risk_manager.schemas.types import (
     CIMode,
     CompetitiveMode,
     FindingsReport,
+    GraphMode,
     Graph,
     PipelineResult,
     PreflightResult,
@@ -358,6 +359,7 @@ class _ScopeStage:
 
 @dataclass
 class _AnalysisStage:
+    deterministic_graph: Graph
     analysis_graph: Graph
     findings_raw: FindingsReport
     findings: FindingsReport
@@ -532,6 +534,7 @@ def _stage_analysis(
     t = sinks.progress.start(4, total_steps, "Running deterministic rules")
     findings_raw = run_rules(scope.analysis_graph, risk_policy=ctx.risk_policy)
     sinks.progress.finish(4, total_steps, "Running deterministic rules", t)
+    deterministic_graph = scope.analysis_graph
 
     suppress_path = ctx.suppress_file
     if suppress_path is None:
@@ -555,6 +558,7 @@ def _stage_analysis(
     )
     notes.extend(semantic_signal_notes)
     filtered_semantic_signals = merge_signal_bundles(semantic_signals, min_confidence=ctx.min_confidence)
+    semantic_signal_count = len(filtered_semantic_signals.signals)
     merged_signals = merge_signal_bundles(scope.analysis_signals, filtered_semantic_signals, min_confidence="low")
     semantic_graph = build_graph(merged_signals)
     semantic_findings = FindingsReport(findings=[], generated_without_llm=True)
@@ -613,6 +617,9 @@ def _stage_analysis(
     summary.verification_pass_rate = verification_pass_rate
     summary.evidence_completeness = evidence_completeness
     summary.competitive_mode = competitive_mode
+    graph_mode_applied: GraphMode = "enriched" if semantic_signal_count > 0 else "deterministic"
+    summary.graph_mode_applied = graph_mode_applied
+    summary.semantic_signal_count = semantic_signal_count
     effective_ci_mode, ci_mode_note = _resolve_effective_ci_mode(ctx.ci_mode, support_level_applied)
     summary.effective_ci_mode = effective_ci_mode
     if ci_mode_note:
@@ -629,6 +636,7 @@ def _stage_analysis(
 
     return (
         _AnalysisStage(
+            deterministic_graph=deterministic_graph,
             analysis_graph=semantic_graph,
             findings_raw=findings_raw,
             findings=findings,
@@ -728,6 +736,7 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
         data_quality_low_confidence_ratio=low_confidence_ratio(analysis_stage.analysis_graph),
         suppressed_count=analysis_stage.suppressed_count,
         graph=analysis_stage.analysis_graph,
+        deterministic_graph=analysis_stage.deterministic_graph,
         findings_raw=analysis_stage.findings_raw,
         findings=analysis_stage.findings,
         test_plan=analysis_stage.test_plan,

@@ -63,6 +63,8 @@ riskmap analyze \
 
 - `report.md`: human-readable summary and top actions.
 - `pr_summary.md`: compact PR comment style view (PR mode).
+- `graph.json` / `graph.analysis.json`: analysis graph used for findings (may include semantic enrichment).
+- `graph.deterministic.json`: deterministic graph snapshot before semantic enrichment.
 - `findings.json`: machine-readable findings for automation.
 - `test_plan.json`: prioritized recommended tests.
 

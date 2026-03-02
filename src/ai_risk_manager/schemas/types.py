@@ -16,6 +16,7 @@ SupportLevel = Literal["auto", "l0", "l1", "l2"]
 AppliedSupportLevel = Literal["l0", "l1", "l2"]
 RiskPolicy = Literal["conservative", "balanced", "aggressive"]
 CompetitiveMode = Literal["deterministic", "hybrid"]
+GraphMode = Literal["deterministic", "enriched"]
 TestType = Literal["api", "integration", "unit", "e2e"]
 PreflightStatus = Literal["PASS", "WARN", "FAIL"]
 AnalysisScope = Literal["impacted", "full", "full_fallback"]
@@ -146,6 +147,8 @@ class RunSummary:
     verification_pass_rate: float = 0.0
     evidence_completeness: float = 0.0
     competitive_mode: CompetitiveMode = "deterministic"
+    graph_mode_applied: GraphMode = "deterministic"
+    semantic_signal_count: int = 0
 
 
 @dataclass
@@ -170,6 +173,7 @@ class PipelineResult:
     data_quality_low_confidence_ratio: float
     suppressed_count: int
     graph: Graph
+    deterministic_graph: Graph
     findings_raw: FindingsReport
     findings: FindingsReport
     test_plan: TestPlan

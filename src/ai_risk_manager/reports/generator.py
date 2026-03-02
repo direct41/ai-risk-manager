@@ -56,13 +56,19 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
     lines.append(f"- support_level_applied: `{result.summary.support_level_applied}`")
     lines.append(f"- effective_ci_mode: `{result.summary.effective_ci_mode}`")
     lines.append(f"- competitive_mode: `{result.summary.competitive_mode}`")
+    lines.append(f"- graph_mode_applied: `{result.summary.graph_mode_applied}`")
+    lines.append(f"- semantic_signal_count: `{result.summary.semantic_signal_count}`")
     lines.append(
         f"- PR delta: new=`{result.summary.new_count}`, resolved=`{result.summary.resolved_count}`, unchanged=`{result.summary.unchanged_count}`"
     )
     if result.summary.fallback_reason:
         lines.append(f"- fallback_reason: `{result.summary.fallback_reason}`")
     lines.append(f"- Data Quality (low-confidence ratio): `{result.data_quality_low_confidence_ratio:.2%}`")
-    lines.append(f"- Graph Statistics: `{len(result.graph.nodes)} nodes`, `{len(result.graph.edges)} edges`")
+    lines.append(f"- Graph Statistics (analysis): `{len(result.graph.nodes)} nodes`, `{len(result.graph.edges)} edges`")
+    lines.append(
+        "- Graph Statistics (deterministic): "
+        f"`{len(result.deterministic_graph.nodes)} nodes`, `{len(result.deterministic_graph.edges)} edges`"
+    )
     lines.append(f"- Suppressed findings: `{result.suppressed_count}`")
     lines.append(f"- Run metric (precision proxy): `{result.run_metrics.precision_proxy:.2%}`")
     lines.append(f"- Run metric (actionability proxy): `{result.run_metrics.actionability_proxy:.2%}`")
@@ -152,6 +158,8 @@ def render_pr_summary_md(result: PipelineResult, notes: list[str], *, only_new: 
     lines.append(f"- support_level_applied: `{result.summary.support_level_applied}`")
     lines.append(f"- effective_ci_mode: `{result.summary.effective_ci_mode}`")
     lines.append(f"- competitive_mode: `{result.summary.competitive_mode}`")
+    lines.append(f"- graph_mode_applied: `{result.summary.graph_mode_applied}`")
+    lines.append(f"- semantic_signal_count: `{result.summary.semantic_signal_count}`")
     lines.append(f"- findings: `{len(result.findings.findings)}`")
     lines.append(
         f"- new/resolved/unchanged: `{result.summary.new_count}/{result.summary.resolved_count}/{result.summary.unchanged_count}`"

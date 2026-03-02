@@ -99,8 +99,18 @@ class LocalArtifactSink:
 
         if ctx.output_format in {"json", "both"}:
             write_json(ctx.output_dir / "graph.json", _with_metadata(to_dict(result.graph), generated_at))
+            write_json(ctx.output_dir / "graph.analysis.json", _with_metadata(to_dict(result.graph), generated_at))
+            write_json(
+                ctx.output_dir / "graph.deterministic.json",
+                _with_metadata(to_dict(result.deterministic_graph), generated_at),
+            )
             if result.analysis_scope != "full":
                 output_notes.append("graph.json contains analysis graph for current scope (not full repository graph).")
+            if result.summary.graph_mode_applied == "enriched":
+                output_notes.append(
+                    "graph.json/graph.analysis.json are enriched by semantic signals; "
+                    "graph.deterministic.json preserves the deterministic graph."
+                )
             write_json(ctx.output_dir / "findings.raw.json", _with_metadata(to_dict(result.findings_raw), generated_at))
             write_json(ctx.output_dir / "findings.json", _with_metadata(to_dict(result.findings), generated_at))
             write_json(ctx.output_dir / "test_plan.json", _with_metadata(to_dict(result.test_plan), generated_at))

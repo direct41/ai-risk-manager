@@ -29,6 +29,8 @@ except Exception as exc:  # pragma: no cover - exercised in minimal installs wit
 
 _ARTIFACT_FILES = (
     "graph.json",
+    "graph.analysis.json",
+    "graph.deterministic.json",
     "findings.raw.json",
     "findings.json",
     "test_plan.json",

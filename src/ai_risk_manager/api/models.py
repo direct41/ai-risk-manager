@@ -10,6 +10,7 @@ from ai_risk_manager.schemas.types import (
     CIMode,
     CompetitiveMode,
     Confidence,
+    GraphMode,
     RiskPolicy,
     Severity,
     SupportLevel,
@@ -48,6 +49,8 @@ class AnalyzeSummary(BaseModel):
     verification_pass_rate: float
     evidence_completeness: float
     competitive_mode: CompetitiveMode
+    graph_mode_applied: GraphMode
+    semantic_signal_count: int
 
 
 class AnalyzeResponse(BaseModel):

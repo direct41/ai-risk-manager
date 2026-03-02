@@ -161,3 +161,5 @@ def test_api_accepts_ai_first_request_fields(tmp_path: Path, write_file) -> None
     assert "verification_pass_rate" in payload["summary"]
     assert "evidence_completeness" in payload["summary"]
     assert payload["summary"]["competitive_mode"] in {"deterministic", "hybrid"}
+    assert payload["summary"]["graph_mode_applied"] in {"deterministic", "enriched"}
+    assert isinstance(payload["summary"]["semantic_signal_count"], int)

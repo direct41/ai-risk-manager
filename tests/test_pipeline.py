@@ -72,6 +72,8 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     assert code == 0
     assert result is not None
     assert (out_dir / "graph.json").exists()
+    assert (out_dir / "graph.analysis.json").exists()
+    assert (out_dir / "graph.deterministic.json").exists()
     assert (out_dir / "findings.raw.json").exists()
     assert (out_dir / "findings.json").exists()
     assert (out_dir / "test_plan.json").exists()
@@ -81,11 +83,16 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     graph = json.loads((out_dir / "graph.json").read_text(encoding="utf-8"))
     assert all(not node["source_ref"].startswith("/") for node in graph["nodes"])
     report = (out_dir / "report.md").read_text(encoding="utf-8")
-    assert "Graph Statistics:" in report
+    assert "Graph Statistics (analysis):" in report
+    assert "Graph Statistics (deterministic):" in report
+    assert "graph_mode_applied:" in report
+    assert "semantic_signal_count:" in report
     assert "effective_ci_mode:" in report
     pr_summary = (out_dir / "pr_summary.md").read_text(encoding="utf-8")
     assert "confidence=`" in pr_summary
     assert "evidence_refs=`" in pr_summary
+    assert "graph_mode_applied:" in pr_summary
+    assert "semantic_signal_count:" in pr_summary
     assert "effective_ci_mode:" in pr_summary
 
 
@@ -133,8 +140,12 @@ def test_pipeline_outputs_enriched_graph_when_semantic_signals_present(tmp_path:
 
     assert code == 0
     assert result is not None
+    assert result.summary.graph_mode_applied == "enriched"
+    assert result.summary.semantic_signal_count == 1
     api_names = {node.name for node in result.graph.nodes if node.type == "API"}
+    deterministic_api_names = {node.name for node in result.deterministic_graph.nodes if node.type == "API"}
     assert "synthetic_endpoint" in api_names
+    assert "synthetic_endpoint" not in deterministic_api_names
 
 
 def test_full_mode_sets_full_analysis_scope(tmp_path: Path, write_file) -> None:
@@ -439,6 +450,11 @@ def test_pipeline_writes_metadata_to_json_artifacts(tmp_path: Path, write_file) 
     assert payload["schema_version"] == "1.1"
     assert "generated_at" in payload
     assert payload["tool_version"] == "0.1.0"
+
+    analysis_graph_payload = json.loads((out_dir / "graph.analysis.json").read_text(encoding="utf-8"))
+    deterministic_graph_payload = json.loads((out_dir / "graph.deterministic.json").read_text(encoding="utf-8"))
+    assert analysis_graph_payload["schema_version"] == "1.1"
+    assert deterministic_graph_payload["schema_version"] == "1.1"
 
     metrics = json.loads((out_dir / "run_metrics.json").read_text(encoding="utf-8"))
     assert "verification_pass_rate" in metrics
