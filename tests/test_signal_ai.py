@@ -52,7 +52,10 @@ def test_semantic_signal_agent_accepts_valid_payload() -> None:
                 "source_ref": "app/api.py:10",
                 "confidence": "high",
                 "evidence_refs": ["app/api.py:10"],
-                "attributes": {"authz_marker": "Depends(get_current_user)"},
+                "attributes": {
+                    "boundary": "endpoint:POST /orders",
+                    "enforcement": "Depends(get_current_user)",
+                },
                 "tags": ["authz", "critical-path"],
             }
         ]
@@ -88,6 +91,29 @@ def test_semantic_signal_agent_degrades_on_invalid_kind() -> None:
 
     assert not bundle.signals
     assert any("degraded" in note.lower() for note in notes)
+
+
+def test_semantic_signal_agent_degrades_on_missing_required_attributes() -> None:
+    graph = _sample_graph()
+    payload = {
+        "signals": [
+            {
+                "id": "sig-ai-3",
+                "kind": "http_write_surface",
+                "source_ref": "app/api.py:10",
+                "confidence": "high",
+                "evidence_refs": ["app/api.py:10"],
+                "attributes": {"method": "POST", "path": "/orders"},
+                "tags": [],
+            }
+        ]
+    }
+
+    with patch("ai_risk_manager.agents.semantic_signal_agent.call_llm_json", return_value=payload):
+        bundle, notes = generate_semantic_signals(graph, provider="api", generated_without_llm=False)
+
+    assert not bundle.signals
+    assert any("missing required attributes" in note.lower() for note in notes)
 
 
 def test_merge_signal_bundles_deduplicates_and_keeps_higher_confidence() -> None:

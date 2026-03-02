@@ -5,6 +5,7 @@ from ai_risk_manager.graph.builder import build_graph
 from ai_risk_manager.rules.engine import run_rules
 from ai_risk_manager.schemas.types import to_dict
 from ai_risk_manager.signals.adapters import artifact_bundle_to_signal_bundle
+from ai_risk_manager.signals.types import CapabilitySignal, SignalBundle
 
 
 def _fixture_artifacts() -> ArtifactBundle:
@@ -54,3 +55,42 @@ def test_rule_engine_accepts_signal_bundle_with_equivalent_output() -> None:
     findings_from_signals = run_rules(signals, risk_policy="balanced")
 
     assert to_dict(findings_from_graph) == to_dict(findings_from_signals)
+
+
+def test_graph_builder_parses_windows_source_ref_without_truncation() -> None:
+    signals = SignalBundle(
+        signals=[
+            CapabilitySignal(
+                id="sig-win",
+                kind="http_write_surface",
+                source_ref=r"C:\repo\app\api.py:10",
+                confidence="high",
+                evidence_refs=[r"C:\repo\app\api.py:10"],
+                attributes={
+                    "endpoint_name": "create_order",
+                    "method": "POST",
+                    "path": "/orders",
+                    "snippet": "@router.post('/orders')",
+                },
+            ),
+            CapabilitySignal(
+                id="sig-win-test",
+                kind="test_to_endpoint_coverage",
+                source_ref=r"C:\repo\tests\test_api.py:6",
+                confidence="high",
+                evidence_refs=[r"C:\repo\tests\test_api.py:6"],
+                attributes={
+                    "test_name": "test_create_order",
+                    "method": "POST",
+                    "path": "/orders",
+                    "snippet": "client.post('/orders')",
+                },
+            ),
+        ],
+        supported_kinds={"http_write_surface", "test_to_endpoint_coverage"},
+    )
+
+    graph = build_graph(signals)
+    api_node = next(node for node in graph.nodes if node.type == "API")
+
+    assert api_node.source_ref == r"C:\repo\app\api.py:10"

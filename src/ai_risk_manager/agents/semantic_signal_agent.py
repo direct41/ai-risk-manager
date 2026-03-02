@@ -19,6 +19,25 @@ _ALLOWED_SIGNAL_KINDS: set[str] = {
     "side_effect_emit_contract",
     "authorization_boundary_enforced",
 }
+_REQUIRED_ATTRS_BY_KIND: dict[str, set[str]] = {
+    "http_write_surface": {"endpoint_name", "method", "path"},
+    "request_contract_binding": {"endpoint_name", "model_name"},
+    "state_transition_declared": {"machine", "source_state", "target_state"},
+    "state_transition_handled_guarded": {"machine", "source_state", "target_state", "invariant_guarded"},
+    "test_to_endpoint_coverage": {"test_name"},
+    "dependency_version_policy": {"dependency_name", "scope"},
+    "side_effect_emit_contract": {"trigger", "side_effect"},
+    "authorization_boundary_enforced": {"boundary", "enforcement"},
+}
+
+
+def _has_non_empty_attr(attributes: dict, key: str) -> bool:
+    value = attributes.get(key)
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    return True
 
 
 def _graph_context(graph: Graph) -> dict:
@@ -72,6 +91,17 @@ def _validate_semantic_signal_payload(payload: dict) -> SignalBundle:
         attributes = row.get("attributes", {})
         if not isinstance(attributes, dict):
             raise ValueError("Semantic signal attributes must be an object")
+        required_attrs = _REQUIRED_ATTRS_BY_KIND[kind]
+        missing = [key for key in required_attrs if not _has_non_empty_attr(attributes, key)]
+        if missing:
+            raise ValueError(f"Semantic signal '{kind}' is missing required attributes: {missing}")
+        if kind == "test_to_endpoint_coverage":
+            has_http_shape = _has_non_empty_attr(attributes, "method") and _has_non_empty_attr(attributes, "path")
+            has_fallback_shape = str(attributes.get("coverage_mode", "")).strip() == "name_fallback_candidate"
+            if not (has_http_shape or has_fallback_shape):
+                raise ValueError(
+                    "Semantic signal 'test_to_endpoint_coverage' must include method/path or coverage_mode=name_fallback_candidate"
+                )
 
         tags = row.get("tags", [])
         if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):

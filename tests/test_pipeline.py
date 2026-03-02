@@ -8,6 +8,7 @@ from unittest.mock import patch
 from ai_risk_manager.cli import main
 from ai_risk_manager.pipeline.run import _resolve_effective_ci_mode, run_pipeline
 from ai_risk_manager.schemas.types import Finding, FindingsReport, RunContext, Severity
+from ai_risk_manager.signals.types import CapabilitySignal, SignalBundle
 from ai_risk_manager.stacks.discovery import StackDetectionResult
 
 
@@ -86,6 +87,54 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     assert "confidence=`" in pr_summary
     assert "evidence_refs=`" in pr_summary
     assert "effective_ci_mode:" in pr_summary
+
+
+def test_pipeline_outputs_enriched_graph_when_semantic_signals_present(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_api.py", "def test_create_order(client):\n    client.post('/orders')\n")
+
+    synthetic_signal = SignalBundle(
+        signals=[
+            CapabilitySignal(
+                id="sig:synthetic",
+                kind="http_write_surface",
+                source_ref="app/semantic.py:12",
+                confidence="high",
+                evidence_refs=["app/semantic.py:12"],
+                attributes={
+                    "endpoint_name": "synthetic_endpoint",
+                    "method": "POST",
+                    "path": "/semantic/orders",
+                    "snippet": "semantic",
+                },
+                origin="ai",
+            )
+        ],
+        supported_kinds={"http_write_surface"},
+    )
+    empty_semantic_findings = FindingsReport(findings=[], generated_without_llm=True)
+
+    with patch("ai_risk_manager.pipeline.run.generate_semantic_signals", return_value=(synthetic_signal, [])):
+        with patch("ai_risk_manager.pipeline.run.generate_semantic_findings", return_value=(empty_semantic_findings, [])):
+            result, code, _ = run_pipeline(
+                RunContext(
+                    repo_path=tmp_path,
+                    mode="full",
+                    base=None,
+                    output_dir=tmp_path / ".riskmap",
+                    provider="auto",
+                    no_llm=False,
+                    analysis_engine="hybrid",
+                )
+            )
+
+    assert code == 0
+    assert result is not None
+    api_names = {node.name for node in result.graph.nodes if node.type == "API"}
+    assert "synthetic_endpoint" in api_names
 
 
 def test_full_mode_sets_full_analysis_scope(tmp_path: Path, write_file) -> None:

@@ -35,6 +35,17 @@ def _normalize_route_path(path: str) -> str:
     return raw
 
 
+_LINE_REF_RE = re.compile(r"^(?P<path>.+):(?P<line>\d+)$")
+
+
+def _split_source_ref(source_ref: str) -> tuple[str, int | None]:
+    raw = source_ref.strip()
+    match = _LINE_REF_RE.match(raw)
+    if not match:
+        return raw, None
+    return match.group("path"), int(match.group("line"))
+
+
 def _is_path_param(segment: str) -> bool:
     token = segment.strip()
     if not token:
@@ -68,14 +79,20 @@ def _artifact_bundle_from_signals(signals: SignalBundle) -> ArtifactBundle:
 
     for signal in signals.signals:
         attrs = signal.attributes
+        file_path, line = _split_source_ref(signal.source_ref)
         if signal.kind == "http_write_surface":
+            endpoint_name = str(attrs.get("endpoint_name", "")).strip()
+            method = str(attrs.get("method", "")).strip().upper()
+            path = str(attrs.get("path", "")).strip()
+            if not endpoint_name or not method or not path:
+                continue
             artifacts.write_endpoints.append(
                 (
-                    str(signal.source_ref.rsplit(":", 1)[0] if ":" in signal.source_ref else signal.source_ref),
-                    str(attrs.get("endpoint_name", "")),
-                    str(attrs.get("method", "")).upper(),
-                    str(attrs.get("path", "")),
-                    int(signal.source_ref.rsplit(":", 1)[1]) if signal.source_ref.rsplit(":", 1)[-1].isdigit() else 1,
+                    file_path,
+                    endpoint_name,
+                    method,
+                    path,
+                    line,
                     str(attrs.get("snippet", "")),
                 )
             )
@@ -86,7 +103,6 @@ def _artifact_bundle_from_signals(signals: SignalBundle) -> ArtifactBundle:
             model_name = str(attrs.get("model_name", ""))
             if not endpoint_name or not model_name:
                 continue
-            file_path = str(signal.source_ref.rsplit(":", 1)[0] if ":" in signal.source_ref else signal.source_ref)
             artifacts.endpoint_models.append((file_path, endpoint_name, model_name))
             model_source = attrs.get("model_source")
             if isinstance(model_source, str):
@@ -97,14 +113,17 @@ def _artifact_bundle_from_signals(signals: SignalBundle) -> ArtifactBundle:
             continue
 
         if signal.kind == "state_transition_declared":
-            file_path = str(signal.source_ref.rsplit(":", 1)[0] if ":" in signal.source_ref else signal.source_ref)
-            line = int(signal.source_ref.rsplit(":", 1)[1]) if signal.source_ref.rsplit(":", 1)[-1].isdigit() else 1
+            machine = str(attrs.get("machine", "")).strip()
+            source_state = str(attrs.get("source_state", "")).strip()
+            target_state = str(attrs.get("target_state", "")).strip()
+            if not machine or not source_state or not target_state:
+                continue
             artifacts.declared_transitions.append(
                 (
                     file_path,
-                    str(attrs.get("machine", "")),
-                    str(attrs.get("source_state", "")),
-                    str(attrs.get("target_state", "")),
+                    machine,
+                    source_state,
+                    target_state,
                     line,
                     str(attrs.get("snippet", "")),
                 )
@@ -112,14 +131,17 @@ def _artifact_bundle_from_signals(signals: SignalBundle) -> ArtifactBundle:
             continue
 
         if signal.kind == "state_transition_handled_guarded":
-            file_path = str(signal.source_ref.rsplit(":", 1)[0] if ":" in signal.source_ref else signal.source_ref)
-            line = int(signal.source_ref.rsplit(":", 1)[1]) if signal.source_ref.rsplit(":", 1)[-1].isdigit() else 1
+            machine = str(attrs.get("machine", "")).strip()
+            source_state = str(attrs.get("source_state", "")).strip()
+            target_state = str(attrs.get("target_state", "")).strip()
+            if not machine or not source_state or not target_state:
+                continue
             artifacts.handled_transitions.append(
                 (
                     file_path,
-                    str(attrs.get("machine", "")),
-                    str(attrs.get("source_state", "")),
-                    str(attrs.get("target_state", "")),
+                    machine,
+                    source_state,
+                    target_state,
                     line,
                     str(attrs.get("snippet", "")),
                     bool(attrs.get("invariant_guarded", False)),
@@ -128,19 +150,23 @@ def _artifact_bundle_from_signals(signals: SignalBundle) -> ArtifactBundle:
             continue
 
         if signal.kind == "test_to_endpoint_coverage":
-            file_path = str(signal.source_ref.rsplit(":", 1)[0] if ":" in signal.source_ref else signal.source_ref)
-            line = int(signal.source_ref.rsplit(":", 1)[1]) if signal.source_ref.rsplit(":", 1)[-1].isdigit() else 1
-            test_name = str(attrs.get("test_name", ""))
+            test_name = str(attrs.get("test_name", "")).strip()
+            if not test_name:
+                continue
             coverage_mode = str(attrs.get("coverage_mode", ""))
             if coverage_mode == "name_fallback_candidate":
                 artifacts.test_cases.append((file_path, test_name, line, str(attrs.get("snippet", ""))))
             else:
+                method = str(attrs.get("method", "")).strip().upper()
+                path = str(attrs.get("path", "")).strip()
+                if not method or not path:
+                    continue
                 artifacts.test_http_calls.append(
                     (
                         file_path,
                         test_name,
-                        str(attrs.get("method", "")).upper(),
-                        str(attrs.get("path", "")),
+                        method,
+                        path,
                         line,
                         str(attrs.get("snippet", "")),
                     )
@@ -148,16 +174,19 @@ def _artifact_bundle_from_signals(signals: SignalBundle) -> ArtifactBundle:
             continue
 
         if signal.kind == "dependency_version_policy":
-            file_path = str(signal.source_ref.rsplit(":", 1)[0] if ":" in signal.source_ref else signal.source_ref)
-            line = int(signal.source_ref.rsplit(":", 1)[1]) if signal.source_ref.rsplit(":", 1)[-1].isdigit() else None
+            dep_name = str(attrs.get("dependency_name", "")).strip()
+            spec = str(attrs.get("spec", "")).strip()
+            scope = str(attrs.get("scope", "")).strip()
+            if not dep_name or not scope:
+                continue
             artifacts.dependency_specs.append(
                 (
                     file_path,
-                    str(attrs.get("dependency_name", "")),
-                    str(attrs.get("spec", "")),
+                    dep_name,
+                    spec,
                     line,
                     str(attrs.get("policy_violation", "")) or None,
-                    str(attrs.get("scope", "runtime")),
+                    scope,
                 )
             )
 

@@ -358,6 +358,7 @@ class _ScopeStage:
 
 @dataclass
 class _AnalysisStage:
+    analysis_graph: Graph
     findings_raw: FindingsReport
     findings: FindingsReport
     summary: RunSummary
@@ -553,7 +554,8 @@ def _stage_analysis(
         generated_without_llm=provider_resolution.generated_without_llm,
     )
     notes.extend(semantic_signal_notes)
-    merged_signals = merge_signal_bundles(scope.analysis_signals, semantic_signals, min_confidence=ctx.min_confidence)
+    filtered_semantic_signals = merge_signal_bundles(semantic_signals, min_confidence=ctx.min_confidence)
+    merged_signals = merge_signal_bundles(scope.analysis_signals, filtered_semantic_signals, min_confidence="low")
     semantic_graph = build_graph(merged_signals)
     semantic_findings = FindingsReport(findings=[], generated_without_llm=True)
     if ctx.analysis_engine != "deterministic":
@@ -627,6 +629,7 @@ def _stage_analysis(
 
     return (
         _AnalysisStage(
+            analysis_graph=semantic_graph,
             findings_raw=findings_raw,
             findings=findings,
             summary=summary,
@@ -722,9 +725,9 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
     result = PipelineResult(
         preflight=preflight_stage.preflight,
         analysis_scope=scope_stage.analysis_scope,
-        data_quality_low_confidence_ratio=low_confidence_ratio(scope_stage.analysis_graph),
+        data_quality_low_confidence_ratio=low_confidence_ratio(analysis_stage.analysis_graph),
         suppressed_count=analysis_stage.suppressed_count,
-        graph=scope_stage.analysis_graph,
+        graph=analysis_stage.analysis_graph,
         findings_raw=analysis_stage.findings_raw,
         findings=analysis_stage.findings,
         test_plan=analysis_stage.test_plan,
