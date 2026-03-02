@@ -936,6 +936,49 @@ def test_unknown_stack_auto_uses_l0_advisory_and_does_not_fail(tmp_path: Path, w
     assert any("ci_mode overridden to advisory" in note for note in notes)
 
 
+def test_django_stack_auto_support_level_defaults_to_l1(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "views.py",
+        "from rest_framework.views import APIView\n"
+        "from rest_framework.response import Response\n"
+        "class PayOrderView(APIView):\n"
+        "    def post(self, request, order_id: str):\n"
+        "        return Response({'order_id': order_id, 'status': 'paid'})\n",
+    )
+    write_file(
+        tmp_path / "app" / "urls.py",
+        "from django.urls import path\n"
+        "from .views import PayOrderView\n"
+        "urlpatterns = [\n"
+        "    path('orders/<str:order_id>/pay/', PayOrderView.as_view(), name='pay-order'),\n"
+        "]\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_pay.py",
+        "def test_pay_order(client):\n"
+        "    response = client.post('/orders/ord_1/pay/')\n"
+        "    assert response.status_code in {200, 201, 202}\n",
+    )
+
+    result, code, notes = run_pipeline(
+        RunContext(
+            repo_path=tmp_path,
+            mode="full",
+            base=None,
+            output_dir=tmp_path / ".riskmap",
+            provider="auto",
+            no_llm=True,
+            support_level="auto",
+            ci_mode="block_new_critical",
+        )
+    )
+    assert code == 0
+    assert result is not None
+    assert result.summary.support_level_applied == "l1"
+    assert result.summary.effective_ci_mode == "soft"
+    assert any("support_level=l1" in note for note in notes)
+
+
 def test_pipeline_reuses_probe_data_for_preflight(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",

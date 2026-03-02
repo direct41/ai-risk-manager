@@ -84,7 +84,7 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Config-driven policy behavior with tests and docs.
 
 ## Epic 6: Next Stack Expansion (P2)
-- Status: Planned
+- Status: In Progress (preview plugin scaffolding started)
 - Outcome: controlled growth after trust stabilization
 
 ### Stories

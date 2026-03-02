@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Evidence/confidence-aware ranking in reports and PR summary output.
 - Policy externalization via `.airiskpolicy` (JSON) with per-rule `enabled`, `severity`, and `gate` overrides.
 - Coverage mapping improvements for route params, local path aliases, and fixture-derived path aliases.
+- Added early `django_drf` collector plugin (auto support level `l1`) with route/test coverage extraction for common APIView/urlpatterns patterns.
 
 ### Changed
 - `block-new-critical` guardrails now trigger only for `new + critical + high confidence + verified evidence` findings.

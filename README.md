@@ -69,12 +69,15 @@ riskmap analyze \
 ## Who This Is For Right Now
 
 - FastAPI teams using pytest.
+- Django/DRF teams (early support preview).
 - Teams that want release-risk visibility in PR/CI.
 - Teams that need actionable test recommendations, not generic warnings.
 
 ## Current Scope (v0.1.x)
 
-- Current stack plugin: `fastapi_pytest`.
+- Current stack plugins:
+  - `fastapi_pytest` (mature path)
+  - `django_drf` (early support preview, default auto support level `l1`)
 - Local/CI assistant for QA risk mapping.
 - Not a generic multi-language SAST replacement.
 - API adapter is local/internal oriented (no auth, no multi-tenant guarantees).

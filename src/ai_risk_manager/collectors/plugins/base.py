@@ -6,7 +6,7 @@ from typing import Literal, Protocol
 
 from ai_risk_manager.schemas.types import Confidence, PreflightResult
 
-StackId = Literal["fastapi_pytest", "unknown"]
+StackId = Literal["fastapi_pytest", "django_drf", "unknown"]
 DetectionConfidence = Confidence  # backward-compatible alias
 
 

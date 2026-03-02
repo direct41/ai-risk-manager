@@ -6,7 +6,9 @@
   - CLI (`riskmap`)
   - HTTP API (`/v1/analyze`, sync)
 - Static stack discovery + collector plugin dispatch
-- First extractor plugin: `fastapi_pytest`
+- Current extractor plugins:
+  - `fastapi_pytest` (mature)
+  - `django_drf` (early support preview)
 - Deterministic rule engine + optional LLM enrichment
 - PR mode with impacted scope and fallback strategy
 - Suppressions via `.airiskignore`
@@ -24,7 +26,7 @@
 
 ## Next
 
-- Additional collector plugins beyond FastAPI
+- Additional collector plugins beyond FastAPI/Django
 - Better test-to-endpoint mapping precision (path params, aliases, fixture-aware heuristics)
 - Policy externalization (`.airiskpolicy`) for per-rule severity/gating tuning
 - Additional rules for authorization and critical-path behavior patterns

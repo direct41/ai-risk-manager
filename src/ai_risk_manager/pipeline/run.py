@@ -54,14 +54,17 @@ CI_MODE_MATRIX: dict[AppliedSupportLevel, dict[CIMode, CIMode]] = {
         "block_new_critical": "block_new_critical",
     },
 }
+DEFAULT_SUPPORT_LEVEL_BY_STACK: dict[str, AppliedSupportLevel] = {
+    "fastapi_pytest": "l2",
+    "django_drf": "l1",
+    "unknown": "l0",
+}
 
 
 def _resolve_support_level(requested: str, detected_stack: str) -> AppliedSupportLevel:
     if requested in {"l0", "l1", "l2"}:
         return requested
-    if detected_stack == "unknown":
-        return "l0"
-    return "l2"
+    return DEFAULT_SUPPORT_LEVEL_BY_STACK.get(detected_stack, "l0")
 
 
 def _resolve_competitive_mode(analysis_engine: str) -> CompetitiveMode:
