@@ -77,7 +77,7 @@ riskmap analyze \
 
 - Current stack plugins:
   - `fastapi_pytest` (mature path)
-  - `django_drf` (verified path, default auto support level `l2`)
+  - `django_drf` (verified path, default auto support level `l2` on clean preflight)
 - Local/CI assistant for QA risk mapping.
 - Not a generic multi-language SAST replacement.
 - API adapter is local/internal oriented (no auth, no multi-tenant guarantees).
@@ -112,6 +112,7 @@ Optional semantic AI stage can add extra grounded findings with evidence refs.
 `support_level`:
 
 - `auto` (default): `unknown -> l0`, known plugin stacks -> `l2`.
+- In `auto`, preflight warnings downgrade support level by one step (`l2 -> l1`, `l1 -> l0`).
 - `l0`: block modes downgraded to advisory.
 - `l1`: `block-new-critical` downgraded to `soft`.
 - `l2`: full mode behavior.

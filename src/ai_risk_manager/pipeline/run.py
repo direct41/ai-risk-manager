@@ -59,12 +59,21 @@ DEFAULT_SUPPORT_LEVEL_BY_STACK: dict[str, AppliedSupportLevel] = {
     "django_drf": "l2",
     "unknown": "l0",
 }
+_SUPPORT_LEVEL_DOWNGRADE: dict[AppliedSupportLevel, AppliedSupportLevel] = {
+    "l2": "l1",
+    "l1": "l0",
+    "l0": "l0",
+}
 
 
 def _resolve_support_level(requested: str, detected_stack: str) -> AppliedSupportLevel:
     if requested in {"l0", "l1", "l2"}:
         return requested
     return DEFAULT_SUPPORT_LEVEL_BY_STACK.get(detected_stack, "l0")
+
+
+def _downgrade_support_level(level: AppliedSupportLevel) -> AppliedSupportLevel:
+    return _SUPPORT_LEVEL_DOWNGRADE[level]
 
 
 def _resolve_competitive_mode(analysis_engine: str) -> CompetitiveMode:
@@ -346,13 +355,13 @@ def _stage_preflight(
     notes.append(f"Detected stack: {detection.stack_id} (confidence: {detection.confidence}).")
     support_level_applied = _resolve_support_level(ctx.support_level, detection.stack_id)
     competitive_mode = _resolve_competitive_mode(ctx.analysis_engine)
-    notes.append(f"Support level applied: {support_level_applied}.")
     if ctx.risk_policy != "balanced":
         notes.append(f"Risk policy: {ctx.risk_policy}.")
 
     plugin = get_plugin_for_stack(detection.stack_id)
     if plugin is None and support_level_applied != "l0":
         sinks.progress.finish(1, total_steps, "Stack detection and pre-flight", t)
+        notes.append(f"Support level applied: {support_level_applied}.")
         notes.extend(detection.reasons)
         notes.append(f"No collector plugin is registered for stack '{detection.stack_id}'.")
         return None, 2
@@ -367,10 +376,20 @@ def _stage_preflight(
     sinks.progress.finish(1, total_steps, "Stack detection and pre-flight", t)
 
     if preflight.status == "FAIL":
+        notes.append(f"Support level applied: {support_level_applied}.")
         notes.extend(preflight.reasons)
         return None, 2
     if preflight.status == "WARN":
         notes.extend(preflight.reasons)
+        if plugin is not None and ctx.support_level == "auto":
+            downgraded = _downgrade_support_level(support_level_applied)
+            if downgraded != support_level_applied:
+                notes.append(
+                    f"Support level downgraded from {support_level_applied} to {downgraded} due to pre-flight warnings."
+                )
+                support_level_applied = downgraded
+
+    notes.append(f"Support level applied: {support_level_applied}.")
 
     return (
         _PreflightStage(

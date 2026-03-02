@@ -108,6 +108,7 @@ Extractor собирает:
 - `advisory`: не блокирует merge по findings.
 - `soft`: блокирует при новых `high|critical` findings.
 - `block-new-critical`: блокирует только при `new + critical + high confidence + verified evidence`.
+- Для `--support-level auto` предупреждения preflight понижают уровень поддержки на один шаг (`l2 -> l1`, `l1 -> l0`).
 
 ## API (sync)
 

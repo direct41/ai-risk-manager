@@ -979,6 +979,43 @@ def test_django_stack_auto_support_level_defaults_to_l2(tmp_path: Path, write_fi
     assert not any("support_level=l1" in note for note in notes)
 
 
+def test_django_stack_auto_downgrades_to_l1_on_preflight_warn(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "views.py",
+        "from rest_framework.views import APIView\n"
+        "from rest_framework.response import Response\n"
+        "class PayOrderView(APIView):\n"
+        "    def post(self, request, order_id: str):\n"
+        "        return Response({'order_id': order_id, 'status': 'paid'})\n",
+    )
+    write_file(
+        tmp_path / "app" / "urls.py",
+        "from django.urls import path\n"
+        "from .views import PayOrderView\n"
+        "urlpatterns = [path('orders/<str:order_id>/pay/', PayOrderView.as_view(), name='pay-order')]\n",
+    )
+
+    result, code, notes = run_pipeline(
+        RunContext(
+            repo_path=tmp_path,
+            mode="full",
+            base=None,
+            output_dir=tmp_path / ".riskmap",
+            provider="auto",
+            no_llm=True,
+            support_level="auto",
+            ci_mode="block_new_critical",
+        )
+    )
+    assert code == 0
+    assert result is not None
+    assert result.preflight.status == "WARN"
+    assert result.summary.support_level_applied == "l1"
+    assert result.summary.effective_ci_mode == "soft"
+    assert any("Support level downgraded from l2 to l1" in note for note in notes)
+    assert any("support_level=l1" in note for note in notes)
+
+
 def test_django_viewset_router_reverse_has_no_critical_path_gap(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "views.py",

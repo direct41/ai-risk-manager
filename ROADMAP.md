@@ -16,6 +16,7 @@
 - CI rollout controls:
   - `ci_mode`: `advisory|soft|block-new-critical`
   - `support_level`: `auto|l0|l1|l2`
+  - auto support-level downgrade on preflight warnings (`l2 -> l1`, `l1 -> l0`)
   - effective CI mode matrix with auditable summary output
 - Trust-first quality controls:
   - eval trust gates with versioned thresholds

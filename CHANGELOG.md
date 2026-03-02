@@ -30,6 +30,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Backlog artifacts updated to mark all P0 trust-first epics done.
 - Exit-code gating (`--fail-on-severity`, `ci_mode`) now respects `.airiskpolicy` per-rule blocking overrides (`gate=never_block`).
 - Auto support level for `django_drf` now defaults to `l2` (full CI-mode matrix behavior).
+- In `support_level=auto`, preflight warnings now downgrade support level by one step to keep blocking behavior conservative.
 
 ### Fixed
 - Pipeline/report consistency: `effective_ci_mode` and CI/fail notes are now computed before markdown artifact generation.
