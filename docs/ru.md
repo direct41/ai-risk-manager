@@ -1,11 +1,11 @@
-# AI Risk Manager: быстрый вход для FastAPI-команд
+# AI Risk Manager: быстрый вход для FastAPI и Django/DRF команд
 
 AI Risk Manager помогает перед merge/release ответить на два вопроса:
 
 - где сейчас рискованные backend-потоки;
 - какие тесты стоит добавить в первую очередь.
 
-Текущий `v0.1.x` сфокусирован на FastAPI + pytest.
+Текущий `v0.1.x` сфокусирован на FastAPI + pytest и Django/DRF.
 
 ## Быстрый старт (5 минут)
 
@@ -56,7 +56,10 @@ riskmap analyze \
 
 ## Что именно анализируется
 
-Текущий stack plugin: `fastapi_pytest`.
+Текущие stack plugins:
+
+- `fastapi_pytest`
+- `django_drf`
 
 Extractor собирает:
 
@@ -82,7 +85,7 @@ Extractor собирает:
 
 ## Ограничения текущей версии
 
-- В `v0.1.x` поддерживается FastAPI extractor plugin.
+- В `v0.1.x` поддерживаются extractor plugins `fastapi_pytest` и `django_drf`.
 - Инструмент не является generic multi-language SAST.
 - API рассчитан на local/internal usage.
 - Universal/mixed-stack стратегия пока в roadmap, это не текущий shipped scope.

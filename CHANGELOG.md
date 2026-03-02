@@ -18,9 +18,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Evidence/confidence-aware ranking in reports and PR summary output.
 - Policy externalization via `.airiskpolicy` (JSON) with per-rule `enabled`, `severity`, and `gate` overrides.
 - Coverage mapping improvements for route params, local path aliases, and fixture-derived path aliases.
-- Added early `django_drf` collector plugin (auto support level `l1`) with route/test coverage extraction for common APIView/urlpatterns patterns.
+- Added `django_drf` collector plugin with route/test coverage extraction for common APIView/urlpatterns patterns.
 - Expanded `django_drf` extraction with DRF router/viewset endpoint mapping and `reverse(...)`-based test path resolution.
 - Added Django viewset eval fixture `eval/repos/milestone7_django_viewset` and included it in eval-suite cases.
+- Added shared dependency extraction parity for FastAPI and Django plugins, with a Django dependency-policy eval fixture (`eval/repos/milestone8_django_dependency`).
 
 ### Changed
 - `block-new-critical` guardrails now trigger only for `new + critical + high confidence + verified evidence` findings.
@@ -28,6 +29,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - PR-focused summary behavior and reporting metadata improved for trust-first rollout.
 - Backlog artifacts updated to mark all P0 trust-first epics done.
 - Exit-code gating (`--fail-on-severity`, `ci_mode`) now respects `.airiskpolicy` per-rule blocking overrides (`gate=never_block`).
+- Auto support level for `django_drf` now defaults to `l2` (full CI-mode matrix behavior).
 
 ### Fixed
 - Pipeline/report consistency: `effective_ci_mode` and CI/fail notes are now computed before markdown artifact generation.

@@ -1,6 +1,6 @@
 # AI Risk Manager
 
-AI Risk Manager is an OSS QA risk-mapping tool for FastAPI services.
+AI Risk Manager is an OSS QA risk-mapping tool for Python backend services (FastAPI and Django/DRF).
 
 It helps answer two questions before merge/release:
 
@@ -69,7 +69,7 @@ riskmap analyze \
 ## Who This Is For Right Now
 
 - FastAPI teams using pytest.
-- Django/DRF teams (early support preview).
+- Django/DRF teams.
 - Teams that want release-risk visibility in PR/CI.
 - Teams that need actionable test recommendations, not generic warnings.
 
@@ -77,7 +77,7 @@ riskmap analyze \
 
 - Current stack plugins:
   - `fastapi_pytest` (mature path)
-  - `django_drf` (early support preview, default auto support level `l1`)
+  - `django_drf` (verified path, default auto support level `l2`)
 - Local/CI assistant for QA risk mapping.
 - Not a generic multi-language SAST replacement.
 - API adapter is local/internal oriented (no auth, no multi-tenant guarantees).

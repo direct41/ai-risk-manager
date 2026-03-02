@@ -56,7 +56,7 @@ CI_MODE_MATRIX: dict[AppliedSupportLevel, dict[CIMode, CIMode]] = {
 }
 DEFAULT_SUPPORT_LEVEL_BY_STACK: dict[str, AppliedSupportLevel] = {
     "fastapi_pytest": "l2",
-    "django_drf": "l1",
+    "django_drf": "l2",
     "unknown": "l0",
 }
 

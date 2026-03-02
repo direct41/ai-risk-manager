@@ -8,7 +8,7 @@
 - Static stack discovery + collector plugin dispatch
 - Current extractor plugins:
   - `fastapi_pytest` (mature)
-  - `django_drf` (early support preview)
+  - `django_drf` (verified)
 - Deterministic rule engine + optional LLM enrichment
 - PR mode with impacted scope and fallback strategy
 - Suppressions via `.airiskignore`

@@ -936,7 +936,7 @@ def test_unknown_stack_auto_uses_l0_advisory_and_does_not_fail(tmp_path: Path, w
     assert any("ci_mode overridden to advisory" in note for note in notes)
 
 
-def test_django_stack_auto_support_level_defaults_to_l1(tmp_path: Path, write_file) -> None:
+def test_django_stack_auto_support_level_defaults_to_l2(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "views.py",
         "from rest_framework.views import APIView\n"
@@ -974,9 +974,9 @@ def test_django_stack_auto_support_level_defaults_to_l1(tmp_path: Path, write_fi
     )
     assert code == 0
     assert result is not None
-    assert result.summary.support_level_applied == "l1"
-    assert result.summary.effective_ci_mode == "soft"
-    assert any("support_level=l1" in note for note in notes)
+    assert result.summary.support_level_applied == "l2"
+    assert result.summary.effective_ci_mode == "block_new_critical"
+    assert not any("support_level=l1" in note for note in notes)
 
 
 def test_django_viewset_router_reverse_has_no_critical_path_gap(tmp_path: Path, write_file) -> None:
@@ -1018,7 +1018,7 @@ def test_django_viewset_router_reverse_has_no_critical_path_gap(tmp_path: Path, 
     )
     assert code == 0
     assert result is not None
-    assert result.summary.support_level_applied == "l1"
+    assert result.summary.support_level_applied == "l2"
     assert not any(finding.rule_id == "critical_path_no_tests" for finding in result.findings.findings)
 
 
@@ -1200,7 +1200,7 @@ def test_django_pipeline_reports_dependency_policy_violation(tmp_path: Path, wri
     )
     assert code == 0
     assert result is not None
-    assert result.summary.support_level_applied == "l1"
+    assert result.summary.support_level_applied == "l2"
     rule_ids = {finding.rule_id for finding in result.findings.findings}
     assert "dependency_risk_policy_violation" in rule_ids
 
