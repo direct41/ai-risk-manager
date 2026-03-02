@@ -16,12 +16,15 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Support-level x CI-mode compatibility matrix with machine-readable `effective_ci_mode` in run summary and API response summary.
 - Dependency policy profiles (`conservative|balanced|aggressive`) and scope-aware dependency severity (`runtime` vs `development`).
 - Evidence/confidence-aware ranking in reports and PR summary output.
+- Policy externalization via `.airiskpolicy` (JSON) with per-rule `enabled`, `severity`, and `gate` overrides.
+- Coverage mapping improvements for route params, local path aliases, and fixture-derived path aliases.
 
 ### Changed
 - `block-new-critical` guardrails now trigger only for `new + critical + high confidence + verified evidence` findings.
 - Transition invariant rule reduced false positives via declared transition anchors.
 - PR-focused summary behavior and reporting metadata improved for trust-first rollout.
 - Backlog artifacts updated to mark all P0 trust-first epics done.
+- Exit-code gating (`--fail-on-severity`, `ci_mode`) now respects `.airiskpolicy` per-rule blocking overrides (`gate=never_block`).
 
 ### Fixed
 - Pipeline/report consistency: `effective_ci_mode` and CI/fail notes are now computed before markdown artifact generation.

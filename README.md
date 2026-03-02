@@ -193,6 +193,31 @@ curl -s -X POST http://127.0.0.1:8000/v1/analyze \
   file: "app/orders.py"
 ```
 
+## Policy Overrides (`.airiskpolicy`)
+
+Use `.airiskpolicy` (JSON) to tune per-rule behavior without code forks.
+
+```json
+{
+  "version": 1,
+  "rules": {
+    "critical_path_no_tests": {
+      "enabled": true,
+      "severity": "medium",
+      "gate": "never_block"
+    }
+  }
+}
+```
+
+Rule fields:
+
+- `enabled` (`true|false`): include or disable findings for this rule.
+- `severity` (`critical|high|medium|low`): override severity in outputs and threshold checks.
+- `gate`:
+  - `default`: finding participates in `--fail-on-severity` and CI blocking modes.
+  - `never_block`: finding is reported but ignored for exit-code blocking decisions.
+
 ## Trust-First Eval Artifacts
 
 Weekly eval workflow publishes:

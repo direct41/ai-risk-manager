@@ -424,6 +424,61 @@ def test_pipeline_applies_airiskignore_suppressions(tmp_path: Path, write_file) 
     assert not result.findings.findings
 
 
+def test_pipeline_applies_airiskpolicy_rule_disable(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_orders.py", "def test_smoke():\n    assert True\n")
+    write_file(
+        tmp_path / ".airiskpolicy",
+        "{\"version\":1,\"rules\":{\"critical_path_no_tests\":{\"enabled\":false}}}\n",
+    )
+
+    out_dir = tmp_path / ".riskmap"
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=out_dir,
+        provider="auto",
+        no_llm=True,
+    )
+    result, code, notes = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    assert not result.findings.findings
+    assert any("Policy filtered findings" in note for note in notes)
+
+
+def test_pipeline_airiskpolicy_severity_override_affects_fail_on_threshold(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_orders.py", "def test_smoke():\n    assert True\n")
+    write_file(
+        tmp_path / ".airiskpolicy",
+        "{\"version\":1,\"rules\":{\"critical_path_no_tests\":{\"severity\":\"low\"}}}\n",
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+        fail_on_severity="high",
+    )
+    result, code, _ = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    dep = [finding for finding in result.findings.findings if finding.rule_id == "critical_path_no_tests"]
+    assert dep
+    assert dep[0].severity == "low"
+
+
 def test_format_md_only_skips_json_artifacts(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",
@@ -718,6 +773,58 @@ def test_ci_mode_l1_downgrades_block_to_soft_and_blocks_unverified_critical(tmp_
     assert result.summary.effective_ci_mode == "soft"
     assert any("support_level=l1" in note for note in notes)
     assert any("ci_mode=soft triggered" in note for note in notes)
+
+
+def test_ci_mode_soft_skips_never_block_rule_from_airiskpolicy(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    baseline = tmp_path / ".riskmap" / "baseline" / "graph.json"
+    write_file(baseline, '{"nodes": []}')
+    write_file(
+        tmp_path / ".airiskpolicy",
+        "{\"version\":1,\"rules\":{\"critical_new_risk\":{\"gate\":\"never_block\"}}}\n",
+    )
+
+    high_new = FindingsReport(
+        findings=[
+            Finding(
+                id="high:new",
+                rule_id="critical_new_risk",
+                title="High new risk",
+                description="d",
+                severity="high",
+                confidence="high",
+                evidence="e",
+                source_ref="app/api.py:1",
+                suppression_key="high:new",
+                recommendation="fix now",
+                evidence_refs=["app/api.py:1"],
+            )
+        ],
+        generated_without_llm=True,
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+        baseline_graph=baseline,
+        ci_mode="soft",
+        support_level="l2",
+    )
+
+    with patch("ai_risk_manager.pipeline.run.run_rules", return_value=high_new):
+        with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"app/api.py"}):
+            result, code, notes = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    assert result.summary.effective_ci_mode == "soft"
+    assert not any("ci_mode=soft triggered" in note for note in notes)
 
 
 def test_pr_baseline_status_and_only_new_summary(tmp_path: Path, write_file) -> None:

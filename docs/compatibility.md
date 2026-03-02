@@ -41,3 +41,14 @@ Breaking changes include:
 - changing field meanings or types without major release
 
 Additive fields are allowed in minor releases.
+
+## Policy file compatibility (`.airiskpolicy`)
+
+- `.airiskpolicy` is an optional JSON config file loaded from repository root.
+- Current schema version: `1`.
+- Additive rule fields are allowed in minor releases.
+
+Breaking changes include:
+
+- changing meaning of existing fields (`enabled`, `severity`, `gate`)
+- removing version `1` support without a major release

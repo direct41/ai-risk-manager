@@ -16,6 +16,7 @@ from ai_risk_manager.graph.builder import build_graph, low_confidence_ratio
 from ai_risk_manager.pipeline.merge_findings import ensure_fingerprint, merge_findings
 from ai_risk_manager.pipeline.sinks import PipelineSinks
 from ai_risk_manager.rules.engine import run_rules
+from ai_risk_manager.rules.policy import PolicyConfig, apply_policy, is_blocking_enabled_for_finding, load_policy
 from ai_risk_manager.rules.suppressions import apply_suppressions, load_suppressions
 from ai_risk_manager.schemas.types import (
     AnalysisScope,
@@ -327,6 +328,7 @@ class _AnalysisStage:
     test_plan: TestPlan
     suppressed_count: int
     verified_fingerprints: set[str]
+    policy: PolicyConfig
 
 
 def _stage_preflight(
@@ -518,6 +520,15 @@ def _stage_analysis(
         suppressed_count += suppressed_after_merge
         notes.append(f"Suppressed merged findings: {suppressed_after_merge}.")
 
+    policy_path = ctx.repo_path / ".airiskpolicy"
+    policy, policy_notes = load_policy(policy_path if policy_path.is_file() else None)
+    notes.extend(policy_notes)
+    merged_findings, policy_dropped, policy_severity_overrides = apply_policy(merged_findings, policy)
+    if policy_dropped:
+        notes.append(f"Policy filtered findings: {policy_dropped}.")
+    if policy_severity_overrides:
+        notes.append(f"Policy severity overrides applied: {policy_severity_overrides}.")
+
     fallback_reason = scope.fallback_reason
     baseline_fingerprints: set[str] | None = None
     if ctx.mode == "pr":
@@ -559,6 +570,7 @@ def _stage_analysis(
             test_plan=test_plan,
             suppressed_count=suppressed_count,
             verified_fingerprints=verified_fingerprints,
+            policy=policy,
         ),
         None,
     )
@@ -568,13 +580,15 @@ def _resolve_exit_code(
     ctx: RunContext,
     result: PipelineResult,
     *,
+    policy: PolicyConfig,
     effective_ci_mode: CIMode,
     verified_fingerprints: set[str],
     notes: list[str],
 ) -> int:
+    blocking_findings = [finding for finding in result.findings.findings if is_blocking_enabled_for_finding(policy, finding)]
     exit_code = 0
     if ctx.fail_on_severity:
-        max_sev = _max_severity([finding.severity for finding in result.findings.findings])
+        max_sev = _max_severity([finding.severity for finding in blocking_findings])
         if max_sev and SEVERITY_RANK.get(max_sev, 0) >= SEVERITY_RANK[ctx.fail_on_severity]:
             notes.append(f"Fail-on-severity triggered: found '{max_sev}' which is >= threshold '{ctx.fail_on_severity}'.")
             exit_code = 3
@@ -582,7 +596,7 @@ def _resolve_exit_code(
     if effective_ci_mode == "soft":
         if any(
             finding.status == "new" and SEVERITY_RANK.get(finding.severity, 0) >= SEVERITY_RANK["high"]
-            for finding in result.findings.findings
+            for finding in blocking_findings
         ):
             notes.append("ci_mode=soft triggered: new high/critical finding exists.")
             exit_code = 3
@@ -592,7 +606,7 @@ def _resolve_exit_code(
             and finding.severity == "critical"
             and finding.confidence == "high"
             and finding.fingerprint in verified_fingerprints
-            for finding in result.findings.findings
+            for finding in blocking_findings
         ):
             notes.append("ci_mode=block_new_critical triggered: verified high-confidence new critical finding exists.")
             exit_code = 3
@@ -658,6 +672,7 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
     exit_code = _resolve_exit_code(
         ctx,
         result,
+        policy=analysis_stage.policy,
         effective_ci_mode=analysis_stage.summary.effective_ci_mode,
         verified_fingerprints=analysis_stage.verified_fingerprints,
         notes=notes,
