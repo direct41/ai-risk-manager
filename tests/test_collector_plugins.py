@@ -254,3 +254,49 @@ def test_django_plugin_collects_write_endpoint_and_test_http_call(tmp_path: Path
     assert endpoint[2] == "POST"
     assert endpoint[3] == "/orders/{order_id}/pay"
     assert any(call[2] == "POST" and call[3] == "/orders/ord_1/pay" for call in bundle.test_http_calls)
+
+
+def test_django_plugin_collects_viewset_routes_and_reverse_calls(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "views.py",
+        "from rest_framework.viewsets import ViewSet\n"
+        "from rest_framework.decorators import action\n"
+        "from rest_framework.response import Response\n"
+        "class OrderViewSet(ViewSet):\n"
+        "    def create(self, request):\n"
+        "        return Response({'status': 'created'})\n"
+        "    @action(detail=True, methods=['post'], url_path='pay')\n"
+        "    def pay(self, request, pk: str):\n"
+        "        return Response({'id': pk, 'status': 'paid'})\n",
+    )
+    write_file(
+        tmp_path / "app" / "urls.py",
+        "from django.urls import include, path\n"
+        "from rest_framework.routers import DefaultRouter\n"
+        "from .views import OrderViewSet\n"
+        "router = DefaultRouter()\n"
+        "router.register('orders', OrderViewSet, basename='order')\n"
+        "urlpatterns = [path('api/', include(router.urls))]\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_order_viewset.py",
+        "from django.urls import reverse\n"
+        "def test_create_order(client):\n"
+        "    response = client.post(reverse('order-list'))\n"
+        "    assert response.status_code in {200, 201, 202}\n"
+        "def test_pay_order(client):\n"
+        "    pay_path = reverse('order-pay', kwargs={'id': 'ord_1'})\n"
+        "    response = client.post(pay_path)\n"
+        "    assert response.status_code in {200, 201, 202}\n",
+    )
+
+    plugin = get_plugin_for_stack("django_drf")
+    assert plugin is not None
+    bundle = plugin.collect(tmp_path)
+
+    endpoints = {(row[1], row[2], row[3]) for row in bundle.write_endpoints}
+    assert ("OrderViewSet.create", "POST", "/api/orders") in endpoints
+    assert ("OrderViewSet.pay", "POST", "/api/orders/{id}/pay") in endpoints
+    calls = {(row[1], row[2], row[3]) for row in bundle.test_http_calls}
+    assert ("test_create_order", "POST", "/api/orders") in calls
+    assert ("test_pay_order", "POST", "/api/orders/ord_1/pay") in calls

@@ -19,6 +19,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Policy externalization via `.airiskpolicy` (JSON) with per-rule `enabled`, `severity`, and `gate` overrides.
 - Coverage mapping improvements for route params, local path aliases, and fixture-derived path aliases.
 - Added early `django_drf` collector plugin (auto support level `l1`) with route/test coverage extraction for common APIView/urlpatterns patterns.
+- Expanded `django_drf` extraction with DRF router/viewset endpoint mapping and `reverse(...)`-based test path resolution.
+- Added Django viewset eval fixture `eval/repos/milestone7_django_viewset` and included it in eval-suite cases.
 
 ### Changed
 - `block-new-critical` guardrails now trigger only for `new + critical + high confidence + verified evidence` findings.

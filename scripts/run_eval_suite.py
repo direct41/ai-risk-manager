@@ -69,6 +69,12 @@ CASES = [
         required_rules=set(),
         forbidden_rules={"critical_path_no_tests"},
     ),
+    EvalCase(
+        name="milestone7_django_viewset",
+        repo_rel="eval/repos/milestone7_django_viewset",
+        required_rules=set(),
+        forbidden_rules={"critical_path_no_tests"},
+    ),
 ]
 
 

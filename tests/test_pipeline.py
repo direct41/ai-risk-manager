@@ -979,6 +979,49 @@ def test_django_stack_auto_support_level_defaults_to_l1(tmp_path: Path, write_fi
     assert any("support_level=l1" in note for note in notes)
 
 
+def test_django_viewset_router_reverse_has_no_critical_path_gap(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "views.py",
+        "from rest_framework.viewsets import ViewSet\n"
+        "from rest_framework.response import Response\n"
+        "class OrderViewSet(ViewSet):\n"
+        "    def create(self, request):\n"
+        "        return Response({'status': 'created'})\n",
+    )
+    write_file(
+        tmp_path / "app" / "urls.py",
+        "from django.urls import include, path\n"
+        "from rest_framework.routers import DefaultRouter\n"
+        "from .views import OrderViewSet\n"
+        "router = DefaultRouter()\n"
+        "router.register('orders', OrderViewSet, basename='order')\n"
+        "urlpatterns = [path('api/', include(router.urls))]\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_order.py",
+        "from django.urls import reverse\n"
+        "def test_create_order(client):\n"
+        "    response = client.post(reverse('order-list'))\n"
+        "    assert response.status_code in {200, 201, 202}\n",
+    )
+
+    result, code, _ = run_pipeline(
+        RunContext(
+            repo_path=tmp_path,
+            mode="full",
+            base=None,
+            output_dir=tmp_path / ".riskmap",
+            provider="auto",
+            no_llm=True,
+            support_level="auto",
+        )
+    )
+    assert code == 0
+    assert result is not None
+    assert result.summary.support_level_applied == "l1"
+    assert not any(finding.rule_id == "critical_path_no_tests" for finding in result.findings.findings)
+
+
 def test_pipeline_reuses_probe_data_for_preflight(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",

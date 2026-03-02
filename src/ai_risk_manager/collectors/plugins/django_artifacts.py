@@ -21,6 +21,12 @@ EXCLUDED_DIRS = {
     "fixtures",
     "testdata",
 }
+_VIEWSET_DEFAULT_WRITE_METHODS: dict[str, tuple[str, str]] = {
+    "create": ("POST", ""),
+    "update": ("PUT", "/{id}"),
+    "partial_update": ("PATCH", "/{id}"),
+    "destroy": ("DELETE", "/{id}"),
+}
 
 
 @dataclass
@@ -29,6 +35,23 @@ class DjangoSignals:
     has_drf_import: bool
     has_urlpatterns: bool
     has_pytest: bool
+
+
+@dataclass
+class RouterRegistration:
+    router_var: str
+    route_path: str
+    view_ref: str
+    basename: str | None
+
+
+@dataclass
+class ViewsetAction:
+    endpoint_name: str
+    method: str
+    path_suffix: str
+    line: int
+    snippet: str
 
 
 def _read_text(path: Path) -> str:
@@ -98,16 +121,9 @@ def _resolve_string_expr(node: ast.AST | None, aliases: dict[str, str]) -> str |
     return None
 
 
-def _collect_string_aliases(node: ast.AST) -> dict[str, str]:
-    aliases: dict[str, str] = {}
-    assignments: list[tuple[str, ast.AST]] = []
-    for child in ast.walk(node):
-        if isinstance(child, ast.Assign):
-            for target in child.targets:
-                if isinstance(target, ast.Name):
-                    assignments.append((target.id, child.value))
-        elif isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name) and child.value is not None:
-            assignments.append((child.target.id, child.value))
+def _collect_string_aliases(node: ast.AST, *, base_aliases: dict[str, str] | None = None) -> dict[str, str]:
+    aliases: dict[str, str] = dict(base_aliases or {})
+    assignments = _iter_named_assignments(node)
 
     changed = True
     while changed:
@@ -123,14 +139,26 @@ def _collect_string_aliases(node: ast.AST) -> dict[str, str]:
     return aliases
 
 
+def _iter_named_assignments(node: ast.AST) -> list[tuple[str, ast.AST]]:
+    assignments: list[tuple[str, ast.AST]] = []
+    for child in ast.walk(node):
+        if isinstance(child, ast.Assign):
+            for target in child.targets:
+                if isinstance(target, ast.Name):
+                    assignments.append((target.id, child.value))
+        elif isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name) and child.value is not None:
+            assignments.append((child.target.id, child.value))
+    return assignments
+
+
 def _normalize_http_path(path: str) -> str | None:
     raw = path.strip()
     if not raw:
-        return None
+        return "/"
     raw = re.sub(r"^[a-zA-Z][a-zA-Z0-9+.-]*://[^/]+", "", raw)
     raw = raw.split("?", 1)[0].split("#", 1)[0].strip()
     if not raw:
-        return None
+        return "/"
     if not raw.startswith("/"):
         raw = f"/{raw}"
     raw = re.sub(r"/{2,}", "/", raw)
@@ -146,6 +174,18 @@ def _normalize_django_route(route: str) -> str | None:
     # Django path params: <str:id> / <id> -> {id}
     normalized = re.sub(r"<(?:[^:>]+:)?([^>]+)>", r"{\1}", normalized)
     return normalized
+
+
+def _combine_paths(prefix: str, route: str) -> str | None:
+    left = _normalize_django_route(prefix)
+    right = _normalize_django_route(route)
+    if left is None or right is None:
+        return None
+    if left == "/":
+        return right
+    if right == "/":
+        return left
+    return _normalize_http_path(f"{left}/{right.lstrip('/')}")
 
 
 def _is_test_file(path: Path) -> bool:
@@ -165,12 +205,85 @@ def _extract_test_cases(tree: ast.AST, source_lines: list[str]) -> list[tuple[st
     return cases
 
 
-def _extract_test_http_calls(tree: ast.AST, source_lines: list[str]) -> list[tuple[str, str, str, int, str]]:
+def _call_name(node: ast.AST) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return ""
+
+
+def _resolve_reverse_route(call: ast.Call, aliases: dict[str, str], route_name_map: dict[str, str]) -> str | None:
+    route_name_expr: ast.AST | None = call.args[0] if call.args else None
+    if route_name_expr is None:
+        for kw in call.keywords:
+            if kw.arg in {"viewname", "urlname"}:
+                route_name_expr = kw.value
+                break
+    route_name = _resolve_string_expr(route_name_expr, aliases)
+    if route_name is None:
+        return None
+
+    route = route_name_map.get(route_name)
+    if route is None:
+        return None
+
+    kwargs_node: ast.AST | None = None
+    for kw in call.keywords:
+        if kw.arg == "kwargs":
+            kwargs_node = kw.value
+            break
+
+    if isinstance(kwargs_node, ast.Dict):
+        for key_node, value_node in zip(kwargs_node.keys, kwargs_node.values):
+            key = _constant_str(key_node)
+            value = _resolve_string_expr(value_node, aliases)
+            if key and value is not None:
+                route = route.replace("{" + key + "}", value)
+
+    return route
+
+
+def _resolve_test_route_expr(route_expr: ast.AST | None, aliases: dict[str, str], route_name_map: dict[str, str]) -> str | None:
+    if route_expr is None:
+        return None
+    route = _resolve_string_expr(route_expr, aliases)
+    if route is not None:
+        return route
+
+    if isinstance(route_expr, ast.Call) and _call_name(route_expr.func) == "reverse":
+        return _resolve_reverse_route(route_expr, aliases, route_name_map)
+
+    return None
+
+
+def _collect_test_route_aliases(node: ast.AST, route_name_map: dict[str, str]) -> dict[str, str]:
+    aliases = _collect_string_aliases(node)
+    assignments = _iter_named_assignments(node)
+    changed = True
+    while changed:
+        changed = False
+        for name, value_node in assignments:
+            if name in aliases:
+                continue
+            resolved = _resolve_test_route_expr(value_node, aliases, route_name_map)
+            if resolved is None:
+                continue
+            aliases[name] = resolved
+            changed = True
+    return aliases
+
+
+def _extract_test_http_calls(
+    tree: ast.AST,
+    source_lines: list[str],
+    route_name_map: dict[str, str],
+) -> list[tuple[str, str, str, int, str]]:
     calls: list[tuple[str, str, str, int, str]] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or not node.name.startswith("test_"):
             continue
-        aliases = _collect_string_aliases(node)
+        aliases = _collect_test_route_aliases(node, route_name_map)
         for child in ast.walk(node):
             if not isinstance(child, ast.Call) or not isinstance(child.func, ast.Attribute):
                 continue
@@ -184,7 +297,7 @@ def _extract_test_http_calls(tree: ast.AST, source_lines: list[str]) -> list[tup
                     if kw.arg in {"path", "url"}:
                         route_expr = kw.value
                         break
-            route = _resolve_string_expr(route_expr, aliases)
+            route = _resolve_test_route_expr(route_expr, aliases, route_name_map)
             if route is None:
                 continue
             normalized = _normalize_http_path(route)
@@ -194,43 +307,6 @@ def _extract_test_http_calls(tree: ast.AST, source_lines: list[str]) -> list[tup
             line = getattr(child, "lineno", getattr(node, "lineno", 1))
             calls.append((node.name, method.upper(), normalized, line, _line_snippet(source_lines, line)))
     return calls
-
-
-def _extract_urlpatterns_route_map(tree: ast.AST) -> dict[str, list[str]]:
-    route_map: dict[str, list[str]] = {}
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Assign) or not node.targets:
-            continue
-        if not any(isinstance(target, ast.Name) and target.id == "urlpatterns" for target in node.targets):
-            continue
-        if not isinstance(node.value, (ast.List, ast.Tuple)):
-            continue
-
-        for elt in node.value.elts:
-            if not isinstance(elt, ast.Call):
-                continue
-            func = elt.func
-            func_name = ""
-            if isinstance(func, ast.Name):
-                func_name = func.id
-            elif isinstance(func, ast.Attribute):
-                func_name = func.attr
-            if func_name not in {"path", "re_path"}:
-                continue
-
-            route_raw = _constant_str(elt.args[0]) if elt.args else None
-            if route_raw is None:
-                continue
-            route_path = _normalize_django_route(route_raw)
-            if route_path is None:
-                continue
-
-            view_expr = elt.args[1] if len(elt.args) > 1 else None
-            view_ref = _resolve_view_ref(view_expr)
-            if view_ref is None:
-                continue
-            route_map.setdefault(view_ref, []).append(route_path)
-    return route_map
 
 
 def _resolve_view_ref(node: ast.AST | None) -> str | None:
@@ -249,13 +325,77 @@ def _resolve_view_ref(node: ast.AST | None) -> str | None:
     return None
 
 
+def _extract_router_var_from_include(node: ast.AST | None) -> str | None:
+    if not isinstance(node, ast.Call):
+        return None
+    if _call_name(node.func) != "include":
+        return None
+    if not node.args:
+        return None
+
+    arg = node.args[0]
+    if isinstance(arg, ast.Attribute) and arg.attr == "urls" and isinstance(arg.value, ast.Name):
+        return arg.value.id
+
+    if isinstance(arg, ast.Tuple) and arg.elts:
+        first = arg.elts[0]
+        if isinstance(first, ast.Attribute) and first.attr == "urls" and isinstance(first.value, ast.Name):
+            return first.value.id
+    return None
+
+
+def _extract_urlpatterns_data(tree: ast.AST) -> tuple[dict[str, list[str]], dict[str, str], dict[str, list[str]]]:
+    route_map: dict[str, list[str]] = {}
+    route_name_map: dict[str, str] = {}
+    router_prefixes: dict[str, list[str]] = {}
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or not node.targets:
+            continue
+        if not any(isinstance(target, ast.Name) and target.id == "urlpatterns" for target in node.targets):
+            continue
+        if not isinstance(node.value, (ast.List, ast.Tuple)):
+            continue
+
+        for elt in node.value.elts:
+            if not isinstance(elt, ast.Call):
+                continue
+            func_name = _call_name(elt.func)
+            if func_name not in {"path", "re_path"}:
+                continue
+
+            route_raw = _constant_str(elt.args[0]) if elt.args else ""
+            if route_raw is None:
+                continue
+            route_path = _normalize_django_route(route_raw)
+            if route_path is None:
+                continue
+
+            route_name: str | None = None
+            for kw in elt.keywords:
+                if kw.arg == "name":
+                    route_name = _constant_str(kw.value)
+                    break
+            if route_name:
+                route_name_map[route_name] = route_path
+
+            view_expr = elt.args[1] if len(elt.args) > 1 else None
+            router_var = _extract_router_var_from_include(view_expr)
+            if router_var is not None:
+                router_prefixes.setdefault(router_var, []).append(route_path)
+                continue
+
+            view_ref = _resolve_view_ref(view_expr)
+            if view_ref is None:
+                continue
+            route_map.setdefault(view_ref, []).append(route_path)
+
+    return route_map, route_name_map, router_prefixes
+
+
 def _is_api_view_decorator(node: ast.AST) -> bool:
     target = node.func if isinstance(node, ast.Call) else node
-    if isinstance(target, ast.Name):
-        return target.id == "api_view"
-    if isinstance(target, ast.Attribute):
-        return target.attr == "api_view"
-    return False
+    return _call_name(target) == "api_view"
 
 
 def _extract_api_view_methods(decorator: ast.AST) -> list[str]:
@@ -297,9 +437,8 @@ def _extract_function_endpoints(
 
 def _is_api_view_class(node: ast.ClassDef) -> bool:
     for base in node.bases:
-        if isinstance(base, ast.Name) and base.id.endswith("APIView"):
-            return True
-        if isinstance(base, ast.Attribute) and base.attr.endswith("APIView"):
+        base_name = _call_name(base)
+        if base_name.endswith("APIView"):
             return True
     return False
 
@@ -329,6 +468,195 @@ def _extract_class_endpoints(
     return endpoints
 
 
+def _is_viewset_class(node: ast.ClassDef) -> bool:
+    for base in node.bases:
+        base_name = _call_name(base)
+        if base_name.endswith("ViewSet"):
+            return True
+    return False
+
+
+def _extract_action_decorator_config(decorator: ast.AST) -> tuple[list[str], bool, str] | None:
+    if not isinstance(decorator, ast.Call) or _call_name(decorator.func) != "action":
+        return None
+
+    methods: list[str] = []
+    detail = False
+    url_path: str | None = None
+
+    for kw in decorator.keywords:
+        if kw.arg == "methods" and isinstance(kw.value, (ast.List, ast.Tuple)):
+            methods = [str(value).upper() for value in (_constant_str(item) for item in kw.value.elts) if value]
+        elif kw.arg == "detail" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, bool):
+            detail = kw.value.value
+        elif kw.arg == "url_path":
+            url_path = _constant_str(kw.value)
+
+    if not methods:
+        return None
+
+    return methods, detail, (url_path or "")
+
+
+def _extract_viewset_actions(class_node: ast.ClassDef, source_lines: list[str]) -> list[ViewsetAction]:
+    actions: list[ViewsetAction] = []
+    for child in class_node.body:
+        if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        method_name = child.name
+        line = getattr(child, "lineno", getattr(class_node, "lineno", 1))
+        snippet = _line_snippet(source_lines, line)
+
+        if method_name in _VIEWSET_DEFAULT_WRITE_METHODS:
+            http_method, suffix = _VIEWSET_DEFAULT_WRITE_METHODS[method_name]
+            actions.append(
+                ViewsetAction(
+                    endpoint_name=f"{class_node.name}.{method_name}",
+                    method=http_method,
+                    path_suffix=suffix,
+                    line=line,
+                    snippet=snippet,
+                )
+            )
+            continue
+
+        for decorator in child.decorator_list:
+            config = _extract_action_decorator_config(decorator)
+            if config is None:
+                continue
+            methods, detail, url_path = config
+            action_path = url_path or method_name.replace("_", "-")
+            suffix = f"/{{id}}/{action_path}" if detail else f"/{action_path}"
+            for method in methods:
+                if method.lower() not in WRITE_METHODS:
+                    continue
+                actions.append(
+                    ViewsetAction(
+                        endpoint_name=f"{class_node.name}.{method_name}",
+                        method=method,
+                        path_suffix=suffix,
+                        line=line,
+                        snippet=snippet,
+                    )
+                )
+    return actions
+
+
+def _extract_router_registrations(tree: ast.AST) -> list[RouterRegistration]:
+    registrations: list[RouterRegistration] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Attribute) or node.func.attr != "register":
+            continue
+        if not isinstance(node.func.value, ast.Name):
+            continue
+        router_var = node.func.value.id
+
+        route_raw = _constant_str(node.args[0]) if node.args else None
+        if route_raw is None:
+            continue
+        route_path = _normalize_django_route(route_raw)
+        if route_path is None:
+            continue
+
+        view_expr = node.args[1] if len(node.args) > 1 else None
+        view_ref = _resolve_view_ref(view_expr)
+        if view_ref is None:
+            continue
+
+        basename: str | None = None
+        for kw in node.keywords:
+            if kw.arg == "basename":
+                basename = _constant_str(kw.value)
+                break
+
+        registrations.append(
+            RouterRegistration(
+                router_var=router_var,
+                route_path=route_path,
+                view_ref=view_ref,
+                basename=basename,
+            )
+        )
+    return registrations
+
+
+def _registration_basename(registration: RouterRegistration) -> str:
+    if registration.basename:
+        return registration.basename
+    token = registration.route_path.strip("/") or "resource"
+    return token.replace("/", "-")
+
+
+def _derive_route_name(path_suffix: str, basename: str) -> str | None:
+    if path_suffix == "":
+        return f"{basename}-list"
+    if path_suffix == "/{id}":
+        return f"{basename}-detail"
+
+    token = path_suffix.strip("/")
+    if token.startswith("{id}/"):
+        token = token[len("{id}/") :]
+    token = token.replace("/", "-")
+    if not token:
+        return None
+    return f"{basename}-{token}"
+
+
+def _extract_viewset_endpoints(
+    parsed: list[tuple[Path, ast.AST, str, list[str]]],
+    router_prefixes: dict[str, list[str]],
+) -> tuple[list[tuple[str, str, str, str, int, str]], dict[str, str]]:
+    registrations: list[RouterRegistration] = []
+    class_index: dict[str, tuple[str, ast.ClassDef, list[str]]] = {}
+
+    for _, tree, relative, source_lines in parsed:
+        registrations.extend(_extract_router_registrations(tree))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and _is_viewset_class(node):
+                class_index[node.name] = (relative, node, source_lines)
+
+    endpoints: list[tuple[str, str, str, str, int, str]] = []
+    route_name_map: dict[str, str] = {}
+    for registration in registrations:
+        class_meta = class_index.get(registration.view_ref)
+        if class_meta is None:
+            continue
+        relative, class_node, source_lines = class_meta
+        actions = _extract_viewset_actions(class_node, source_lines)
+        if not actions:
+            continue
+
+        prefixes = router_prefixes.get(registration.router_var, ["/"])
+        basename = _registration_basename(registration)
+        for action in actions:
+            for prefix in prefixes:
+                base_route = _combine_paths(prefix, registration.route_path)
+                if base_route is None:
+                    continue
+                full_route = _combine_paths(base_route, action.path_suffix)
+                if full_route is None:
+                    continue
+
+                endpoints.append(
+                    (
+                        relative,
+                        action.endpoint_name,
+                        action.method,
+                        full_route,
+                        action.line,
+                        action.snippet,
+                    )
+                )
+
+                route_name = _derive_route_name(action.path_suffix, basename)
+                if route_name is not None:
+                    route_name_map[route_name] = full_route
+
+    return endpoints, route_name_map
+
+
 def scan_django_signals(repo_path: Path) -> DjangoSignals:
     has_django_import = False
     has_drf_import = False
@@ -344,8 +672,8 @@ def scan_django_signals(repo_path: Path) -> DjangoSignals:
             continue
 
         if path.name == "urls.py":
-            route_map = _extract_urlpatterns_route_map(tree)
-            if route_map:
+            route_map, _, router_prefixes = _extract_urlpatterns_data(tree)
+            if route_map or router_prefixes:
                 has_urlpatterns = True
 
         for node in ast.walk(tree):
@@ -391,11 +719,21 @@ def collect_django_artifacts(repo_path: Path) -> ArtifactBundle:
         parsed.append((path, tree, relative, text.splitlines()))
 
     route_map: dict[str, list[str]] = {}
+    route_name_map: dict[str, str] = {}
+    router_prefixes: dict[str, list[str]] = {}
     for path, tree, _, _ in parsed:
         if path.name != "urls.py":
             continue
-        for view_ref, route_paths in _extract_urlpatterns_route_map(tree).items():
+        local_route_map, local_route_name_map, local_router_prefixes = _extract_urlpatterns_data(tree)
+        for view_ref, route_paths in local_route_map.items():
             route_map.setdefault(view_ref, []).extend(route_paths)
+        route_name_map.update(local_route_name_map)
+        for router_var, prefixes in local_router_prefixes.items():
+            router_prefixes.setdefault(router_var, []).extend(prefixes)
+
+    viewset_endpoints, viewset_route_names = _extract_viewset_endpoints(parsed, router_prefixes)
+    route_name_map.update(viewset_route_names)
+    bundle.write_endpoints.extend(viewset_endpoints)
 
     for path, tree, relative, source_lines in parsed:
         for endpoint_name, method, route_path, line, snippet in _extract_function_endpoints(tree, route_map, source_lines):
@@ -406,7 +744,7 @@ def collect_django_artifacts(repo_path: Path) -> ArtifactBundle:
         if path in bundle.test_files:
             for case, line, snippet in _extract_test_cases(tree, source_lines):
                 bundle.test_cases.append((relative, case, line, snippet))
-            for test_name, method, route_path, line, snippet in _extract_test_http_calls(tree, source_lines):
+            for test_name, method, route_path, line, snippet in _extract_test_http_calls(tree, source_lines, route_name_map):
                 bundle.test_http_calls.append((relative, test_name, method, route_path, line, snippet))
 
     return bundle
