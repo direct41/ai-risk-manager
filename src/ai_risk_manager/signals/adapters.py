@@ -144,4 +144,60 @@ def artifact_bundle_to_signal_bundle(artifacts: ArtifactBundle) -> SignalBundle:
             )
         )
 
+    for file_path, endpoint_name, effect_kind, effect_target, line, snippet in artifacts.side_effect_requirements:
+        supported_kinds.add("side_effect_emit_contract")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:side_effect:required:{file_path}:{endpoint_name}:{effect_kind}:{effect_target}:{line or 0}",
+                kind="side_effect_emit_contract",
+                source_ref=_line_ref(file_path, line),
+                confidence="medium",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "role": "required",
+                    "owner_name": endpoint_name,
+                    "effect_kind": effect_kind,
+                    "effect_target": effect_target,
+                    "snippet": snippet,
+                },
+            )
+        )
+
+    for file_path, emitter_name, effect_kind, effect_target, line, snippet in artifacts.side_effect_emits:
+        supported_kinds.add("side_effect_emit_contract")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:side_effect:emitted:{file_path}:{emitter_name}:{effect_kind}:{effect_target}:{line or 0}",
+                kind="side_effect_emit_contract",
+                source_ref=_line_ref(file_path, line),
+                confidence="medium",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "role": "emitted",
+                    "owner_name": emitter_name,
+                    "effect_kind": effect_kind,
+                    "effect_target": effect_target,
+                    "snippet": snippet,
+                },
+            )
+        )
+
+    for file_path, endpoint_name, auth_mechanism, auth_subject, line, snippet in artifacts.authorization_boundaries:
+        supported_kinds.add("authorization_boundary_enforced")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:authz:{file_path}:{endpoint_name}:{auth_mechanism}:{auth_subject}:{line or 0}",
+                kind="authorization_boundary_enforced",
+                source_ref=_line_ref(file_path, line),
+                confidence="medium",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "owner_name": endpoint_name,
+                    "auth_mechanism": auth_mechanism,
+                    "auth_subject": auth_subject,
+                    "snippet": snippet,
+                },
+            )
+        )
+
     return SignalBundle(signals=signals, supported_kinds=supported_kinds)

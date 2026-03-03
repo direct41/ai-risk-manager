@@ -28,11 +28,6 @@
 
 ## Next (Global, Gate-Based)
 
-- Stage 5: Universal plugin contract (v1)
-  - Formalize a versioned plugin contract for stack analyzers:
-    - required capability signals by support level (`l0/l1/l2`)
-    - plugin-declared capability matrix and unsupported markers
-    - shared conformance tests for every plugin
 - Stage 6: Universal risk capability pack
   - Add stack-agnostic risk signals and deterministic rules for:
     - `side_effect_emit_contract`
@@ -62,7 +57,7 @@
 2. [x] Stage 2: coverage mapping quality improvements.
 3. [x] Stage 3: policy engine externalization (`.airiskpolicy`).
 4. [x] Stage 4: next stack expansion behind trust gates.
-5. [ ] Stage 5: universal plugin contract (v1) + conformance gates.
+5. [x] Stage 5: universal plugin contract (v1) + conformance gates.
 6. [ ] Stage 6: universal risk capability pack (`side_effect_emit_contract`, `authorization_boundary_enforced`).
 7. [ ] Stage 7: contract-driven stack expansion (parity + trust gates).
 8. [ ] Stage 8: service-grade hardening for deployment scenarios.

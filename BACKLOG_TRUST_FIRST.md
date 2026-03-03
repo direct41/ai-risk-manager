@@ -99,14 +99,14 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Required stack-parity eval cases pass (`milestone7_django_viewset`, `milestone8_django_dependency`).
 
 ## Epic 7: Universal Plugin Contract (P1)
-- Status: Planned (completion-gate)
+- Status: Done (completion-gate)
 - Outcome: all backend plugins integrate through one versioned contract
 
 ### Stories
-1. [ ] Define `plugin_contract_version` and required capabilities per support level (`l0/l1/l2`).
-2. [ ] Add plugin self-declared capability matrix and explicit unsupported markers.
-3. [ ] Add shared conformance test suite and make it mandatory in CI for each plugin.
-4. [ ] Publish plugin conformance artifact in eval outputs.
+1. [x] Define `plugin_contract_version` and required capabilities per support level (`l0/l1/l2`).
+2. [x] Add plugin self-declared capability matrix and explicit unsupported markers.
+3. [x] Add shared conformance test suite and make it mandatory in CI for each plugin.
+4. [x] Publish plugin conformance artifact in eval outputs.
 
 ### Definition of Done
 - Contract spec is versioned and documented.
@@ -118,9 +118,9 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Outcome: missing high-value risk scenarios are covered by shared core logic
 
 ### Stories
-1. [ ] Add extraction contract for `side_effect_emit_contract`.
+1. [x] Add extraction contract for `side_effect_emit_contract`.
 2. [ ] Add deterministic rule `missing_required_side_effect` with evidence-driven output.
-3. [ ] Add extraction contract for `authorization_boundary_enforced`.
+3. [x] Add extraction contract for `authorization_boundary_enforced`.
 4. [ ] Add deterministic rule `critical_write_missing_authz` with policy integration.
 5. [ ] Add eval cases for pass/fail paths across current supported stacks.
 

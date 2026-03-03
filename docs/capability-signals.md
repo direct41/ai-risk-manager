@@ -19,8 +19,8 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 | `state_transition_handled_guarded` | Runtime status mutation and guard presence | `ArtifactBundle.handled_transitions` (`invariant_guarded`) | `Graph.handled_transitions` entries | `broken_invariant_on_transition` | implemented |
 | `test_to_endpoint_coverage` | Evidence that tests exercise write paths | `ArtifactBundle.test_cases` + `test_http_calls` (path params, aliases, fixture/reverse mapping) | `Node(type=\"TestCase\")` + `Edge(type=\"covered_by\")` | `critical_path_no_tests` | implemented |
 | `dependency_version_policy` | Supply-chain risk from mutable dependency specs | `ArtifactBundle.dependency_specs` via shared extractor (`pyproject.toml` + requirements files) | `Node(type=\"Dependency\")` with `details.policy_violation/scope` | `dependency_risk_policy_violation` | implemented |
-| `side_effect_emit_contract` | Mandatory side-effect after critical write (event, notification, webhook, job) | Not first-class today | None yet | None yet | missing |
-| `authorization_boundary_enforced` | Authz checks on critical path writes | Not first-class today (guard hints only cover transition invariants) | None yet | None yet (no dedicated auth rule) | missing |
+| `side_effect_emit_contract` | Mandatory side-effect after critical write (event, notification, webhook, job) | `ArtifactBundle.side_effect_requirements` + `side_effect_emits` contract fields (plugins not implemented yet) | None yet | None yet | partial |
+| `authorization_boundary_enforced` | Authz checks on critical path writes | `ArtifactBundle.authorization_boundaries` contract field (plugins not implemented yet) | None yet | None yet (no dedicated auth rule) | partial |
 
 ## Rule-to-Signal Dependency
 
@@ -33,17 +33,17 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 
 ## Current Gaps Blocking Higher Coverage
 
-1. No first-class side-effect contract (`db write -> required emit/notify`).
-2. No deterministic authorization enforcement rule for write endpoints.
+1. Side-effect contract exists in artifact/signal schema but no stack plugin extracts it yet.
+2. Authorization contract exists in artifact/signal schema but no stack plugin extracts it yet.
 3. Contract binding is FastAPI-oriented (`pydantic_models`) and only partially generalized for Django/DRF.
 
 ## Recommended Next Capability Pack (Highest ROI)
 
-1. Add `side_effect_emit_contract` extraction.
+1. Implement plugin extraction for `side_effect_emit_contract`.
    - Collector artifacts: required emit operations + observed emit operations per write endpoint.
    - Rule: `missing_required_side_effect`.
    - Eval: one pass case, one fail case (missing emit).
-2. Add `authorization_boundary_enforced` extraction.
+2. Implement plugin extraction for `authorization_boundary_enforced`.
    - Collector artifacts: endpoint auth decorators/permissions/policy checks.
    - Rule: `critical_write_missing_authz`.
    - Eval: endpoint with and without authz guard.

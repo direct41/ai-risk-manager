@@ -52,3 +52,19 @@ Breaking changes include:
 
 - changing meaning of existing fields (`enabled`, `severity`, `gate`)
 - removing version `1` support without a major release
+
+## Plugin contract compatibility
+
+- Collector plugin contract current version: `1`.
+- Contract governs plugin capability declaration and conformance gates.
+- New plugins must declare:
+  - `plugin_contract_version`
+  - `target_support_level`
+  - `supported_signal_kinds`
+  - `unsupported_signal_kinds`
+
+Breaking changes include:
+
+- changing support-level required capabilities (`l0/l1/l2`) incompatibly
+- changing semantics of existing signal kinds in the contract
+- removing support for contract version `1` without a major release
