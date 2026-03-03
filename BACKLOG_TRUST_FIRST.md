@@ -152,7 +152,7 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 1. [x] Add API authn/authz controls and secure defaults for non-local usage.
 2. [x] Add request-level guardrails (rate limits, input size/timeouts).
 3. [x] Add operational controls (audit trail, run correlation IDs, failure diagnostics).
-4. [ ] Add deployment hardening docs and minimal security checklist.
+4. [x] Add deployment hardening docs and minimal security checklist.
 
 ### Definition of Done
 - Threat model for API deployment path is documented and validated.

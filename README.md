@@ -245,6 +245,7 @@ python scripts/init_stack_plugin.py --stack-id flask_pytest
 
 - `docs/ru.md`: Russian quick guide
 - `docs/compatibility.md`: CLI/API/JSON compatibility policy
+- `docs/deployment-hardening.md`: API deployment baseline and security checklist
 - `docs/capability-signals.md`: stack-agnostic signal model
 - `docs/plugin-contract.md`: plugin contract v1 and conformance rules
 - `docs/stack-expansion-candidates.md`: ranked shortlist for next stack expansion
