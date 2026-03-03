@@ -26,21 +26,12 @@
   - confidence/evidence-based ranking in reports
   - dependency policy profiles with scope-aware severity
 
-## Next (Global, Gate-Based)
+## Next (Post Stage 8, Gate-Based)
 
-- Stage 6: Universal risk capability pack
-  - Add stack-agnostic risk signals and deterministic rules for:
-    - `side_effect_emit_contract`
-    - `authorization_boundary_enforced`
-  - Keep rule logic in shared core, with plugins only mapping framework syntax to common signals.
-- Stage 7: Contract-driven stack expansion
-  - Expand beyond FastAPI/Django only through the common signal contract.
-  - Require parity eval cases and trust-gate pass for each added stack before support-level promotion.
-- Stage 8: Service-grade hardening
-  - Harden API/runtime for broader deployment scenarios:
-    - authn/authz
-    - rate limiting
-    - operational controls (auditability, reliability guardrails)
+- Universal core and hardening stages are complete through Stage 8.
+- Next delivery focus:
+  - Stage 9: add next stack plugin candidates using contract v1 + parity eval gates.
+  - Stage 10: strengthen service operations (multi-instance rate limiting, richer auth model, external audit pipeline).
 
 ## Delivery Model (Stage-Gate)
 
@@ -58,6 +49,6 @@
 3. [x] Stage 3: policy engine externalization (`.airiskpolicy`).
 4. [x] Stage 4: next stack expansion behind trust gates.
 5. [x] Stage 5: universal plugin contract (v1) + conformance gates.
-6. [ ] Stage 6: universal risk capability pack (`side_effect_emit_contract`, `authorization_boundary_enforced`).
-7. [ ] Stage 7: contract-driven stack expansion (parity + trust gates).
-8. [ ] Stage 8: service-grade hardening for deployment scenarios.
+6. [x] Stage 6: universal risk capability pack (`side_effect_emit_contract`, `authorization_boundary_enforced`).
+7. [x] Stage 7: contract-driven stack expansion (parity + trust gates).
+8. [x] Stage 8: service-grade hardening for deployment scenarios.

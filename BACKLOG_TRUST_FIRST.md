@@ -114,7 +114,7 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - CI blocks plugin changes that violate contract requirements.
 
 ## Epic 8: Universal Risk Capability Pack (P1)
-- Status: Planned (completion-gate)
+- Status: Completed
 - Outcome: missing high-value risk scenarios are covered by shared core logic
 
 ### Stories
@@ -122,7 +122,7 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 2. [x] Add deterministic rule `missing_required_side_effect` with evidence-driven output.
 3. [x] Add extraction contract for `authorization_boundary_enforced`.
 4. [x] Add deterministic rule `critical_write_missing_authz` with policy integration.
-5. [ ] Add eval cases for pass/fail paths across current supported stacks.
+5. [x] Add eval cases for pass/fail paths across current supported stacks.
 
 ### Definition of Done
 - Both new signals are represented in the common signal model.
@@ -130,13 +130,13 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Trust/eval gates show no net precision regression after enabling rules.
 
 ## Epic 9: Contract-Driven Stack Expansion Program (P2)
-- Status: Planned (completion-gate)
+- Status: Completed
 - Outcome: adding stacks does not multiply core complexity
 
 ### Stories
 1. [x] Select next candidate stacks based on contract fit and expected risk coverage gain.
 2. [x] Add plugin scaffolding/template based on Epic 7 contract.
-3. [ ] Deliver parity eval suites for each added stack (positive, negative, edge cases).
+3. [x] Deliver parity eval suites for each added stack (positive, negative, edge cases).
 4. [x] Define support-level promotion criteria (`l0 -> l1 -> l2`) per stack.
 
 ### Definition of Done
@@ -145,7 +145,7 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Core rule engine remains stack-agnostic (no stack-specific rule forks in core).
 
 ## Epic 10: Service-Grade Hardening (P2)
-- Status: In Progress (completion-gate)
+- Status: Completed
 - Outcome: API/runtime is safe for broader deployment scenarios
 
 ### Stories

@@ -108,6 +108,12 @@ CASES = [
         required_rules={"dependency_risk_policy_violation"},
         forbidden_rules={"critical_path_no_tests"},
     ),
+    EvalCase(
+        name="milestone9_django_missing_tests",
+        repo_rel="eval/repos/milestone9_django_missing_tests",
+        required_rules={"critical_path_no_tests"},
+        forbidden_rules={"dependency_risk_policy_violation"},
+    ),
 ]
 
 
