@@ -14,6 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_ROOT = REPO_ROOT / "eval" / "results"
 HISTORY_ROOT = REPO_ROOT / "eval" / ".history"
 TRUST_THRESHOLDS_PATH = REPO_ROOT / "eval" / "trust_thresholds.json"
+SUPPORT_LEVEL_PROMOTION_PATH = REPO_ROOT / "eval" / "support_level_promotion.json"
 DEFAULT_HISTORY_PATH = HISTORY_ROOT / "trust_gate_history.jsonl"
 DEFAULT_TREND_WINDOW = 12
 DEFAULT_EXPANSION_GATE_CONSECUTIVE_RUNS = 4
@@ -38,6 +39,21 @@ DEFAULT_TRUST_THRESHOLDS: dict[str, float] = {
     "max_avg_triage_time_proxy_min": 10.0,
     "max_flaky_cases": 0.0,
     "max_avg_fallback_rate": 0.15,
+}
+DEFAULT_SUPPORT_LEVEL_PROMOTION_POLICY: dict[str, object] = {
+    "version": 1,
+    "stacks": {
+        "fastapi_pytest": {
+            "eligible_level": "l2",
+            "required_cases": ["milestone2_fastapi", "milestone5_balanced"],
+            "required_consecutive_trust_passes": 2,
+        },
+        "django_drf": {
+            "eligible_level": "l2",
+            "required_cases": ["milestone7_django_viewset", "milestone8_django_dependency"],
+            "required_consecutive_trust_passes": 2,
+        },
+    },
 }
 
 if str(REPO_ROOT / "src") not in sys.path:
@@ -335,6 +351,50 @@ def load_trust_thresholds(path: Path = TRUST_THRESHOLDS_PATH) -> dict[str, float
     return thresholds
 
 
+def load_support_level_promotion_policy(path: Path = SUPPORT_LEVEL_PROMOTION_PATH) -> dict[str, object]:
+    policy: dict[str, object] = dict(DEFAULT_SUPPORT_LEVEL_PROMOTION_POLICY)
+    if not path.is_file():
+        return policy
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return policy
+    if not isinstance(payload, dict):
+        return policy
+
+    version = payload.get("version", 1)
+    stacks = payload.get("stacks", {})
+    if not isinstance(version, int) or not isinstance(stacks, dict):
+        return policy
+
+    normalized_stacks: dict[str, dict[str, object]] = {}
+    for stack_id, raw in stacks.items():
+        if not isinstance(stack_id, str) or not isinstance(raw, dict):
+            continue
+        eligible_level = raw.get("eligible_level", "l2")
+        required_cases = raw.get("required_cases", [])
+        required_passes = raw.get("required_consecutive_trust_passes", 1)
+        if (
+            isinstance(eligible_level, str)
+            and isinstance(required_cases, list)
+            and isinstance(required_passes, int)
+            and required_passes >= 1
+        ):
+            normalized_cases = [str(item) for item in required_cases if isinstance(item, str)]
+            normalized_stacks[stack_id] = {
+                "eligible_level": eligible_level,
+                "required_cases": normalized_cases,
+                "required_consecutive_trust_passes": required_passes,
+            }
+
+    if not normalized_stacks:
+        return policy
+    return {
+        "version": version,
+        "stacks": normalized_stacks,
+    }
+
+
 def run_case(case: EvalCase) -> dict:
     repo_path = REPO_ROOT / case.repo_rel
     out_dir = OUTPUT_ROOT / case.name
@@ -549,6 +609,76 @@ def build_plugin_conformance_payload() -> dict[str, object]:
     }
 
 
+def build_support_level_promotion_payload(
+    *,
+    results: list[dict],
+    trend_history: list[dict],
+    trust_gate_payload: dict[str, object],
+    plugin_conformance_payload: dict[str, object],
+    policy: dict[str, object],
+) -> dict[str, object]:
+    result_by_case = {str(row.get("case")): str(row.get("status")) for row in results}
+    plugin_rows = plugin_conformance_payload.get("plugins", [])
+    plugin_status_by_stack: dict[str, str] = {}
+    if isinstance(plugin_rows, list):
+        for row in plugin_rows:
+            if not isinstance(row, dict):
+                continue
+            stack_id = row.get("stack_id")
+            status = row.get("status")
+            if isinstance(stack_id, str) and isinstance(status, str):
+                plugin_status_by_stack[stack_id] = status
+
+    trust_passed = str(trust_gate_payload.get("status")) == "passed"
+    consecutive_trust_passes = _count_consecutive_trust_passes(trend_history)
+    stacks_policy = policy.get("stacks", {})
+    stack_rows: list[dict[str, object]] = []
+    for stack_id, raw in stacks_policy.items():
+        if not isinstance(stack_id, str) or not isinstance(raw, dict):
+            continue
+        eligible_level = str(raw.get("eligible_level", "l2"))
+        required_cases = [str(item) for item in raw.get("required_cases", []) if isinstance(item, str)]
+        required_passes = int(raw.get("required_consecutive_trust_passes", 1))
+        missing_cases = [case for case in required_cases if case not in result_by_case]
+        failing_cases = [case for case in required_cases if result_by_case.get(case) not in {None, "passed"}]
+        plugin_status = plugin_status_by_stack.get(stack_id, "missing")
+        plugin_ok = plugin_status == "passed"
+        trust_ok = trust_passed and consecutive_trust_passes >= required_passes
+        reasons: list[str] = []
+        if not plugin_ok:
+            reasons.append(f"plugin conformance status is '{plugin_status}'")
+        if not trust_ok:
+            reasons.append(
+                "trust gate requirement not satisfied "
+                f"(consecutive={consecutive_trust_passes}, required={required_passes}, status={trust_gate_payload.get('status')})"
+            )
+        if missing_cases:
+            reasons.append(f"missing required eval cases: {missing_cases}")
+        if failing_cases:
+            reasons.append(f"required eval cases not passed: {failing_cases}")
+
+        stack_rows.append(
+            {
+                "stack_id": stack_id,
+                "eligible_level": eligible_level,
+                "status": "eligible" if not reasons else "blocked",
+                "required_cases": required_cases,
+                "missing_cases": missing_cases,
+                "failing_cases": failing_cases,
+                "required_consecutive_trust_passes": required_passes,
+                "consecutive_trust_passes": consecutive_trust_passes,
+                "plugin_conformance_status": plugin_status,
+                "reasons": reasons,
+            }
+        )
+
+    return {
+        "version": policy.get("version", 1),
+        "status": "ready" if stack_rows and all(row["status"] == "eligible" for row in stack_rows) else "blocked",
+        "stacks": stack_rows,
+    }
+
+
 def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_gates: bool) -> int:
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     (OUTPUT_ROOT / "summary.json").write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -573,6 +703,18 @@ def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_
     plugin_conformance_payload = build_plugin_conformance_payload()
     (OUTPUT_ROOT / "plugin_conformance.json").write_text(
         json.dumps(plugin_conformance_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    promotion_policy = load_support_level_promotion_policy()
+    support_level_promotion_payload = build_support_level_promotion_payload(
+        results=results,
+        trend_history=trend_history,
+        trust_gate_payload=gate_payload,
+        plugin_conformance_payload=plugin_conformance_payload,
+        policy=promotion_policy,
+    )
+    (OUTPUT_ROOT / "support_level_promotion.json").write_text(
+        json.dumps(support_level_promotion_payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
@@ -633,6 +775,21 @@ def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_
         lines.append("- Gate errors:")
         for reason in plugin_conformance_payload["errors"]:
             lines.append(f"  - {reason}")
+    lines.extend(
+        [
+            "",
+            "## Support-Level Promotion",
+            "",
+            f"- Gate status: `{str(support_level_promotion_payload['status']).upper()}`",
+        ]
+    )
+    for stack_row in support_level_promotion_payload["stacks"]:
+        lines.append(
+            f"- {stack_row['stack_id']} -> {stack_row['eligible_level']}: "
+            f"`{str(stack_row['status']).upper()}`"
+        )
+        if stack_row["reasons"]:
+            lines.append(f"  - reasons: {', '.join(str(item) for item in stack_row['reasons'])}")
     lines.append("")
 
     lines.extend(

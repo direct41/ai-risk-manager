@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "stacks": {
+    "fastapi_pytest": {
+      "eligible_level": "l2",
+      "required_cases": [
+        "milestone2_fastapi",
+        "milestone5_balanced"
+      ],
+      "required_consecutive_trust_passes": 2
+    },
+    "django_drf": {
+      "eligible_level": "l2",
+      "required_cases": [
+        "milestone7_django_viewset",
+        "milestone8_django_dependency"
+      ],
+      "required_consecutive_trust_passes": 2
+    }
+  }
+}
