@@ -184,10 +184,12 @@ def test_api_requires_token_when_airisk_api_token_is_configured(tmp_path: Path, 
         "path": str(tmp_path),
         "mode": "full",
         "no_llm": True,
+        "output_dir": str(tmp_path / "untrusted-audit-dir"),
     }
     unauthorized = client.post("/v1/analyze", json=payload)
     assert unauthorized.status_code == 401
     assert unauthorized.json()["detail"] == "Unauthorized"
+    assert not (tmp_path / "untrusted-audit-dir" / "api_audit.json").exists()
 
     wrong_key = client.post("/v1/analyze", json=payload, headers={"X-API-Key": "wrong"})
     assert wrong_key.status_code == 401

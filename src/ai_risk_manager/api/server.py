@@ -152,13 +152,6 @@ def _resolve_correlation_id(x_correlation_id: str | None, x_request_id: str | No
     return uuid.uuid4().hex
 
 
-def _resolve_output_dir_hint(payload: dict[str, Any]) -> Path:
-    raw = payload.get("output_dir")
-    if isinstance(raw, str) and raw.strip():
-        return Path(raw).resolve()
-    return Path(".riskmap").resolve()
-
-
 def _utc_now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
@@ -194,7 +187,7 @@ def _write_audit_event(
     status: str,
     http_status: int,
     request_payload: dict[str, Any],
-    output_dir: Path,
+    output_dir: Path | None,
     exit_code: int | None = None,
     error_detail: str | None = None,
     diagnostics: dict[str, Any] | None = None,
@@ -215,21 +208,22 @@ def _write_audit_event(
         "exit_code": exit_code,
         "duration_ms": duration_ms,
         "request": request_view,
-        "output_dir": str(output_dir),
+        "output_dir": str(output_dir) if output_dir is not None else None,
     }
     if error_detail:
         payload["error_detail"] = error_detail
     if diagnostics:
         payload["diagnostics"] = diagnostics
 
-    try:
-        output_dir.mkdir(parents=True, exist_ok=True)
-        (output_dir / "api_audit.json").write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
-            encoding="utf-8",
-        )
-    except OSError:
-        pass
+    if output_dir is not None:
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            (output_dir / "api_audit.json").write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
 
     audit_log_path = _configured_audit_log_path()
     if audit_log_path is None:
@@ -312,7 +306,6 @@ def create_app() -> FastAPIApp:
     ) -> Any:
         started_at = time.perf_counter()
         correlation_id = _resolve_correlation_id(x_correlation_id, x_request_id)
-        output_dir_hint = _resolve_output_dir_hint(request_payload)
 
         try:
             request = cast(Any, AnalyzeRequestModel.model_validate(request_payload))
@@ -326,7 +319,7 @@ def create_app() -> FastAPIApp:
                     status="validation_error",
                     http_status=422,
                     request_payload=request_payload,
-                    output_dir=output_dir_hint,
+                    output_dir=None,
                     error_detail=_sanitize_error_detail(detail),
                 )
                 raise HTTPException(status_code=422, detail=detail) from exc
@@ -356,7 +349,7 @@ def create_app() -> FastAPIApp:
                 status="request_rejected",
                 http_status=exc.status_code,
                 request_payload=request_payload,
-                output_dir=output_dir_hint,
+                output_dir=None,
                 error_detail=_sanitize_error_detail(exc.detail),
             )
             raise
@@ -370,7 +363,7 @@ def create_app() -> FastAPIApp:
                 status="invalid_repo_path",
                 http_status=400,
                 request_payload=request_payload,
-                output_dir=output_dir_hint,
+                output_dir=None,
                 error_detail=str(exc),
             )
             raise HTTPException(status_code=400, detail=str(exc)) from exc
