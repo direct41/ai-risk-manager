@@ -7,7 +7,6 @@ from ai_risk_manager.pipeline.context_builder import build_run_context
 from ai_risk_manager.pipeline.run import run_pipeline
 from ai_risk_manager.sample_repo import resolve_sample_repo_path
 from ai_risk_manager.schemas.types import to_dict
-from pydantic import ValidationError
 
 _API_INSTALL_HINT = "Install API dependencies with: pip install -e '.[api]'."
 _API_IMPORT_ERROR: Exception | None = None
@@ -99,8 +98,11 @@ def create_app() -> FastAPIApp:
     def analyze(request_payload: dict[str, Any] = Body(...)) -> Any:
         try:
             request = cast(Any, AnalyzeRequestModel.model_validate(request_payload))
-        except ValidationError as exc:
-            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        except Exception as exc:
+            errors = getattr(exc, "errors", None)
+            if callable(errors):
+                raise HTTPException(status_code=422, detail=errors()) from exc
+            raise
 
         try:
             repo_path = _resolve_repo_path(request.path, request.sample)
