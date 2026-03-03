@@ -163,3 +163,31 @@ def test_api_accepts_ai_first_request_fields(tmp_path: Path, write_file) -> None
     assert payload["summary"]["competitive_mode"] in {"deterministic", "hybrid"}
     assert payload["summary"]["graph_mode_applied"] in {"deterministic", "enriched"}
     assert isinstance(payload["summary"]["semantic_signal_count"], int)
+
+
+def test_api_requires_token_when_airisk_api_token_is_configured(tmp_path: Path, write_file, monkeypatch) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_api.py", "def test_smoke():\n    assert True\n")
+    monkeypatch.setenv("AIRISK_API_TOKEN", "secret-token")
+
+    client = TestClient(app)
+    payload = {
+        "path": str(tmp_path),
+        "mode": "full",
+        "no_llm": True,
+    }
+    unauthorized = client.post("/v1/analyze", json=payload)
+    assert unauthorized.status_code == 401
+    assert unauthorized.json()["detail"] == "Unauthorized"
+
+    wrong_key = client.post("/v1/analyze", json=payload, headers={"X-API-Key": "wrong"})
+    assert wrong_key.status_code == 401
+
+    with_api_key = client.post("/v1/analyze", json=payload, headers={"X-API-Key": "secret-token"})
+    assert with_api_key.status_code == 200
+
+    with_bearer = client.post("/v1/analyze", json=payload, headers={"Authorization": "Bearer secret-token"})
+    assert with_bearer.status_code == 200

@@ -156,6 +156,16 @@ Run server:
 riskmap-api
 ```
 
+Optional hardening:
+
+```bash
+AIRISK_API_TOKEN=change-me riskmap-api
+```
+
+When `AIRISK_API_TOKEN` is set, `POST /v1/analyze` requires either:
+- `X-API-Key: <token>`
+- `Authorization: Bearer <token>`
+
 Health:
 
 ```bash

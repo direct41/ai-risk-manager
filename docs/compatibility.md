@@ -24,6 +24,7 @@ Breaking changes include:
 - moving pipeline execution errors from `exit_code` to incompatible HTTP semantics
 
 Additive response fields are allowed in minor releases.
+Enabling optional API auth via `AIRISK_API_TOKEN` is considered additive hardening; endpoint contracts stay unchanged.
 
 ## JSON artifact compatibility
 

@@ -13,6 +13,7 @@ _API_IMPORT_ERROR: Exception | None = None
 _FastAPI: Any = None
 _HTTPException: Any = None
 _Body: Any = None
+_Header: Any = None
 _AnalyzeRequest: Any = None
 _AnalyzeResponse: Any = None
 _HealthResponse: Any = None
@@ -26,12 +27,14 @@ try:
     from fastapi import FastAPI as FastAPIImport
     from fastapi import HTTPException as HTTPExceptionImport
     from fastapi import Body as BodyImport
+    from fastapi import Header as HeaderImport
     from ai_risk_manager.api.models import AnalyzeRequest as AnalyzeRequestImport
     from ai_risk_manager.api.models import AnalyzeResponse as AnalyzeResponseImport
     from ai_risk_manager.api.models import HealthResponse as HealthResponseImport
     _FastAPI = FastAPIImport
     _HTTPException = HTTPExceptionImport
     _Body = BodyImport
+    _Header = HeaderImport
     _AnalyzeRequest = AnalyzeRequestImport
     _AnalyzeResponse = AnalyzeResponseImport
     _HealthResponse = HealthResponseImport
@@ -59,10 +62,41 @@ def _missing_dependency_error(exc: Exception) -> ApiDependencyError:
     return ApiDependencyError(f"API adapter is unavailable ({exc.__class__.__name__}: {exc}). {_API_INSTALL_HINT}")
 
 
-def _load_api_dependencies() -> tuple[Any, Any, Any, Any, Any, Any]:
+def _load_api_dependencies() -> tuple[Any, Any, Any, Any, Any, Any, Any]:
     if _API_IMPORT_ERROR is not None:
         raise _missing_dependency_error(_API_IMPORT_ERROR) from _API_IMPORT_ERROR
-    return _FastAPI, _HTTPException, _Body, _AnalyzeRequest, _AnalyzeResponse, _HealthResponse
+    return _FastAPI, _HTTPException, _Body, _Header, _AnalyzeRequest, _AnalyzeResponse, _HealthResponse
+
+
+def _configured_api_token() -> str | None:
+    token = os.getenv("AIRISK_API_TOKEN", "").strip()
+    return token or None
+
+
+def _extract_bearer_token(authorization: str | None) -> str | None:
+    if not authorization:
+        return None
+    parts = authorization.strip().split(maxsplit=1)
+    if len(parts) != 2:
+        return None
+    scheme, token = parts
+    if scheme.lower() != "bearer":
+        return None
+    return token.strip() or None
+
+
+def _enforce_api_auth(
+    *,
+    expected_token: str | None,
+    x_api_key: str | None,
+    authorization: str | None,
+    http_exception_cls: Any,
+) -> None:
+    if expected_token is None:
+        return
+    provided_token = (x_api_key or "").strip() or (_extract_bearer_token(authorization) or "")
+    if provided_token != expected_token:
+        raise http_exception_cls(status_code=401, detail="Unauthorized")
 
 
 def _resolve_repo_path(path: str, sample: bool) -> Path:
@@ -87,7 +121,9 @@ def _collect_artifacts(output_dir: Path) -> dict[str, str]:
 
 
 def create_app() -> FastAPIApp:
-    FastAPI, HTTPException, Body, AnalyzeRequestModel, AnalyzeResponseModel, HealthResponseModel = _load_api_dependencies()
+    FastAPI, HTTPException, Body, Header, AnalyzeRequestModel, AnalyzeResponseModel, HealthResponseModel = (
+        _load_api_dependencies()
+    )
     app = FastAPI(title="AI Risk Manager API", version=__version__)
 
     @app.get("/healthz", response_model=HealthResponseModel)
@@ -95,7 +131,11 @@ def create_app() -> FastAPIApp:
         return HealthResponseModel(status="ok", version=__version__)
 
     @app.post("/v1/analyze", response_model=AnalyzeResponseModel)
-    def analyze(request_payload: dict[str, Any] = Body(...)) -> Any:
+    def analyze(
+        request_payload: dict[str, Any] = Body(...),
+        x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+        authorization: str | None = Header(default=None, alias="Authorization"),
+    ) -> Any:
         try:
             request = cast(Any, AnalyzeRequestModel.model_validate(request_payload))
         except Exception as exc:
@@ -103,6 +143,13 @@ def create_app() -> FastAPIApp:
             if callable(errors):
                 raise HTTPException(status_code=422, detail=errors()) from exc
             raise
+
+        _enforce_api_auth(
+            expected_token=_configured_api_token(),
+            x_api_key=x_api_key,
+            authorization=authorization,
+            http_exception_cls=HTTPException,
+        )
 
         try:
             repo_path = _resolve_repo_path(request.path, request.sample)

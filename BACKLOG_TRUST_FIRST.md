@@ -145,11 +145,11 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Core rule engine remains stack-agnostic (no stack-specific rule forks in core).
 
 ## Epic 10: Service-Grade Hardening (P2)
-- Status: Planned (completion-gate)
+- Status: In Progress (completion-gate)
 - Outcome: API/runtime is safe for broader deployment scenarios
 
 ### Stories
-1. [ ] Add API authn/authz controls and secure defaults for non-local usage.
+1. [x] Add API authn/authz controls and secure defaults for non-local usage.
 2. [ ] Add request-level guardrails (rate limits, input size/timeouts).
 3. [ ] Add operational controls (audit trail, run correlation IDs, failure diagnostics).
 4. [ ] Add deployment hardening docs and minimal security checklist.
