@@ -225,6 +225,7 @@ python scripts/init_stack_plugin.py --stack-id flask_pytest
 - `docs/compatibility.md`: CLI/API/JSON compatibility policy
 - `docs/capability-signals.md`: stack-agnostic signal model
 - `docs/plugin-contract.md`: plugin contract v1 and conformance rules
+- `docs/stack-expansion-candidates.md`: ranked shortlist for next stack expansion
 - `ROADMAP.md`: product roadmap
 - `BACKLOG_TRUST_FIRST.md`: trust-first backlog and KPI gates
 - `SUPPORT.md`: support channels
