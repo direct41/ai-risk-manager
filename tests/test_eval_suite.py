@@ -260,5 +260,9 @@ def test_write_summary_writes_expansion_gate_artifact(tmp_path: Path) -> None:
     expansion_payload = json.loads((output_root / "expansion_gate.json").read_text(encoding="utf-8"))
     assert expansion_payload["status"] in {"open", "closed"}
     assert expansion_payload["required_consecutive_passes"] >= 1
+    plugin_payload = json.loads((output_root / "plugin_conformance.json").read_text(encoding="utf-8"))
+    assert plugin_payload["plugin_contract_version"] == "1"
+    assert plugin_payload["status"] in {"passed", "failed"}
     summary_md = (output_root / "summary.md").read_text(encoding="utf-8")
     assert "## Expansion Gate" in summary_md
+    assert "## Plugin Conformance" in summary_md

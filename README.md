@@ -192,6 +192,7 @@ Weekly eval workflow publishes:
 - `eval/results/trust_trend.json`
 - `eval/results/trust_trend.md`
 - `eval/results/expansion_gate.json`
+- `eval/results/plugin_conformance.json`
 
 Use `make eval` locally.
 Use `AIRISK_EVAL_ENFORCE_THRESHOLDS=0 make eval` for non-blocking local runs.

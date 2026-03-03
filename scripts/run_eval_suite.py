@@ -40,6 +40,12 @@ DEFAULT_TRUST_THRESHOLDS: dict[str, float] = {
     "max_avg_fallback_rate": 0.15,
 }
 
+if str(REPO_ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "src"))
+
+from ai_risk_manager.collectors.plugins.contract import PLUGIN_CONTRACT_VERSION  # noqa: E402
+from ai_risk_manager.collectors.plugins.registry import evaluate_registered_plugin_conformance  # noqa: E402
+
 
 @dataclass
 class EvalCase:
@@ -517,6 +523,32 @@ def evaluate_trust_gates(aggregates: dict[str, float], thresholds: dict[str, flo
     return errors
 
 
+def build_plugin_conformance_payload() -> dict[str, object]:
+    reports = evaluate_registered_plugin_conformance()
+    errors: list[str] = []
+    plugin_rows: list[dict[str, object]] = []
+    for report in reports:
+        plugin_rows.append(
+            {
+                "stack_id": report.stack_id,
+                "plugin_contract_version": report.plugin_contract_version,
+                "target_support_level": report.target_support_level,
+                "status": "passed" if report.passed else "failed",
+                "capability_matrix": report.capability_matrix,
+                "errors": report.errors,
+            }
+        )
+        if report.errors:
+            errors.extend(f"{report.stack_id}: {message}" for message in report.errors)
+
+    return {
+        "plugin_contract_version": PLUGIN_CONTRACT_VERSION,
+        "status": "failed" if errors else "passed",
+        "plugins": plugin_rows,
+        "errors": errors,
+    }
+
+
 def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_gates: bool) -> int:
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     (OUTPUT_ROOT / "summary.json").write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -536,6 +568,11 @@ def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_
     expansion_gate_payload = build_expansion_gate_payload(results, trend_history)
     (OUTPUT_ROOT / "expansion_gate.json").write_text(
         json.dumps(expansion_gate_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    plugin_conformance_payload = build_plugin_conformance_payload()
+    (OUTPUT_ROOT / "plugin_conformance.json").write_text(
+        json.dumps(plugin_conformance_payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
@@ -583,6 +620,19 @@ def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_
         lines.append("- Gate reasons:")
         for reason in expansion_gate_payload["reasons"]:
             lines.append(f"  - {reason}")
+    lines.extend(
+        [
+            "",
+            "## Plugin Conformance",
+            "",
+            f"- Contract version: `{plugin_conformance_payload['plugin_contract_version']}`",
+            f"- Gate status: `{str(plugin_conformance_payload['status']).upper()}`",
+        ]
+    )
+    if plugin_conformance_payload["errors"]:
+        lines.append("- Gate errors:")
+        for reason in plugin_conformance_payload["errors"]:
+            lines.append(f"  - {reason}")
     lines.append("")
 
     lines.extend(
@@ -616,6 +666,8 @@ def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_
 
     (OUTPUT_ROOT / "summary.md").write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
     if enforce_gates and gate_errors:
+        failures += 1
+    if plugin_conformance_payload["status"] != "passed":
         failures += 1
     return failures
 
