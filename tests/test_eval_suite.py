@@ -215,6 +215,46 @@ def test_build_expansion_gate_payload_closes_when_required_case_fails() -> None:
     assert payload["reasons"]
 
 
+def test_build_support_level_promotion_payload_marks_stack_blocked_on_case_failure() -> None:
+    results = [
+        {"case": "milestone7_django_viewset", "status": "passed"},
+        {"case": "milestone8_django_dependency", "status": "failed"},
+    ]
+    history = [
+        {"gate_status": "passed"},
+        {"gate_status": "passed"},
+    ]
+    trust_gate = {"status": "passed"}
+    plugin_conformance = {
+        "status": "passed",
+        "plugins": [
+            {"stack_id": "django_drf", "status": "passed"},
+        ],
+    }
+    policy = {
+        "version": 1,
+        "stacks": {
+            "django_drf": {
+                "eligible_level": "l2",
+                "required_cases": ["milestone7_django_viewset", "milestone8_django_dependency"],
+                "required_consecutive_trust_passes": 2,
+            }
+        },
+    }
+
+    payload = run_eval_suite.build_support_level_promotion_payload(
+        results=results,
+        trend_history=history,
+        trust_gate_payload=trust_gate,
+        plugin_conformance_payload=plugin_conformance,
+        policy=policy,
+    )
+
+    assert payload["status"] == "blocked"
+    assert payload["stacks"][0]["status"] == "blocked"
+    assert payload["stacks"][0]["failing_cases"] == ["milestone8_django_dependency"]
+
+
 def test_write_summary_writes_expansion_gate_artifact(tmp_path: Path) -> None:
     output_root = tmp_path / "results"
     thresholds = dict(run_eval_suite.DEFAULT_TRUST_THRESHOLDS)
@@ -260,5 +300,12 @@ def test_write_summary_writes_expansion_gate_artifact(tmp_path: Path) -> None:
     expansion_payload = json.loads((output_root / "expansion_gate.json").read_text(encoding="utf-8"))
     assert expansion_payload["status"] in {"open", "closed"}
     assert expansion_payload["required_consecutive_passes"] >= 1
+    plugin_payload = json.loads((output_root / "plugin_conformance.json").read_text(encoding="utf-8"))
+    assert plugin_payload["plugin_contract_version"] == "1"
+    assert plugin_payload["status"] in {"passed", "failed"}
+    promotion_payload = json.loads((output_root / "support_level_promotion.json").read_text(encoding="utf-8"))
+    assert promotion_payload["status"] in {"ready", "blocked"}
     summary_md = (output_root / "summary.md").read_text(encoding="utf-8")
     assert "## Expansion Gate" in summary_md
+    assert "## Plugin Conformance" in summary_md
+    assert "## Support-Level Promotion" in summary_md

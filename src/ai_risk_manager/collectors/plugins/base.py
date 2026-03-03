@@ -42,6 +42,12 @@ class ArtifactBundle:
     # (file, test_name, method, route_path, line, snippet)
     dependency_specs: list[tuple[str, str, str, int | None, str | None, str]] = field(default_factory=list)
     # (file, dependency_name, raw_spec, line, policy_violation, scope)
+    side_effect_requirements: list[tuple[str, str, str, str, int | None, str]] = field(default_factory=list)
+    # (file, endpoint_name, effect_kind, effect_target, line, snippet)
+    side_effect_emits: list[tuple[str, str, str, str, int | None, str]] = field(default_factory=list)
+    # (file, emitter_name, effect_kind, effect_target, line, snippet)
+    authorization_boundaries: list[tuple[str, str, str, str, int | None, str]] = field(default_factory=list)
+    # (file, endpoint_name, auth_mechanism, auth_subject, line, snippet)
 
 
 class CollectorPlugin(Protocol):

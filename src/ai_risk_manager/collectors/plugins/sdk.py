@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from ai_risk_manager.collectors.plugins.contract import PLUGIN_CONTRACT_VERSION
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle
+from ai_risk_manager.schemas.types import AppliedSupportLevel
 from ai_risk_manager.signals.adapters import artifact_bundle_to_signal_bundle
 from ai_risk_manager.signals.types import SignalBundle, SignalKind
 
@@ -20,7 +22,10 @@ class CapabilitySignalPlugin(Protocol):
 
 
 class CapabilitySignalPluginMixin:
+    plugin_contract_version = PLUGIN_CONTRACT_VERSION
+    target_support_level: AppliedSupportLevel = "l2"
     supported_signal_kinds: set[SignalKind] = set()
+    unsupported_signal_kinds: set[SignalKind] = set()
 
     def collect_signals(self, repo_path: Path) -> SignalBundle:
         collect_fn = getattr(self, "collect", None)

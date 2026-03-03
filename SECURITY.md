@@ -27,3 +27,8 @@ General rules:
 - Share only the minimum reproducible details required for triage.
 
 Initial triage target: within 3 business days.
+
+## Deployment baseline
+
+For runtime hardening guidance (auth, guardrails, audit trail, operational checklist), see:
+- `docs/deployment-hardening.md`

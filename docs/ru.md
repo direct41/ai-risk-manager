@@ -97,7 +97,7 @@ Extractor собирает:
 
 - В `v0.1.x` поддерживаются extractor plugins `fastapi_pytest` и `django_drf`.
 - Инструмент не является generic multi-language SAST.
-- API рассчитан на local/internal usage.
+- API имеет базовые сервисные защиты (token auth, rate/payload guardrails, audit/correlation controls).
 - Universal/mixed-stack стратегия пока в roadmap, это не текущий shipped scope.
 
 ## Ключевые CLI флаги

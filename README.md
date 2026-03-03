@@ -70,13 +70,15 @@ Important for PR delta (`new/resolved/unchanged`):
   - `django_drf`
 - Local/CI assistant for risk mapping.
 - Not a generic multi-language SAST replacement.
-- API is local/internal oriented (no auth, no multi-tenant guarantees).
+- API supports optional token auth, request guardrails, and correlation/audit controls for service usage.
 
 Deterministic rules:
 - `critical_path_no_tests`
 - `missing_transition_handler`
 - `broken_invariant_on_transition`
 - `dependency_risk_policy_violation`
+- `missing_required_side_effect` (contract-level; plugin extraction in progress)
+- `critical_write_missing_authz` (contract-level; plugin extraction in progress)
 
 ## CI Rollout Controls
 
@@ -154,6 +156,28 @@ Run server:
 riskmap-api
 ```
 
+Optional hardening:
+
+```bash
+AIRISK_API_TOKEN=change-me riskmap-api
+```
+
+When `AIRISK_API_TOKEN` is set, `POST /v1/analyze` requires either:
+- `X-API-Key: <token>`
+- `Authorization: Bearer <token>`
+
+Additional request guardrails:
+
+- `AIRISK_API_RATE_LIMIT_PER_MINUTE` (default `0`, disabled)
+- `AIRISK_API_MAX_BODY_BYTES` (default `0`, disabled)
+- `AIRISK_API_AUDIT_LOG` (optional path for append-only JSONL audit events)
+
+Operational controls:
+
+- Pass `X-Correlation-ID` (or `X-Request-ID`) to keep a stable run identifier through API logs and output.
+- API response includes `correlation_id` and `diagnostics`.
+- `api_audit.json` is written to `output_dir` for each API run.
+
 Health:
 
 ```bash
@@ -192,6 +216,8 @@ Weekly eval workflow publishes:
 - `eval/results/trust_trend.json`
 - `eval/results/trust_trend.md`
 - `eval/results/expansion_gate.json`
+- `eval/results/plugin_conformance.json`
+- `eval/results/support_level_promotion.json`
 
 Use `make eval` locally.
 Use `AIRISK_EVAL_ENFORCE_THRESHOLDS=0 make eval` for non-blocking local runs.
@@ -212,13 +238,17 @@ make test
 make analyze-demo
 make serve-api
 make eval
+python scripts/init_stack_plugin.py --stack-id flask_pytest
 ```
 
 ## Docs Map
 
 - `docs/ru.md`: Russian quick guide
 - `docs/compatibility.md`: CLI/API/JSON compatibility policy
+- `docs/deployment-hardening.md`: API deployment baseline and security checklist
 - `docs/capability-signals.md`: stack-agnostic signal model
+- `docs/plugin-contract.md`: plugin contract v1 and conformance rules
+- `docs/stack-expansion-candidates.md`: ranked shortlist for next stack expansion
 - `ROADMAP.md`: product roadmap
 - `BACKLOG_TRUST_FIRST.md`: trust-first backlog and KPI gates
 - `SUPPORT.md`: support channels

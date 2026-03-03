@@ -189,6 +189,45 @@ def _artifact_bundle_from_signals(signals: SignalBundle) -> ArtifactBundle:
                     scope,
                 )
             )
+            continue
+
+        if signal.kind == "side_effect_emit_contract":
+            owner_name = str(attrs.get("owner_name", "")).strip()
+            effect_kind = str(attrs.get("effect_kind", "")).strip()
+            effect_target = str(attrs.get("effect_target", "")).strip()
+            role = str(attrs.get("role", "")).strip()
+            if not owner_name or not effect_kind or not effect_target:
+                continue
+            item = (
+                file_path,
+                owner_name,
+                effect_kind,
+                effect_target,
+                line,
+                str(attrs.get("snippet", "")),
+            )
+            if role == "required":
+                artifacts.side_effect_requirements.append(item)
+            elif role == "emitted":
+                artifacts.side_effect_emits.append(item)
+            continue
+
+        if signal.kind == "authorization_boundary_enforced":
+            owner_name = str(attrs.get("owner_name", "")).strip()
+            auth_mechanism = str(attrs.get("auth_mechanism", "")).strip()
+            auth_subject = str(attrs.get("auth_subject", "")).strip()
+            if not owner_name or not auth_mechanism or not auth_subject:
+                continue
+            artifacts.authorization_boundaries.append(
+                (
+                    file_path,
+                    owner_name,
+                    auth_mechanism,
+                    auth_subject,
+                    line,
+                    str(attrs.get("snippet", "")),
+                )
+            )
 
     return artifacts
 

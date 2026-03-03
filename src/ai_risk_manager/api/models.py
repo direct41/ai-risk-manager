@@ -60,6 +60,8 @@ class AnalyzeResponse(BaseModel):
     artifacts: dict[str, str]
     result: dict[str, Any] | None
     summary: AnalyzeSummary | None = None
+    correlation_id: str | None = None
+    diagnostics: dict[str, Any] | None = None
 
 
 class HealthResponse(BaseModel):

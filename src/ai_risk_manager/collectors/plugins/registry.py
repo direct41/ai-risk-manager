@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ai_risk_manager.collectors.plugins.base import CollectorPlugin, StackId
+from ai_risk_manager.collectors.plugins.contract import PluginConformanceReport, evaluate_plugin_conformance
 from ai_risk_manager.collectors.plugins.django import DjangoCollectorPlugin
 from ai_risk_manager.collectors.plugins.fastapi import FastAPICollectorPlugin
 from ai_risk_manager.collectors.plugins.sdk import CapabilitySignalPlugin
@@ -38,3 +39,7 @@ def list_plugins() -> tuple[CollectorPlugin, ...]:
 
 def list_signal_plugins() -> tuple[CapabilitySignalPlugin, ...]:
     return tuple(plugin for plugin in _PLUGINS.values() if isinstance(plugin, CapabilitySignalPlugin))
+
+
+def evaluate_registered_plugin_conformance() -> tuple[PluginConformanceReport, ...]:
+    return tuple(evaluate_plugin_conformance(plugin) for plugin in _PLUGINS.values())

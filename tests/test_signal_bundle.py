@@ -62,3 +62,47 @@ def test_artifact_bundle_to_signal_bundle_populates_evidence_refs() -> None:
 
     assert bundle.signals
     assert all(signal.evidence_refs for signal in bundle.signals)
+
+
+def test_artifact_bundle_to_signal_bundle_maps_side_effect_contract() -> None:
+    artifacts = ArtifactBundle(
+        side_effect_requirements=[
+            ("app/service.py", "create_order", "event", "order.created", 21, "require emit order.created"),
+        ],
+        side_effect_emits=[
+            ("app/service.py", "emit_order_created", "event", "order.created", 34, "emit('order.created')"),
+        ],
+    )
+
+    bundle = artifact_bundle_to_signal_bundle(artifacts)
+    side_effect_signals = [signal for signal in bundle.signals if signal.kind == "side_effect_emit_contract"]
+
+    assert len(side_effect_signals) == 2
+    roles = {str(signal.attributes.get("role")) for signal in side_effect_signals}
+    assert roles == {"required", "emitted"}
+    assert "side_effect_emit_contract" in bundle.supported_kinds
+
+
+def test_artifact_bundle_to_signal_bundle_maps_authorization_contract() -> None:
+    artifacts = ArtifactBundle(
+        authorization_boundaries=[
+            (
+                "app/api.py",
+                "create_order",
+                "decorator",
+                "order.write",
+                12,
+                "@requires_permission('order.write')",
+            )
+        ]
+    )
+
+    bundle = artifact_bundle_to_signal_bundle(artifacts)
+    authz_signals = [signal for signal in bundle.signals if signal.kind == "authorization_boundary_enforced"]
+
+    assert len(authz_signals) == 1
+    authz = authz_signals[0]
+    assert authz.attributes["owner_name"] == "create_order"
+    assert authz.attributes["auth_mechanism"] == "decorator"
+    assert authz.attributes["auth_subject"] == "order.write"
+    assert "authorization_boundary_enforced" in bundle.supported_kinds

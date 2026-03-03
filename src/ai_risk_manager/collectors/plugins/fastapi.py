@@ -47,6 +47,10 @@ class FastAPICollectorPlugin(CapabilitySignalPluginMixin):
         "test_to_endpoint_coverage",
         "dependency_version_policy",
     }
+    unsupported_signal_kinds = {
+        "side_effect_emit_contract",
+        "authorization_boundary_enforced",
+    }
 
     def probe(self, repo_path: Path) -> StackProbeResult | None:
         signals = scan_fastapi_signals(repo_path)
