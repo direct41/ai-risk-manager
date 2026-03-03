@@ -45,4 +45,4 @@ jobs:
             echo "Expected riskmap-api to fail without [api] extras."
             exit 1
           fi
-          echo "$output" | grep -q "Install API dependencies with: pip install -e '.[api]'."
+          echo "$output" | grep -Fq "Install API dependencies with: pip install -e '.[api]'."
