@@ -135,7 +135,7 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 
 ### Stories
 1. [ ] Select next candidate stacks based on contract fit and expected risk coverage gain.
-2. [ ] Add plugin scaffolding/template based on Epic 7 contract.
+2. [x] Add plugin scaffolding/template based on Epic 7 contract.
 3. [ ] Deliver parity eval suites for each added stack (positive, negative, edge cases).
 4. [ ] Define support-level promotion criteria (`l0 -> l1 -> l2`) per stack.
 

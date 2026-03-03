@@ -215,6 +215,7 @@ make test
 make analyze-demo
 make serve-api
 make eval
+python scripts/init_stack_plugin.py --stack-id flask_pytest
 ```
 
 ## Docs Map

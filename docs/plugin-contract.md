@@ -78,3 +78,8 @@ When adding a new stack plugin:
 3. Set `target_support_level` conservatively.
 4. Pass plugin conformance tests before enabling stricter rollout behavior.
 
+Scaffold helper:
+
+```bash
+python scripts/init_stack_plugin.py --stack-id flask_pytest
+```
