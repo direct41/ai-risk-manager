@@ -191,3 +191,49 @@ def test_api_requires_token_when_airisk_api_token_is_configured(tmp_path: Path, 
 
     with_bearer = client.post("/v1/analyze", json=payload, headers={"Authorization": "Bearer secret-token"})
     assert with_bearer.status_code == 200
+
+
+def test_api_respects_rate_limit_when_configured(tmp_path: Path, write_file, monkeypatch) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_api.py", "def test_smoke():\n    assert True\n")
+    monkeypatch.setenv("AIRISK_API_RATE_LIMIT_PER_MINUTE", "1")
+
+    client = TestClient(app)
+    payload = {
+        "path": str(tmp_path),
+        "mode": "full",
+        "no_llm": True,
+    }
+    headers = {"X-Forwarded-For": "198.51.100.10"}
+    first = client.post("/v1/analyze", json=payload, headers=headers)
+    second = client.post("/v1/analyze", json=payload, headers=headers)
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["detail"] == "Rate limit exceeded"
+
+
+def test_api_rejects_payload_above_max_body_size(tmp_path: Path, write_file, monkeypatch) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_api.py", "def test_smoke():\n    assert True\n")
+    monkeypatch.setenv("AIRISK_API_MAX_BODY_BYTES", "120")
+
+    client = TestClient(app)
+    response = client.post(
+        "/v1/analyze",
+        json={
+            "path": str(tmp_path),
+            "mode": "full",
+            "no_llm": True,
+            "base": "x" * 300,
+        },
+    )
+
+    assert response.status_code == 413
+    assert response.json()["detail"] == "Payload too large"

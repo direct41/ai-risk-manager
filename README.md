@@ -166,6 +166,11 @@ When `AIRISK_API_TOKEN` is set, `POST /v1/analyze` requires either:
 - `X-API-Key: <token>`
 - `Authorization: Bearer <token>`
 
+Additional request guardrails:
+
+- `AIRISK_API_RATE_LIMIT_PER_MINUTE` (default `0`, disabled)
+- `AIRISK_API_MAX_BODY_BYTES` (default `0`, disabled)
+
 Health:
 
 ```bash

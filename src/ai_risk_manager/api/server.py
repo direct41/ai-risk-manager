@@ -1,5 +1,9 @@
+from collections import deque
+import json
 import os
 from pathlib import Path
+import threading
+import time
 from typing import TYPE_CHECKING, Any, cast
 
 from ai_risk_manager import __version__
@@ -17,6 +21,8 @@ _Header: Any = None
 _AnalyzeRequest: Any = None
 _AnalyzeResponse: Any = None
 _HealthResponse: Any = None
+_RATE_LIMIT_STATE: dict[str, deque[float]] = {}
+_RATE_LIMIT_LOCK = threading.Lock()
 
 if TYPE_CHECKING:
     from fastapi import FastAPI as FastAPIApp
@@ -71,6 +77,58 @@ def _load_api_dependencies() -> tuple[Any, Any, Any, Any, Any, Any, Any]:
 def _configured_api_token() -> str | None:
     token = os.getenv("AIRISK_API_TOKEN", "").strip()
     return token or None
+
+
+def _configured_rate_limit_per_minute() -> int:
+    raw = os.getenv("AIRISK_API_RATE_LIMIT_PER_MINUTE", "").strip()
+    if not raw:
+        return 0
+    try:
+        value = int(raw)
+    except ValueError:
+        return 0
+    return value if value > 0 else 0
+
+
+def _configured_max_body_bytes() -> int:
+    raw = os.getenv("AIRISK_API_MAX_BODY_BYTES", "").strip()
+    if not raw:
+        return 0
+    try:
+        value = int(raw)
+    except ValueError:
+        return 0
+    return value if value > 0 else 0
+
+
+def _rate_limit_key(x_forwarded_for: str | None) -> str:
+    if not x_forwarded_for:
+        return "anonymous"
+    first = x_forwarded_for.split(",", 1)[0].strip()
+    return first or "anonymous"
+
+
+def _enforce_rate_limit(*, limit_per_minute: int, x_forwarded_for: str | None, http_exception_cls: Any) -> None:
+    if limit_per_minute <= 0:
+        return
+    key = _rate_limit_key(x_forwarded_for)
+    now = time.monotonic()
+    window_seconds = 60.0
+    with _RATE_LIMIT_LOCK:
+        bucket = _RATE_LIMIT_STATE.setdefault(key, deque())
+        while bucket and (now - bucket[0]) >= window_seconds:
+            bucket.popleft()
+        if len(bucket) >= limit_per_minute:
+            raise http_exception_cls(status_code=429, detail="Rate limit exceeded")
+        bucket.append(now)
+
+
+def _enforce_payload_size(*, max_body_bytes: int, payload: dict[str, Any], http_exception_cls: Any) -> None:
+    if max_body_bytes <= 0:
+        return
+    body_size = len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    if body_size > max_body_bytes:
+        raise http_exception_cls(status_code=413, detail="Payload too large")
 
 
 def _extract_bearer_token(authorization: str | None) -> str | None:
@@ -135,6 +193,7 @@ def create_app() -> FastAPIApp:
         request_payload: dict[str, Any] = Body(...),
         x_api_key: str | None = Header(default=None, alias="X-API-Key"),
         authorization: str | None = Header(default=None, alias="Authorization"),
+        x_forwarded_for: str | None = Header(default=None, alias="X-Forwarded-For"),
     ) -> Any:
         try:
             request = cast(Any, AnalyzeRequestModel.model_validate(request_payload))
@@ -148,6 +207,16 @@ def create_app() -> FastAPIApp:
             expected_token=_configured_api_token(),
             x_api_key=x_api_key,
             authorization=authorization,
+            http_exception_cls=HTTPException,
+        )
+        _enforce_rate_limit(
+            limit_per_minute=_configured_rate_limit_per_minute(),
+            x_forwarded_for=x_forwarded_for,
+            http_exception_cls=HTTPException,
+        )
+        _enforce_payload_size(
+            max_body_bytes=_configured_max_body_bytes(),
+            payload=request_payload,
             http_exception_cls=HTTPException,
         )
 

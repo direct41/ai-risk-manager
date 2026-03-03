@@ -150,7 +150,7 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 
 ### Stories
 1. [x] Add API authn/authz controls and secure defaults for non-local usage.
-2. [ ] Add request-level guardrails (rate limits, input size/timeouts).
+2. [x] Add request-level guardrails (rate limits, input size/timeouts).
 3. [ ] Add operational controls (audit trail, run correlation IDs, failure diagnostics).
 4. [ ] Add deployment hardening docs and minimal security checklist.
 
