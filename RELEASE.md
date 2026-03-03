@@ -3,7 +3,7 @@
 ## MVP release checklist (`v0.1.x`)
 
 1. Ensure all quality gates are green.
-2. Run eval suite and review KPI summary.
+2. Run eval suite and review KPI summary + trust trend artifacts (`trust_gate.json`, `trust_trend.json`).
 3. Update `CHANGELOG.md` and release notes with:
    - value proposition
    - known limits (FastAPI+pytest only)

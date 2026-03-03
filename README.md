@@ -1,75 +1,160 @@
 # AI Risk Manager
 
-AI Risk Manager is an OSS risk-mapping tool with one shared analysis core and two adapters:
+AI Risk Manager is a QA risk-mapping tool for Python backends (FastAPI and Django/DRF).
 
-- `CLI` (`riskmap analyze ...`)
-- `HTTP API` (`/v1/analyze`)
+It answers two practical questions before merge/release:
+- Which backend flows are risky now?
+- Which tests should we add first?
 
-The analysis core is deterministic-first (`collector -> graph -> rules`) with optional LLM enrichment (`risk agent`, `qa strategy agent`).
+## Quick Start
 
-## Scope (v0.1.x)
-
-Current extractor support:
-
-- `fastapi_pytest` stack plugin (FastAPI + pytest patterns)
-
-This project is still intentionally narrow in extraction scope, but architecture is adapter/plugin based:
-
-- one core pipeline (`run_pipeline`)
-- stack detection + collector plugin dispatch
-- transport adapters (CLI/API)
-
-## Project Status
-
-- Current maturity: MVP (`0.1.x`), focused on `fastapi_pytest` repositories.
-- Intended usage: local/CI assistant for QA-risk mapping, not a generic SAST replacement.
-- API adapter is currently local/internal oriented (no auth, no multi-tenant guarantees).
-
-## Quickstart
+Install:
 
 ```bash
 pip install -e '.[dev]'
-riskmap analyze --sample --output-dir ./.riskmap
+```
+
+Run on bundled sample:
+
+```bash
+riskmap analyze --sample --no-llm --output-dir ./.riskmap
 cat ./.riskmap/report.md
 ```
 
-Expected artifacts (`--format both`, default):
+Optional sample override:
 
-- `.riskmap/report.md`
-- `.riskmap/graph.json`
-- `.riskmap/findings.raw.json`
-- `.riskmap/findings.json`
-- `.riskmap/test_plan.json`
-- `.riskmap/pr_summary.md` (PR mode only)
+```bash
+AIRISK_SAMPLE_REPO=/path/to/local/sample riskmap analyze --sample --no-llm
+```
 
-## CLI Usage
+## PR Workflow (Recommended)
+
+1. Build deterministic baseline on `main`:
+
+```bash
+riskmap analyze \
+  --mode full \
+  --no-llm \
+  --analysis-engine deterministic \
+  --output-dir ./.riskmap/baseline
+```
+
+2. Run PR-scoped analysis on feature branch:
+
+```bash
+riskmap analyze \
+  --mode pr \
+  --base main \
+  --baseline-graph ./.riskmap/baseline/graph.json \
+  --only-new \
+  --output-dir ./.riskmap
+```
+
+Important for PR delta (`new/resolved/unchanged`):
+- baseline folder must contain both `graph.json` and `findings.json`.
+
+## Key Outputs
+
+- `report.md`: human-readable summary and top actions.
+- `pr_summary.md`: compact PR view (PR mode).
+- `findings.json`: machine-readable findings.
+- `test_plan.json`: prioritized test recommendations.
+- `graph.json` and `graph.analysis.json`: analysis graph used for findings (may include semantic enrichment).
+- `graph.deterministic.json`: deterministic graph before semantic enrichment.
+- `run_metrics.json`: quality and run metrics.
+
+## Current Scope (v0.1.x)
+
+- Stack plugins:
+  - `fastapi_pytest`
+  - `django_drf`
+- Local/CI assistant for risk mapping.
+- Not a generic multi-language SAST replacement.
+- API is local/internal oriented (no auth, no multi-tenant guarantees).
+
+Deterministic rules:
+- `critical_path_no_tests`
+- `missing_transition_handler`
+- `broken_invariant_on_transition`
+- `dependency_risk_policy_violation`
+
+## CI Rollout Controls
+
+`ci_mode`:
+- `advisory` (default): never fails build.
+- `soft`: fails on new `high|critical`.
+- `block-new-critical`: fails only on `new + critical + high confidence + verified evidence`.
+
+`support_level`:
+- `auto` (default): `unknown -> l0`, known stacks -> `l2`.
+- preflight warnings in `auto` downgrade one step (`l2 -> l1`, `l1 -> l0`).
+- `l0`: blocking modes downgraded to advisory.
+- `l1`: `block-new-critical` downgraded to `soft`.
+- `l2`: full behavior.
+
+## Useful CLI Flags
 
 ```bash
 riskmap analyze [PATH]
 riskmap analyze --sample
 riskmap analyze --mode pr --base main --baseline-graph ./.riskmap/baseline/graph.json
+riskmap analyze --analysis-engine deterministic|hybrid|ai-first
 riskmap analyze --provider auto|api|cli
 riskmap analyze --no-llm
-riskmap analyze --format md|json|both
-riskmap analyze --fail-on-severity high
+riskmap analyze --only-new
+riskmap analyze --min-confidence high|medium|low
+riskmap analyze --ci-mode advisory|soft|block-new-critical
+riskmap analyze --support-level auto|l0|l1|l2
+riskmap analyze --risk-policy conservative|balanced|aggressive
+riskmap analyze --fail-on-severity critical|high|medium|low
 riskmap analyze --suppress-file .airiskignore
 ```
 
-## API Usage (sync)
+Dependency policy profiles:
+- `conservative`: `direct_reference`, `wildcard_version`
+- `balanced` (default): conservative + `range_not_pinned`
+- `aggressive`: balanced + `unpinned_version`
 
-Install API dependencies first:
+## Suppressions and Policy
+
+Suppressions (`.airiskignore`):
+
+```yaml
+- key: "critical_path_no_tests:api:app:api.py:create_order"
+- rule: "missing_transition_handler"
+  file: "app/orders.py"
+```
+
+Policy overrides (`.airiskpolicy`):
+
+```json
+{
+  "version": 1,
+  "rules": {
+    "critical_path_no_tests": {
+      "enabled": true,
+      "severity": "medium",
+      "gate": "never_block"
+    }
+  }
+}
+```
+
+## API Quick Start
+
+Install API extras:
 
 ```bash
 pip install -e '.[api]'
 ```
 
-Start server:
+Run server:
 
 ```bash
 riskmap-api
 ```
 
-Healthcheck:
+Health:
 
 ```bash
 curl -s http://127.0.0.1:8000/healthz
@@ -90,103 +175,35 @@ curl -s -X POST http://127.0.0.1:8000/v1/analyze \
   }'
 ```
 
-`POST /v1/analyze` request fields are compatible with `RunContext`:
-
-- `path`, `mode`, `base`, `no_llm`, `provider`, `baseline_graph`, `output_dir`, `format`, `fail_on_severity`, `suppress_file`, `sample`
-
-Response always includes:
-
-- `exit_code`
-- `notes`
-- `output_dir`
-- `artifacts`
-- `result` (`null` for `exit_code` 1/2)
-
-## Provider Selection
-
-- `--provider auto` (default)
-  - local: `cli -> api -> no-llm`
-  - CI: `api -> no-llm`
-- `--provider api`: uses API credentials from env vars.
-- `--provider cli`: uses installed AI CLI.
-- `--no-llm`: deterministic-only mode.
-
-Supported credentials:
-
-- `OPENAI_API_KEY`
-- `LITELLM_API_KEY`
-- `ANTHROPIC_API_KEY`
-
 ## Exit Codes
 
 | Code | Meaning |
 |---|---|
 | 0 | Success |
 | 1 | Explicit provider unavailable (`--provider api|cli`) |
-| 2 | Unsupported repository for current extractor plugins |
-| 3 | `--fail-on-severity` threshold reached |
+| 2 | Unsupported repository for strict extractor modes |
+| 3 | `--fail-on-severity` or `--ci-mode` threshold reached |
 
-## Suppressions (`.airiskignore`)
+## Eval Artifacts
 
-Use suppressions to hide known noise:
+Weekly eval workflow publishes:
+- `eval/results/trust_gate.json`
+- `eval/results/trust_history.jsonl`
+- `eval/results/trust_trend.json`
+- `eval/results/trust_trend.md`
+- `eval/results/expansion_gate.json`
 
-```yaml
-- key: "critical_path_no_tests:api:app:api.py:create_order"
-- rule: "missing_transition_handler"
-  file: "app/orders.py"
-```
-
-## What Good Output Looks Like
-
-Example `report.md` excerpt:
-
-```md
-## Summary
-| Severity | Count |
-|---|---:|
-| critical | 0 |
-| high | 1 |
-
-## Top Actions for Next Sprint
-- Action: Add API/service tests for endpoint 'create_order'.
-  Expected impact: reduce `critical_path_no_tests` risk around `app/api.py`.
-```
-
-## Glossary
-
-- `Graph`: extracted nodes and edges from code/test structure.
-- `Finding`: normalized risk record with severity, evidence, and action.
-- `TestPlan`: prioritized test recommendations derived from findings.
-- `analysis_scope`: `full`, `impacted`, or `full_fallback` for PR analysis.
-
-## GitHub Actions Integration
-
-Minimal job (fork-safe, no secrets):
-
-```yaml
-- run: pip install -e '.[dev]'
-- run: riskmap analyze --no-llm --output-dir ./.riskmap
-```
-
-Recommended PR mode job:
-
-```yaml
-- run: |
-    riskmap analyze \
-      --mode pr \
-      --base "${{ github.base_ref }}" \
-      --provider auto \
-      --baseline-graph ./.riskmap/baseline/graph.json \
-      --output-dir ./.riskmap
-```
+Use `make eval` locally.
+Use `AIRISK_EVAL_ENFORCE_THRESHOLDS=0 make eval` for non-blocking local runs.
 
 ## Troubleshooting
 
-- `exit 1`: select another provider or run with `--no-llm`.
-- `exit 2`: repo does not match supported stack plugins.
-- Empty PR findings: ensure baseline graph exists and changed files are detected.
+- `exit 1`: choose another provider or use `--no-llm`.
+- `exit 2`: repository does not match supported plugin patterns in strict levels.
+- Empty PR findings: verify baseline files and changed-files detection.
+- Unknown stack with `--support-level auto`: run continues in L0 advisory mode.
 
-## Development Commands
+## Development
 
 ```bash
 make install
@@ -197,17 +214,19 @@ make serve-api
 make eval
 ```
 
-## Docs
+## Docs Map
 
-- `docs/ru.md`: short Russian guide
+- `docs/ru.md`: Russian quick guide
 - `docs/compatibility.md`: CLI/API/JSON compatibility policy
-- `ROADMAP.md`: MVP now / next
+- `docs/capability-signals.md`: stack-agnostic signal model
+- `ROADMAP.md`: product roadmap
+- `BACKLOG_TRUST_FIRST.md`: trust-first backlog and KPI gates
 - `SUPPORT.md`: support channels
 
 ## Open Source
 
 - License: `LICENSE` (MIT)
-- Contributing guide: `CONTRIBUTING.md`
-- Code of conduct: `CODE_OF_CONDUCT.md`
-- Security policy: `SECURITY.md`
+- Contributing: `CONTRIBUTING.md`
+- Code of Conduct: `CODE_OF_CONDUCT.md`
+- Security Policy: `SECURITY.md`
 - Changelog: `CHANGELOG.md`

@@ -3,8 +3,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from ai_risk_manager.pipeline.context_builder import build_run_context, normalize_cli_choice
 from ai_risk_manager.pipeline.run import run_pipeline
-from ai_risk_manager.schemas.types import RunContext
+from ai_risk_manager.sample_repo import resolve_sample_repo_path
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -21,6 +22,37 @@ def _build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--output-dir", default=".riskmap", help="Output directory")
     analyze.add_argument("--format", choices=["md", "json", "both"], default="both", help="Output artifact format")
     analyze.add_argument(
+        "--analysis-engine",
+        choices=["deterministic", "hybrid", "ai-first"],
+        default="ai-first",
+        help="Analysis strategy. ai-first prioritizes semantic AI findings.",
+    )
+    analyze.add_argument("--only-new", action="store_true", help="PR summary: show only new high/critical findings")
+    analyze.add_argument(
+        "--min-confidence",
+        choices=["high", "medium", "low"],
+        default="low",
+        help="Drop findings below confidence threshold",
+    )
+    analyze.add_argument(
+        "--ci-mode",
+        choices=["advisory", "soft", "block-new-critical"],
+        default="advisory",
+        help="CI behavior: advisory, soft-block on new high/critical, or block new critical only",
+    )
+    analyze.add_argument(
+        "--support-level",
+        choices=["auto", "l0", "l1", "l2"],
+        default="auto",
+        help="Stack support maturity level (auto resolves by detected stack).",
+    )
+    analyze.add_argument(
+        "--risk-policy",
+        choices=["conservative", "balanced", "aggressive"],
+        default="balanced",
+        help="Risk triage policy profile.",
+    )
+    analyze.add_argument(
         "--fail-on-severity",
         choices=["critical", "high", "medium", "low"],
         default=None,
@@ -36,27 +68,19 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _resolve_sample_repo() -> Path:
-    for parent in Path(__file__).resolve().parents:
-        candidate = parent / "eval" / "repos" / "milestone2_fastapi"
-        if candidate.is_dir():
-            return candidate
-    raise FileNotFoundError("Bundled sample repository not found")
-
-
 def _run_analyze(args: argparse.Namespace) -> int:
     if args.sample:
-        repo_path = _resolve_sample_repo().resolve()
+        repo_path = resolve_sample_repo_path()
     else:
         repo_path = Path(args.path).resolve()
     output_dir = Path(args.output_dir).resolve()
     baseline_graph = Path(args.baseline_graph).resolve() if args.baseline_graph else None
     suppress_file = Path(args.suppress_file).resolve() if args.suppress_file else None
 
-    ctx = RunContext(
+    ctx = build_run_context(
         repo_path=repo_path,
         mode=args.mode,
-        base=args.base if args.mode == "pr" else None,
+        base=args.base,
         output_dir=output_dir,
         provider=args.provider,
         no_llm=args.no_llm,
@@ -64,6 +88,12 @@ def _run_analyze(args: argparse.Namespace) -> int:
         fail_on_severity=args.fail_on_severity,
         suppress_file=suppress_file,
         baseline_graph=baseline_graph,
+        analysis_engine=normalize_cli_choice(args.analysis_engine),
+        only_new=args.only_new,
+        min_confidence=args.min_confidence,
+        ci_mode=normalize_cli_choice(args.ci_mode),
+        support_level=args.support_level,
+        risk_policy=args.risk_policy,
     )
 
     result, exit_code, notes = run_pipeline(ctx)

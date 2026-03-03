@@ -6,8 +6,51 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- Trust-first eval gates with in-repo thresholds (`eval/trust_thresholds.json`) and CI enforcement in weekly eval workflow.
+- Eval trend tracking artifacts:
+  - `eval/results/trust_gate.json`
+  - `eval/results/trust_history.jsonl`
+  - `eval/results/trust_trend.json`
+  - `eval/results/trust_trend.md`
+- Support-level x CI-mode compatibility matrix with machine-readable `effective_ci_mode` in run summary and API response summary.
+- Dependency policy profiles (`conservative|balanced|aggressive`) and scope-aware dependency severity (`runtime` vs `development`).
+- Evidence/confidence-aware ranking in reports and PR summary output.
+- Policy externalization via `.airiskpolicy` (JSON) with per-rule `enabled`, `severity`, and `gate` overrides.
+- Coverage mapping improvements for route params, local path aliases, and fixture-derived path aliases.
+- Added `django_drf` collector plugin with route/test coverage extraction for common APIView/urlpatterns patterns.
+- Expanded `django_drf` extraction with DRF router/viewset endpoint mapping and `reverse(...)`-based test path resolution.
+- Added Django viewset eval fixture `eval/repos/milestone7_django_viewset` and included it in eval-suite cases.
+- Added shared dependency extraction parity for FastAPI and Django plugins, with a Django dependency-policy eval fixture (`eval/repos/milestone8_django_dependency`).
+- Added stack expansion readiness artifact `eval/results/expansion_gate.json` driven by consecutive trust-gate passes and required Django parity eval cases.
+- Added explicit graph artifacts split:
+  - `graph.analysis.json` (analysis graph)
+  - `graph.deterministic.json` (deterministic pre-enrichment graph)
+- Added run summary metadata for graph transparency:
+  - `graph_mode_applied`
+  - `semantic_signal_count`
+
 ### Changed
-- OSS documentation and governance polish (`README`, `SECURITY`, `SUPPORT`, release/process docs).
+- `block-new-critical` guardrails now trigger only for `new + critical + high confidence + verified evidence` findings.
+- Transition invariant rule reduced false positives via declared transition anchors.
+- PR-focused summary behavior and reporting metadata improved for trust-first rollout.
+- Backlog artifacts updated to mark all P0 trust-first epics done.
+- Exit-code gating (`--fail-on-severity`, `ci_mode`) now respects `.airiskpolicy` per-rule blocking overrides (`gate=never_block`).
+- Auto support level for `django_drf` now defaults to `l2` (full CI-mode matrix behavior).
+- In `support_level=auto`, preflight warnings now downgrade support level by one step to keep blocking behavior conservative.
+- Stack expansion gate criteria are now completion-based (consecutive trust-pass runs) instead of calendar-tied wording.
+- README was streamlined for faster onboarding and updated baseline guidance.
+- CI risk-analysis baseline now uses deterministic/no-llm mode and caches both `graph.json` and `findings.json` for correct PR delta status.
+
+### Fixed
+- Pipeline/report consistency: `effective_ci_mode` and CI/fail notes are now computed before markdown artifact generation.
+- Semantic AI payload validation now rejects unsupported severity/confidence labels and degrades gracefully.
+- Collector noise reduction: scanning skips `eval/`, `fixtures/`, and `testdata/` directories.
+
+### Refactored
+- Removed unused `risk_agent` layer.
+- Unified bundled sample repository resolution for both CLI and API via shared helper (`sample_repo.py`).
+- Extracted PR scope and baseline helper logic from `pipeline/run.py` into `pipeline/pr_scope.py` to reduce orchestrator complexity.
 
 ## [0.1.0] - 2026-02-19
 

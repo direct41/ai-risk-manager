@@ -6,16 +6,44 @@
   - CLI (`riskmap`)
   - HTTP API (`/v1/analyze`, sync)
 - Static stack discovery + collector plugin dispatch
-- First extractor plugin: `fastapi_pytest`
+- Current extractor plugins:
+  - `fastapi_pytest` (mature)
+  - `django_drf` (verified)
 - Deterministic rule engine + optional LLM enrichment
 - PR mode with impacted scope and fallback strategy
 - Suppressions via `.airiskignore`
 - Stable JSON metadata (`schema_version`, `generated_at`, `tool_version`)
+- CI rollout controls:
+  - `ci_mode`: `advisory|soft|block-new-critical`
+  - `support_level`: `auto|l0|l1|l2`
+  - auto support-level downgrade on preflight warnings (`l2 -> l1`, `l1 -> l0`)
+  - effective CI mode matrix with auditable summary output
+- Trust-first quality controls:
+  - eval trust gates with versioned thresholds
+  - weekly trend tracking artifacts from eval runs
+  - expansion readiness gate artifact (`eval/results/expansion_gate.json`)
+- Explainability and risk precision improvements:
+  - confidence/evidence-based ranking in reports
+  - dependency policy profiles with scope-aware severity
 
 ## Next
 
-- Additional collector plugins beyond FastAPI
-- Additional rules for dependency and authorization risk patterns
-- Better test-to-endpoint mapping precision
-- Optional blocking mode rollout by severity threshold
+- Additional collector plugins beyond FastAPI/Django
+- Additional rules for authorization and critical-path behavior patterns
 - Hardening for service deployment scenarios (auth, rate limits) after local/internal maturity
+
+## Delivery Model (Stage-Gate)
+
+- Development progresses by completion gates, not fixed calendar dates.
+- Transition to the next stage is allowed only when all gates pass:
+  - implementation is complete for the current stage
+  - `pytest` is green
+  - trust/eval gates pass for touched behavior
+  - docs/contracts are updated when interfaces or semantics change
+
+## Execution Sequence (By Completion)
+
+1. [x] Stage 1: pipeline contract stabilization and stage decomposition.
+2. [x] Stage 2: coverage mapping quality improvements.
+3. [x] Stage 3: policy engine externalization (`.airiskpolicy`).
+4. [x] Stage 4: next stack expansion behind trust gates.

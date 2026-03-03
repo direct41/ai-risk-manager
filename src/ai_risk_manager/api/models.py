@@ -4,7 +4,17 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ai_risk_manager.schemas.types import Severity
+from ai_risk_manager.schemas.types import (
+    AnalysisEngine,
+    AppliedSupportLevel,
+    CIMode,
+    CompetitiveMode,
+    Confidence,
+    GraphMode,
+    RiskPolicy,
+    Severity,
+    SupportLevel,
+)
 
 
 class AnalyzeRequest(BaseModel):
@@ -19,8 +29,28 @@ class AnalyzeRequest(BaseModel):
     fail_on_severity: Severity | None = None
     suppress_file: str | None = None
     sample: bool = False
+    analysis_engine: AnalysisEngine = "ai_first"
+    only_new: bool = False
+    min_confidence: Confidence = "low"
+    ci_mode: CIMode = "advisory"
+    support_level: SupportLevel = "auto"
+    risk_policy: RiskPolicy = "balanced"
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+
+class AnalyzeSummary(BaseModel):
+    new_count: int
+    resolved_count: int
+    unchanged_count: int
+    fallback_reason: str | None = None
+    support_level_applied: AppliedSupportLevel
+    effective_ci_mode: CIMode
+    verification_pass_rate: float
+    evidence_completeness: float
+    competitive_mode: CompetitiveMode
+    graph_mode_applied: GraphMode
+    semantic_signal_count: int
 
 
 class AnalyzeResponse(BaseModel):
@@ -29,6 +59,7 @@ class AnalyzeResponse(BaseModel):
     output_dir: str
     artifacts: dict[str, str]
     result: dict[str, Any] | None
+    summary: AnalyzeSummary | None = None
 
 
 class HealthResponse(BaseModel):

@@ -1,35 +1,51 @@
-from __future__ import annotations
-
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ai_risk_manager import __version__
+from ai_risk_manager.pipeline.context_builder import build_run_context
 from ai_risk_manager.pipeline.run import run_pipeline
-from ai_risk_manager.schemas.types import RunContext, to_dict
+from ai_risk_manager.sample_repo import resolve_sample_repo_path
+from ai_risk_manager.schemas.types import to_dict
 
 _API_INSTALL_HINT = "Install API dependencies with: pip install -e '.[api]'."
 _API_IMPORT_ERROR: Exception | None = None
+_FastAPI: Any = None
+_HTTPException: Any = None
+_Body: Any = None
+_AnalyzeRequest: Any = None
+_AnalyzeResponse: Any = None
+_HealthResponse: Any = None
 
 if TYPE_CHECKING:
     from fastapi import FastAPI as FastAPIApp
+else:
+    FastAPIApp = Any
 
 try:
-    from fastapi import FastAPI, HTTPException
-    from ai_risk_manager.api.models import AnalyzeRequest, AnalyzeResponse, HealthResponse
+    from fastapi import FastAPI as FastAPIImport
+    from fastapi import HTTPException as HTTPExceptionImport
+    from fastapi import Body as BodyImport
+    from ai_risk_manager.api.models import AnalyzeRequest as AnalyzeRequestImport
+    from ai_risk_manager.api.models import AnalyzeResponse as AnalyzeResponseImport
+    from ai_risk_manager.api.models import HealthResponse as HealthResponseImport
+    _FastAPI = FastAPIImport
+    _HTTPException = HTTPExceptionImport
+    _Body = BodyImport
+    _AnalyzeRequest = AnalyzeRequestImport
+    _AnalyzeResponse = AnalyzeResponseImport
+    _HealthResponse = HealthResponseImport
 except Exception as exc:  # pragma: no cover - exercised in minimal installs without API extras.
-    FastAPI = None  # type: ignore[assignment]
-    HTTPException = None  # type: ignore[assignment]
-    AnalyzeRequest = None  # type: ignore[assignment]
-    AnalyzeResponse = None  # type: ignore[assignment]
-    HealthResponse = None  # type: ignore[assignment]
     _API_IMPORT_ERROR = exc
 
 _ARTIFACT_FILES = (
     "graph.json",
+    "graph.analysis.json",
+    "graph.deterministic.json",
     "findings.raw.json",
     "findings.json",
     "test_plan.json",
+    "run_metrics.json",
     "report.md",
     "pr_summary.md",
 )
@@ -43,33 +59,15 @@ def _missing_dependency_error(exc: Exception) -> ApiDependencyError:
     return ApiDependencyError(f"API adapter is unavailable ({exc.__class__.__name__}: {exc}). {_API_INSTALL_HINT}")
 
 
-def _load_api_dependencies() -> tuple[Any, Any, Any, Any, Any]:
+def _load_api_dependencies() -> tuple[Any, Any, Any, Any, Any, Any]:
     if _API_IMPORT_ERROR is not None:
         raise _missing_dependency_error(_API_IMPORT_ERROR) from _API_IMPORT_ERROR
-    return FastAPI, HTTPException, AnalyzeRequest, AnalyzeResponse, HealthResponse
-
-
-def _resolve_sample_repo() -> Path:
-    env_repo = os.getenv("AIRISK_SAMPLE_REPO", "").strip()
-    if env_repo:
-        candidate = Path(env_repo).expanduser().resolve()
-        if candidate.is_dir():
-            return candidate
-        raise FileNotFoundError(f"AIRISK_SAMPLE_REPO points to a missing directory: {candidate}")
-
-    for parent in Path(__file__).resolve().parents:
-        candidate = parent / "eval" / "repos" / "milestone2_fastapi"
-        if candidate.is_dir():
-            return candidate
-    raise FileNotFoundError(
-        "Bundled sample repository is unavailable in this installation. "
-        "Set AIRISK_SAMPLE_REPO to a local sample path or pass sample=false with an explicit path."
-    )
+    return _FastAPI, _HTTPException, _Body, _AnalyzeRequest, _AnalyzeResponse, _HealthResponse
 
 
 def _resolve_repo_path(path: str, sample: bool) -> Path:
     if sample:
-        return _resolve_sample_repo().resolve()
+        return resolve_sample_repo_path()
 
     repo_path = Path(path).resolve()
     if not repo_path.exists():
@@ -89,15 +87,23 @@ def _collect_artifacts(output_dir: Path) -> dict[str, str]:
 
 
 def create_app() -> FastAPIApp:
-    FastAPI, HTTPException, AnalyzeRequest, AnalyzeResponse, HealthResponse = _load_api_dependencies()
+    FastAPI, HTTPException, Body, AnalyzeRequestModel, AnalyzeResponseModel, HealthResponseModel = _load_api_dependencies()
     app = FastAPI(title="AI Risk Manager API", version=__version__)
 
-    @app.get("/healthz", response_model=HealthResponse)
-    def healthz() -> HealthResponse:
-        return HealthResponse(status="ok", version=__version__)
+    @app.get("/healthz", response_model=HealthResponseModel)
+    def healthz() -> Any:
+        return HealthResponseModel(status="ok", version=__version__)
 
-    @app.post("/v1/analyze", response_model=AnalyzeResponse)
-    def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
+    @app.post("/v1/analyze", response_model=AnalyzeResponseModel)
+    def analyze(request_payload: dict[str, Any] = Body(...)) -> Any:
+        try:
+            request = cast(Any, AnalyzeRequestModel.model_validate(request_payload))
+        except Exception as exc:
+            errors = getattr(exc, "errors", None)
+            if callable(errors):
+                raise HTTPException(status_code=422, detail=errors()) from exc
+            raise
+
         try:
             repo_path = _resolve_repo_path(request.path, request.sample)
         except (FileNotFoundError, ValueError) as exc:
@@ -107,10 +113,10 @@ def create_app() -> FastAPIApp:
         baseline_graph = Path(request.baseline_graph).resolve() if request.baseline_graph else None
         suppress_file = Path(request.suppress_file).resolve() if request.suppress_file else None
 
-        ctx = RunContext(
+        ctx = build_run_context(
             repo_path=repo_path,
             mode=request.mode,
-            base=request.base if request.mode == "pr" else None,
+            base=request.base,
             output_dir=output_dir,
             provider=request.provider,
             no_llm=request.no_llm,
@@ -118,19 +124,28 @@ def create_app() -> FastAPIApp:
             fail_on_severity=request.fail_on_severity,
             suppress_file=suppress_file,
             baseline_graph=baseline_graph,
+            analysis_engine=request.analysis_engine,
+            only_new=request.only_new,
+            min_confidence=request.min_confidence,
+            ci_mode=request.ci_mode,
+            support_level=request.support_level,
+            risk_policy=request.risk_policy,
         )
 
         result, exit_code, notes = run_pipeline(ctx)
-        return AnalyzeResponse(
+        return AnalyzeResponseModel(
             exit_code=exit_code,
             notes=notes,
             output_dir=str(output_dir),
             artifacts=_collect_artifacts(output_dir),
             result=to_dict(result) if result is not None else None,
+            summary=to_dict(result.summary) if result is not None else None,
         )
 
     return app
 
+
+app: Any
 
 try:
     app = create_app()

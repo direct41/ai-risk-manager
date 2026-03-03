@@ -1,0 +1,10 @@
+{
+  "min_avg_precision_proxy": 0.75,
+  "min_avg_recall_proxy": 0.75,
+  "min_avg_actionability_proxy": 0.40,
+  "min_avg_evidence_completeness": 0.95,
+  "min_avg_verification_pass_rate": 0.95,
+  "max_avg_triage_time_proxy_min": 10.0,
+  "max_flaky_cases": 0,
+  "max_avg_fallback_rate": 0.15
+}

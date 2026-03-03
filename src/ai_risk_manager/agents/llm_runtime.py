@@ -37,7 +37,7 @@ def _invoke_provider(provider: str, prompt: str) -> str:
 
 
 def _invoke_api(prompt: str) -> str:
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("LITELLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("AIRISK_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("LITELLM_API_KEY")
     if not api_key:
         raise LLMRuntimeError("API key is missing for API provider")
 

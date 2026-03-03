@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 
 from ai_risk_manager.agents.llm_runtime import LLMRuntimeError, call_llm_json
@@ -17,10 +18,24 @@ def _deterministic_test_plan(findings: FindingsReport, *, generated_without_llm:
                 finding_id=finding.id,
                 source_ref=finding.source_ref,
                 recommendation=finding.recommendation,
+                test_type="api",
+                test_target=finding.source_ref,
+                assertions=[
+                    "Validate success response path.",
+                    "Validate failure/validation response path.",
+                ],
+                confidence="medium",
                 generated_without_llm=generated_without_llm,
             )
         )
     return TestPlan(items=items, generated_without_llm=generated_without_llm)
+
+
+def _low_confidence_plan(plan: TestPlan) -> TestPlan:
+    return TestPlan(
+        items=[replace(item, confidence="low", generated_without_llm=True) for item in plan.items],
+        generated_without_llm=True,
+    )
 
 
 def _validate_test_plan_payload(payload: dict) -> TestPlan:
@@ -32,6 +47,12 @@ def _validate_test_plan_payload(payload: dict) -> TestPlan:
     for row in rows:
         if not isinstance(row, dict):
             raise ValueError("Each test-plan row must be an object")
+        required = ("test_type", "test_target", "assertions")
+        if not all(key in row for key in required):
+            raise ValueError("Each AI test-plan row must include test_type, test_target, assertions")
+        assertions = row.get("assertions")
+        if not isinstance(assertions, list) or not all(isinstance(assertion, str) for assertion in assertions):
+            raise ValueError("Test-plan assertions must be a list of strings")
         items.append(TestRecommendation(**row))
 
     return TestPlan(items=items, generated_without_llm=False)
@@ -64,4 +85,4 @@ def generate_test_plan(
         payload = call_llm_json(provider, prompt, max_retries=2)
         return _validate_test_plan_payload(payload)
     except (LLMRuntimeError, ValueError, TypeError):
-        return _deterministic_test_plan(findings, generated_without_llm=True)
+        return _low_confidence_plan(_deterministic_test_plan(findings, generated_without_llm=True))

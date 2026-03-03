@@ -8,6 +8,18 @@ import json
 Severity = Literal["critical", "high", "medium", "low"]
 Confidence = Literal["high", "medium", "low"]
 Layer = Literal["domain", "infrastructure", "qa"]
+FindingOrigin = Literal["deterministic", "ai"]
+FindingStatus = Literal["new", "resolved", "unchanged"]
+AnalysisEngine = Literal["deterministic", "hybrid", "ai_first"]
+CIMode = Literal["advisory", "soft", "block_new_critical"]
+SupportLevel = Literal["auto", "l0", "l1", "l2"]
+AppliedSupportLevel = Literal["l0", "l1", "l2"]
+RiskPolicy = Literal["conservative", "balanced", "aggressive"]
+CompetitiveMode = Literal["deterministic", "hybrid"]
+GraphMode = Literal["deterministic", "enriched"]
+TestType = Literal["api", "integration", "unit", "e2e"]
+PreflightStatus = Literal["PASS", "WARN", "FAIL"]
+AnalysisScope = Literal["impacted", "full", "full_fallback"]
 
 
 @dataclass
@@ -18,6 +30,7 @@ class Node:
     layer: Layer
     source_ref: str
     confidence: Confidence = "medium"
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -29,6 +42,7 @@ class Edge:
     source_ref: str
     evidence: str
     confidence: Confidence = "medium"
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -45,6 +59,9 @@ class TransitionSpec:
     source: str
     target: str
     source_ref: str
+    line: int | None = None
+    snippet: str = ""
+    invariant_guarded: bool = True
 
 
 @dataclass
@@ -59,6 +76,10 @@ class Finding:
     source_ref: str
     suppression_key: str
     recommendation: str
+    origin: FindingOrigin = "deterministic"
+    fingerprint: str = ""
+    status: FindingStatus = "unchanged"
+    evidence_refs: list[str] = field(default_factory=list)
     generated_without_llm: bool = False
 
 
@@ -76,6 +97,10 @@ class TestRecommendation:
     finding_id: str
     source_ref: str
     recommendation: str
+    test_type: TestType = "api"
+    test_target: str = ""
+    assertions: list[str] = field(default_factory=list)
+    confidence: Confidence = "medium"
     generated_without_llm: bool = False
 
 
@@ -87,7 +112,7 @@ class TestPlan:
 
 @dataclass
 class PreflightResult:
-    status: Literal["PASS", "WARN", "FAIL"]
+    status: PreflightStatus
     reasons: list[str] = field(default_factory=list)
 
 
@@ -103,18 +128,57 @@ class RunContext:
     fail_on_severity: Severity | None = None
     suppress_file: Path | None = None
     baseline_graph: Path | None = None
+    analysis_engine: AnalysisEngine = "ai_first"
+    only_new: bool = False
+    min_confidence: Confidence = "low"
+    ci_mode: CIMode = "advisory"
+    support_level: SupportLevel = "auto"
+    risk_policy: RiskPolicy = "balanced"
+
+
+@dataclass
+class RunSummary:
+    new_count: int = 0
+    resolved_count: int = 0
+    unchanged_count: int = 0
+    fallback_reason: str | None = None
+    support_level_applied: AppliedSupportLevel = "l0"
+    effective_ci_mode: CIMode = "advisory"
+    verification_pass_rate: float = 0.0
+    evidence_completeness: float = 0.0
+    competitive_mode: CompetitiveMode = "deterministic"
+    graph_mode_applied: GraphMode = "deterministic"
+    semantic_signal_count: int = 0
+
+
+@dataclass
+class RunMetrics:
+    precision_proxy: float
+    fallback_reason: str | None
+    new_findings_count: int
+    actionability_proxy: float
+    triage_time_proxy_min: float
+    verification_pass_rate: float
+    evidence_completeness: float
+    support_level_applied: AppliedSupportLevel
+    competitive_mode: CompetitiveMode
+    analysis_scope: AnalysisScope
+    duration_ms: int
 
 
 @dataclass
 class PipelineResult:
     preflight: PreflightResult
-    analysis_scope: Literal["impacted", "full", "full_fallback"]
+    analysis_scope: AnalysisScope
     data_quality_low_confidence_ratio: float
     suppressed_count: int
     graph: Graph
+    deterministic_graph: Graph
     findings_raw: FindingsReport
     findings: FindingsReport
     test_plan: TestPlan
+    summary: RunSummary
+    run_metrics: RunMetrics
 
 
 def write_json(path: Path, data: Any) -> None:

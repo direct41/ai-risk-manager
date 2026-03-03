@@ -21,7 +21,12 @@ jobs:
 
       - name: Analyze main
         run: |
-          riskmap analyze --mode full --provider auto --output-dir ./.riskmap || {
+          riskmap analyze \
+            --mode full \
+            --no-llm \
+            --analysis-engine deterministic \
+            --ci-mode advisory \
+            --output-dir ./.riskmap || {
             rc=$?
             if [ "$rc" -ne 2 ]; then
               exit "$rc"
@@ -31,15 +36,16 @@ jobs:
 
       - name: Prepare baseline
         run: |
-          if [ -f ./.riskmap/graph.json ]; then
+          if [ -f ./.riskmap/graph.json ] && [ -f ./.riskmap/findings.json ]; then
             mkdir -p ./.riskmap/baseline
             cp ./.riskmap/graph.json ./.riskmap/baseline/graph.json
+            cp ./.riskmap/findings.json ./.riskmap/baseline/findings.json
           else
-            echo "No graph.json generated; baseline not prepared."
+            echo "Missing baseline artifacts (graph.json/findings.json); baseline not prepared."
           fi
 
       - name: Save baseline cache
-        if: hashFiles('./.riskmap/baseline/graph.json') != ''
+        if: hashFiles('./.riskmap/baseline/graph.json') != '' && hashFiles('./.riskmap/baseline/findings.json') != ''
         uses: actions/cache/save@v4
         with:
           path: ./.riskmap/baseline
@@ -74,24 +80,43 @@ jobs:
 
       - name: Analyze PR
         run: |
+          mkdir -p ./.riskmap
           if [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
             provider_flags="--no-llm"
+            ci_mode="advisory"
           else
             provider_flags="--provider auto"
+            ci_mode="${AIRISK_CI_MODE:-advisory}"
           fi
           riskmap analyze \
             --mode pr \
             --base "${{ github.base_ref }}" \
             ${provider_flags} \
+            --analysis-engine ai-first \
+            --only-new \
+            --ci-mode "${ci_mode}" \
             --output-dir ./.riskmap \
-            --baseline-graph ./.riskmap/baseline/graph.json
+            --baseline-graph ./.riskmap/baseline/graph.json || {
+            rc=$?
+            if [ "$rc" -ne 2 ]; then
+              exit "$rc"
+            fi
+            echo "Preflight unsupported for this repository in PR mode; writing fallback summary."
+            printf '%s\n' \
+              '<!-- ai-risk-manager -->' \
+              '## AI Risk Manager Summary' \
+              '' \
+              '- status: `skipped`' \
+              '- reason: `unsupported_repository_preflight`' \
+              > ./.riskmap/pr_summary.md
+          }
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: risk-analysis-pr-${{ github.event.pull_request.number }}-${{ github.sha }}
           path: ./.riskmap/
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Upsert PR comment
         uses: actions/github-script@v7

@@ -14,7 +14,11 @@ class SuppressionSet:
 
 
 def _normalize_path(path: str) -> str:
-    return path.replace("\\", "/")
+    normalized = path.replace("\\", "/")
+    match = re.match(r"^(.*):\d+$", normalized)
+    if match:
+        return match.group(1)
+    return normalized
 
 
 def _unquote(value: str) -> str:

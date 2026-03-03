@@ -3,10 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ai_risk_manager.collectors.plugins.base import DetectionConfidence, StackId, StackProbeResult
+from ai_risk_manager.collectors.plugins.base import StackId, StackProbeResult
+from ai_risk_manager.schemas.types import Confidence
 from ai_risk_manager.collectors.plugins.registry import list_plugins
 
-_CONFIDENCE_RANK: dict[DetectionConfidence, int] = {
+_CONFIDENCE_RANK: dict[Confidence, int] = {
     "low": 1,
     "medium": 2,
     "high": 3,
@@ -16,7 +17,7 @@ _CONFIDENCE_RANK: dict[DetectionConfidence, int] = {
 @dataclass
 class StackDetectionResult:
     stack_id: StackId
-    confidence: DetectionConfidence
+    confidence: Confidence
     reasons: list[str] = field(default_factory=list)
     probe_data: object | None = None
 
