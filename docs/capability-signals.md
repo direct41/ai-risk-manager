@@ -19,7 +19,7 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 | `state_transition_handled_guarded` | Runtime status mutation and guard presence | `ArtifactBundle.handled_transitions` (`invariant_guarded`) | `Graph.handled_transitions` entries | `broken_invariant_on_transition` | implemented |
 | `test_to_endpoint_coverage` | Evidence that tests exercise write paths | `ArtifactBundle.test_cases` + `test_http_calls` (path params, aliases, fixture/reverse mapping) | `Node(type=\"TestCase\")` + `Edge(type=\"covered_by\")` | `critical_path_no_tests` | implemented |
 | `dependency_version_policy` | Supply-chain risk from mutable dependency specs | `ArtifactBundle.dependency_specs` via shared extractor (`pyproject.toml` + requirements files) | `Node(type=\"Dependency\")` with `details.policy_violation/scope` | `dependency_risk_policy_violation` | implemented |
-| `side_effect_emit_contract` | Mandatory side-effect after critical write (event, notification, webhook, job) | `ArtifactBundle.side_effect_requirements` + `side_effect_emits` contract fields (plugins not implemented yet) | None yet | None yet | partial |
+| `side_effect_emit_contract` | Mandatory side-effect after critical write (event, notification, webhook, job) | `ArtifactBundle.side_effect_requirements` + `side_effect_emits` contract fields (plugins not implemented yet) | None yet | `missing_required_side_effect` (contract-level) | partial |
 | `authorization_boundary_enforced` | Authz checks on critical path writes | `ArtifactBundle.authorization_boundaries` contract field (plugins not implemented yet) | None yet | None yet (no dedicated auth rule) | partial |
 
 ## Rule-to-Signal Dependency
@@ -30,6 +30,7 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 | `missing_transition_handler` | `state_transition_declared`, `state_transition_handled_guarded` |
 | `broken_invariant_on_transition` | `state_transition_handled_guarded`, `state_transition_declared` |
 | `dependency_risk_policy_violation` | `dependency_version_policy` |
+| `missing_required_side_effect` | `side_effect_emit_contract` |
 
 ## Current Gaps Blocking Higher Coverage
 

@@ -532,7 +532,7 @@ def _stage_analysis(
     notes: list[str],
 ) -> tuple[_AnalysisStage | None, int | None]:
     t = sinks.progress.start(4, total_steps, "Running deterministic rules")
-    findings_raw = run_rules(scope.analysis_graph, risk_policy=ctx.risk_policy)
+    findings_raw = run_rules(scope.analysis_signals, risk_policy=ctx.risk_policy)
     sinks.progress.finish(4, total_steps, "Running deterministic rules", t)
     deterministic_graph = scope.analysis_graph
 

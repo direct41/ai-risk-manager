@@ -152,7 +152,62 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
     return FindingsReport(findings=findings, generated_without_llm=True)
 
 
+def _run_signal_only_rules(signals: SignalBundle) -> list[Finding]:
+    findings: list[Finding] = []
+    emitted_keys: set[tuple[str, str]] = set()
+    required: list[tuple[str, str, str, str, str]] = []
+
+    for signal in signals.signals:
+        if signal.kind != "side_effect_emit_contract":
+            continue
+        role = str(signal.attributes.get("role", "")).strip()
+        effect_kind = str(signal.attributes.get("effect_kind", "")).strip()
+        effect_target = str(signal.attributes.get("effect_target", "")).strip()
+        owner_name = str(signal.attributes.get("owner_name", "unknown")).strip() or "unknown"
+        if not effect_kind or not effect_target:
+            continue
+
+        key = (effect_kind, effect_target)
+        if role == "emitted":
+            emitted_keys.add(key)
+        elif role == "required":
+            required.append((signal.source_ref, owner_name, effect_kind, effect_target, signal.id))
+
+    for source_ref, owner_name, effect_kind, effect_target, signal_id in required:
+        if (effect_kind, effect_target) in emitted_keys:
+            continue
+        finding_id = f"missing_required_side_effect:{owner_name}:{effect_kind}:{effect_target}:{signal_id}"
+        findings.append(
+            Finding(
+                id=finding_id,
+                rule_id="missing_required_side_effect",
+                title=f"Missing required side-effect '{effect_kind}:{effect_target}' for '{owner_name}'",
+                description=(
+                    "A required side-effect contract was declared but no matching emitted side-effect signal was found."
+                ),
+                severity="high",
+                confidence="medium",
+                evidence=(
+                    f"Required side-effect '{effect_kind}:{effect_target}' declared for '{owner_name}' "
+                    "without matching emitted side-effect evidence."
+                ),
+                source_ref=source_ref,
+                suppression_key=finding_id,
+                recommendation=(
+                    f"Ensure '{owner_name}' emits side-effect '{effect_kind}:{effect_target}' "
+                    "or update the declared side-effect contract."
+                ),
+                origin="deterministic",
+                evidence_refs=[source_ref],
+            )
+        )
+
+    return findings
+
+
 def run_rules(graph: Graph | SignalBundle, *, risk_policy: RiskPolicy = "balanced") -> FindingsReport:
     if isinstance(graph, SignalBundle):
-        return _run_rules_on_graph(build_graph(graph), risk_policy=risk_policy)
+        graph_findings = _run_rules_on_graph(build_graph(graph), risk_policy=risk_policy)
+        signal_findings = _run_signal_only_rules(graph)
+        return FindingsReport(findings=[*graph_findings.findings, *signal_findings], generated_without_llm=True)
     return _run_rules_on_graph(graph, risk_policy=risk_policy)

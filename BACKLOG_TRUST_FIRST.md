@@ -119,7 +119,7 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 
 ### Stories
 1. [x] Add extraction contract for `side_effect_emit_contract`.
-2. [ ] Add deterministic rule `missing_required_side_effect` with evidence-driven output.
+2. [x] Add deterministic rule `missing_required_side_effect` with evidence-driven output.
 3. [x] Add extraction contract for `authorization_boundary_enforced`.
 4. [ ] Add deterministic rule `critical_write_missing_authz` with policy integration.
 5. [ ] Add eval cases for pass/fail paths across current supported stacks.

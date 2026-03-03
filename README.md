@@ -77,6 +77,7 @@ Deterministic rules:
 - `missing_transition_handler`
 - `broken_invariant_on_transition`
 - `dependency_risk_policy_violation`
+- `missing_required_side_effect` (contract-level; plugin extraction in progress)
 
 ## CI Rollout Controls
 
