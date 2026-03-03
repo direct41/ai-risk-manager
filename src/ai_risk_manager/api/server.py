@@ -136,6 +136,8 @@ def create_app() -> FastAPIApp:
     return app
 
 
+app: Any
+
 try:
     app = create_app()
 except ApiDependencyError:
