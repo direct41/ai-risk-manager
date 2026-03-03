@@ -1,19 +1,19 @@
-from __future__ import annotations
-
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ai_risk_manager import __version__
 from ai_risk_manager.pipeline.context_builder import build_run_context
 from ai_risk_manager.pipeline.run import run_pipeline
 from ai_risk_manager.sample_repo import resolve_sample_repo_path
 from ai_risk_manager.schemas.types import to_dict
+from pydantic import ValidationError
 
 _API_INSTALL_HINT = "Install API dependencies with: pip install -e '.[api]'."
 _API_IMPORT_ERROR: Exception | None = None
 _FastAPI: Any = None
 _HTTPException: Any = None
+_Body: Any = None
 _AnalyzeRequest: Any = None
 _AnalyzeResponse: Any = None
 _HealthResponse: Any = None
@@ -26,11 +26,13 @@ else:
 try:
     from fastapi import FastAPI as FastAPIImport
     from fastapi import HTTPException as HTTPExceptionImport
+    from fastapi import Body as BodyImport
     from ai_risk_manager.api.models import AnalyzeRequest as AnalyzeRequestImport
     from ai_risk_manager.api.models import AnalyzeResponse as AnalyzeResponseImport
     from ai_risk_manager.api.models import HealthResponse as HealthResponseImport
     _FastAPI = FastAPIImport
     _HTTPException = HTTPExceptionImport
+    _Body = BodyImport
     _AnalyzeRequest = AnalyzeRequestImport
     _AnalyzeResponse = AnalyzeResponseImport
     _HealthResponse = HealthResponseImport
@@ -58,10 +60,10 @@ def _missing_dependency_error(exc: Exception) -> ApiDependencyError:
     return ApiDependencyError(f"API adapter is unavailable ({exc.__class__.__name__}: {exc}). {_API_INSTALL_HINT}")
 
 
-def _load_api_dependencies() -> tuple[Any, Any, Any, Any, Any]:
+def _load_api_dependencies() -> tuple[Any, Any, Any, Any, Any, Any]:
     if _API_IMPORT_ERROR is not None:
         raise _missing_dependency_error(_API_IMPORT_ERROR) from _API_IMPORT_ERROR
-    return _FastAPI, _HTTPException, _AnalyzeRequest, _AnalyzeResponse, _HealthResponse
+    return _FastAPI, _HTTPException, _Body, _AnalyzeRequest, _AnalyzeResponse, _HealthResponse
 
 
 def _resolve_repo_path(path: str, sample: bool) -> Path:
@@ -86,15 +88,20 @@ def _collect_artifacts(output_dir: Path) -> dict[str, str]:
 
 
 def create_app() -> FastAPIApp:
-    FastAPI, HTTPException, AnalyzeRequest, AnalyzeResponse, HealthResponse = _load_api_dependencies()
+    FastAPI, HTTPException, Body, AnalyzeRequestModel, AnalyzeResponseModel, HealthResponseModel = _load_api_dependencies()
     app = FastAPI(title="AI Risk Manager API", version=__version__)
 
-    @app.get("/healthz", response_model=HealthResponse)
+    @app.get("/healthz", response_model=HealthResponseModel)
     def healthz() -> Any:
-        return HealthResponse(status="ok", version=__version__)
+        return HealthResponseModel(status="ok", version=__version__)
 
-    @app.post("/v1/analyze", response_model=AnalyzeResponse)
-    def analyze(request: Any) -> Any:
+    @app.post("/v1/analyze", response_model=AnalyzeResponseModel)
+    def analyze(request_payload: dict[str, Any] = Body(...)) -> Any:
+        try:
+            request = cast(Any, AnalyzeRequestModel.model_validate(request_payload))
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
         try:
             repo_path = _resolve_repo_path(request.path, request.sample)
         except (FileNotFoundError, ValueError) as exc:
@@ -124,7 +131,7 @@ def create_app() -> FastAPIApp:
         )
 
         result, exit_code, notes = run_pipeline(ctx)
-        return AnalyzeResponse(
+        return AnalyzeResponseModel(
             exit_code=exit_code,
             notes=notes,
             output_dir=str(output_dir),
