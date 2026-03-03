@@ -154,6 +154,13 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
 
 def _run_signal_only_rules(signals: SignalBundle) -> list[Finding]:
     findings: list[Finding] = []
+    findings.extend(_run_missing_required_side_effect_rule(signals))
+    findings.extend(_run_critical_write_missing_authz_rule(signals))
+    return findings
+
+
+def _run_missing_required_side_effect_rule(signals: SignalBundle) -> list[Finding]:
+    findings: list[Finding] = []
     emitted_keys: set[tuple[str, str]] = set()
     required: list[tuple[str, str, str, str, str]] = []
 
@@ -199,6 +206,61 @@ def _run_signal_only_rules(signals: SignalBundle) -> list[Finding]:
                 ),
                 origin="deterministic",
                 evidence_refs=[source_ref],
+            )
+        )
+
+    return findings
+
+
+def _run_critical_write_missing_authz_rule(signals: SignalBundle) -> list[Finding]:
+    if "authorization_boundary_enforced" not in signals.supported_kinds:
+        return []
+
+    findings: list[Finding] = []
+    protected_owners: set[str] = set()
+    for signal in signals.signals:
+        if signal.kind != "authorization_boundary_enforced":
+            continue
+        owner_name = str(signal.attributes.get("owner_name", "")).strip()
+        if owner_name:
+            protected_owners.add(owner_name)
+
+    for signal in signals.signals:
+        if signal.kind != "http_write_surface":
+            continue
+        owner_name = str(signal.attributes.get("endpoint_name", "")).strip()
+        if not owner_name:
+            continue
+        if owner_name in protected_owners:
+            continue
+
+        method = str(signal.attributes.get("method", "")).strip().upper()
+        path = str(signal.attributes.get("path", "")).strip()
+        finding_id = f"critical_write_missing_authz:{owner_name}:{method}:{path}:{signal.id}"
+        findings.append(
+            Finding(
+                id=finding_id,
+                rule_id="critical_write_missing_authz",
+                title=f"Critical write endpoint '{owner_name}' lacks authz boundary",
+                description=(
+                    "Write endpoint is part of a stack with declared authorization signal support, "
+                    "but no authorization boundary evidence was found for this endpoint."
+                ),
+                severity="high",
+                confidence="medium",
+                evidence=(
+                    f"Detected write endpoint '{owner_name}' ({method} {path}) "
+                    "without matching authorization boundary signal."
+                ),
+                source_ref=signal.source_ref,
+                suppression_key=finding_id,
+                recommendation=(
+                    f"Add and enforce authorization boundary for endpoint '{owner_name}' "
+                    "(permission/policy/decorator/guard) and expose it as "
+                    "`authorization_boundary_enforced` signal."
+                ),
+                origin="deterministic",
+                evidence_refs=[signal.source_ref],
             )
         )
 

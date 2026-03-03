@@ -66,3 +66,86 @@ def test_missing_required_side_effect_is_not_reported_when_emit_exists() -> None
 
     assert all(row.rule_id != "missing_required_side_effect" for row in findings.findings)
 
+
+def test_critical_write_missing_authz_is_reported_when_supported_but_not_present() -> None:
+    signals = SignalBundle(
+        signals=[
+            CapabilitySignal(
+                id="sig:http:create_order",
+                kind="http_write_surface",
+                source_ref="app/api.py:12",
+                confidence="high",
+                evidence_refs=["app/api.py:12"],
+                attributes={
+                    "endpoint_name": "create_order",
+                    "method": "POST",
+                    "path": "/orders",
+                },
+            )
+        ],
+        supported_kinds={"http_write_surface", "authorization_boundary_enforced"},
+    )
+
+    findings = run_rules(signals, risk_policy="balanced")
+
+    assert any(row.rule_id == "critical_write_missing_authz" for row in findings.findings)
+
+
+def test_critical_write_missing_authz_is_not_reported_when_boundary_exists() -> None:
+    signals = SignalBundle(
+        signals=[
+            CapabilitySignal(
+                id="sig:http:create_order",
+                kind="http_write_surface",
+                source_ref="app/api.py:12",
+                confidence="high",
+                evidence_refs=["app/api.py:12"],
+                attributes={
+                    "endpoint_name": "create_order",
+                    "method": "POST",
+                    "path": "/orders",
+                },
+            ),
+            CapabilitySignal(
+                id="sig:authz:create_order",
+                kind="authorization_boundary_enforced",
+                source_ref="app/api.py:8",
+                confidence="medium",
+                evidence_refs=["app/api.py:8"],
+                attributes={
+                    "owner_name": "create_order",
+                    "auth_mechanism": "decorator",
+                    "auth_subject": "order.write",
+                },
+            ),
+        ],
+        supported_kinds={"http_write_surface", "authorization_boundary_enforced"},
+    )
+
+    findings = run_rules(signals, risk_policy="balanced")
+
+    assert all(row.rule_id != "critical_write_missing_authz" for row in findings.findings)
+
+
+def test_critical_write_missing_authz_is_not_reported_when_capability_is_not_supported() -> None:
+    signals = SignalBundle(
+        signals=[
+            CapabilitySignal(
+                id="sig:http:create_order",
+                kind="http_write_surface",
+                source_ref="app/api.py:12",
+                confidence="high",
+                evidence_refs=["app/api.py:12"],
+                attributes={
+                    "endpoint_name": "create_order",
+                    "method": "POST",
+                    "path": "/orders",
+                },
+            )
+        ],
+        supported_kinds={"http_write_surface"},
+    )
+
+    findings = run_rules(signals, risk_policy="balanced")
+
+    assert all(row.rule_id != "critical_write_missing_authz" for row in findings.findings)
