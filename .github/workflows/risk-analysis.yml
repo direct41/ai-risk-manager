@@ -102,13 +102,13 @@ jobs:
               exit "$rc"
             fi
             echo "Preflight unsupported for this repository in PR mode; writing fallback summary."
-            cat > ./.riskmap/pr_summary.md <<'EOF'
-<!-- ai-risk-manager -->
-## AI Risk Manager Summary
-
-- status: `skipped`
-- reason: `unsupported_repository_preflight`
-EOF
+            printf '%s\n' \
+              '<!-- ai-risk-manager -->' \
+              '## AI Risk Manager Summary' \
+              '' \
+              '- status: `skipped`' \
+              '- reason: `unsupported_repository_preflight`' \
+              > ./.riskmap/pr_summary.md
           }
 
       - name: Upload artifacts
