@@ -70,7 +70,7 @@ Important for PR delta (`new/resolved/unchanged`):
   - `django_drf`
 - Local/CI assistant for risk mapping.
 - Not a generic multi-language SAST replacement.
-- API is local/internal oriented (no auth, no multi-tenant guarantees).
+- API supports optional token auth, request guardrails, and correlation/audit controls for service usage.
 
 Deterministic rules:
 - `critical_path_no_tests`
@@ -170,6 +170,13 @@ Additional request guardrails:
 
 - `AIRISK_API_RATE_LIMIT_PER_MINUTE` (default `0`, disabled)
 - `AIRISK_API_MAX_BODY_BYTES` (default `0`, disabled)
+- `AIRISK_API_AUDIT_LOG` (optional path for append-only JSONL audit events)
+
+Operational controls:
+
+- Pass `X-Correlation-ID` (or `X-Request-ID`) to keep a stable run identifier through API logs and output.
+- API response includes `correlation_id` and `diagnostics`.
+- `api_audit.json` is written to `output_dir` for each API run.
 
 Health:
 

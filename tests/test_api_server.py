@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -66,6 +67,11 @@ def test_api_analyze_matches_pipeline_for_same_input(tmp_path: Path, write_file)
     assert "effective_ci_mode" in api_data["summary"]
     assert api_data["result"]["analysis_scope"] == direct_result.analysis_scope
     assert len(api_data["result"]["findings"]["findings"]) == len(direct_result.findings.findings)
+    assert isinstance(api_data["correlation_id"], str)
+    assert api_data["diagnostics"]["status"] == "completed"
+    assert isinstance(api_data["diagnostics"]["duration_ms"], int)
+    assert api_data["artifacts"]["api_audit.json"].endswith("api_audit.json")
+    assert (output_dir / "api_audit.json").exists()
 
 
 def test_api_returns_400_for_missing_repo_path(tmp_path: Path) -> None:
@@ -237,3 +243,81 @@ def test_api_rejects_payload_above_max_body_size(tmp_path: Path, write_file, mon
 
     assert response.status_code == 413
     assert response.json()["detail"] == "Payload too large"
+
+
+def test_api_uses_provided_correlation_id(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_api.py", "def test_smoke():\n    assert True\n")
+
+    client = TestClient(app)
+    response = client.post(
+        "/v1/analyze",
+        json={
+            "path": str(tmp_path),
+            "mode": "full",
+            "no_llm": True,
+        },
+        headers={"X-Correlation-ID": "custom.req-001"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["correlation_id"] == "custom.req-001"
+    assert payload["notes"][0] == "correlation_id=custom.req-001"
+
+
+def test_api_writes_audit_log_when_configured(tmp_path: Path, write_file, monkeypatch) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_api.py", "def test_smoke():\n    assert True\n")
+    audit_log = tmp_path / "audit" / "api.jsonl"
+    monkeypatch.setenv("AIRISK_API_AUDIT_LOG", str(audit_log))
+
+    client = TestClient(app)
+    response = client.post(
+        "/v1/analyze",
+        json={
+            "path": str(tmp_path),
+            "mode": "full",
+            "no_llm": True,
+        },
+    )
+
+    assert response.status_code == 200
+    lines = [line for line in audit_log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(lines) == 1
+    payload = json.loads(lines[0])
+    assert payload["status"] == "completed"
+    assert payload["http_status"] == 200
+    assert payload["exit_code"] == 0
+    assert payload["correlation_id"] == response.json()["correlation_id"]
+
+
+def test_api_returns_failure_diagnostics_on_internal_error(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_api.py", "def test_smoke():\n    assert True\n")
+
+    client = TestClient(app)
+    with patch("ai_risk_manager.api.server.run_pipeline", side_effect=RuntimeError("boom")):
+        response = client.post(
+            "/v1/analyze",
+            json={
+                "path": str(tmp_path),
+                "mode": "full",
+                "no_llm": True,
+            },
+        )
+
+    assert response.status_code == 500
+    detail = response.json()["detail"]
+    assert detail["message"] == "Internal server error"
+    assert isinstance(detail["correlation_id"], str)
+    assert detail["diagnostic_id"].startswith("diag-")
