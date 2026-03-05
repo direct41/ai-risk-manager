@@ -2,9 +2,28 @@ from __future__ import annotations
 
 from dataclasses import replace
 import json
+import os
 
 from ai_risk_manager.agents.llm_runtime import LLMRuntimeError, call_llm_json
 from ai_risk_manager.schemas.types import FindingsReport, Graph, TestPlan, TestRecommendation
+
+
+def _qa_llm_timeout_seconds() -> float:
+    raw = os.getenv("AIRISK_QA_LLM_TIMEOUT_SECONDS", "20")
+    try:
+        value = float(raw)
+    except ValueError:
+        return 20.0
+    return value if value > 0 else 20.0
+
+
+def _qa_llm_max_retries() -> int:
+    raw = os.getenv("AIRISK_QA_LLM_MAX_RETRIES", "0")
+    try:
+        value = int(raw)
+    except ValueError:
+        return 0
+    return value if value >= 0 else 0
 
 
 def _deterministic_test_plan(findings: FindingsReport, *, generated_without_llm: bool) -> TestPlan:
@@ -82,7 +101,12 @@ def generate_test_plan(
     prompt = json.dumps(prompt_payload, ensure_ascii=False)
 
     try:
-        payload = call_llm_json(provider, prompt, max_retries=2)
+        payload = call_llm_json(
+            provider,
+            prompt,
+            max_retries=_qa_llm_max_retries(),
+            timeout_seconds=_qa_llm_timeout_seconds(),
+        )
         return _validate_test_plan_payload(payload)
     except (LLMRuntimeError, ValueError, TypeError):
         return _low_confidence_plan(_deterministic_test_plan(findings, generated_without_llm=True))

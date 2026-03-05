@@ -106,3 +106,60 @@ def test_artifact_bundle_to_signal_bundle_maps_authorization_contract() -> None:
     assert authz.attributes["auth_mechanism"] == "decorator"
     assert authz.attributes["auth_subject"] == "order.write"
     assert "authorization_boundary_enforced" in bundle.supported_kinds
+
+
+def test_artifact_bundle_to_signal_bundle_maps_integrity_and_frontend_safety_contracts() -> None:
+    artifacts = ArtifactBundle(
+        write_contract_issues=[
+            (
+                "server/services/notesService.js",
+                "db_insert_binding_mismatch",
+                "createNote",
+                42,
+                "INSERT INTO notes (...) VALUES (...)",
+                {"column": "title", "value_field": "content"},
+            )
+        ],
+        session_lifecycle_issues=[
+            (
+                "public/app.js",
+                "storage_key_mismatch",
+                "localStorage",
+                81,
+                "localStorage.removeItem('session_token')",
+                {"set_key": "sessionToken", "remove_key": "session_token"},
+            )
+        ],
+        html_render_issues=[
+            (
+                "public/app.js",
+                "unsanitized_innerhtml",
+                "renderNotes",
+                120,
+                "refs.notesContainer.innerHTML = ...",
+                {"sink": "refs.notesContainer.innerHTML"},
+            )
+        ],
+        ui_ergonomics_issues=[
+            (
+                "public/app.js",
+                "pagination_page_not_normalized_after_mutation",
+                "loadNotes",
+                114,
+                "async function loadNotes()",
+                {"state_field": "state.page"},
+            )
+        ],
+    )
+
+    bundle = artifact_bundle_to_signal_bundle(artifacts)
+    kinds = {signal.kind for signal in bundle.signals}
+
+    assert "write_contract_integrity" in kinds
+    assert "session_lifecycle_consistency" in kinds
+    assert "html_render_safety" in kinds
+    assert "ui_ergonomics" in kinds
+    assert "write_contract_integrity" in bundle.supported_kinds
+    assert "session_lifecycle_consistency" in bundle.supported_kinds
+    assert "html_render_safety" in bundle.supported_kinds
+    assert "ui_ergonomics" in bundle.supported_kinds

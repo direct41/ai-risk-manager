@@ -23,3 +23,16 @@ def test_detect_stack_unknown_for_plain_python_repo(tmp_path: Path, write_file) 
     detected = detect_stack(tmp_path)
     assert detected.stack_id == "unknown"
     assert detected.confidence == "low"
+
+
+def test_detect_stack_express_node_high_confidence(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "server" / "app.js",
+        "const express = require('express');\n"
+        "const app = express();\n"
+        "app.post('/api/notes', (_req, res) => res.json({ ok: true }));\n",
+    )
+
+    detected = detect_stack(tmp_path)
+    assert detected.stack_id == "express_node"
+    assert detected.confidence == "high"

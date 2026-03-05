@@ -9,7 +9,7 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 - `partial`: extracted for some stacks or not yet enforced by deterministic rules.
 - `missing`: not extracted as a first-class capability yet.
 
-## Core 8 Signals
+## Core 12 Signals
 
 | Signal | Meaning | Current extraction source | Graph expression | Rule coverage | Status |
 |---|---|---|---|---|---|
@@ -19,8 +19,12 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 | `state_transition_handled_guarded` | Runtime status mutation and guard presence | `ArtifactBundle.handled_transitions` (`invariant_guarded`) | `Graph.handled_transitions` entries | `broken_invariant_on_transition` | implemented |
 | `test_to_endpoint_coverage` | Evidence that tests exercise write paths | `ArtifactBundle.test_cases` + `test_http_calls` (path params, aliases, fixture/reverse mapping) | `Node(type=\"TestCase\")` + `Edge(type=\"covered_by\")` | `critical_path_no_tests` | implemented |
 | `dependency_version_policy` | Supply-chain risk from mutable dependency specs | `ArtifactBundle.dependency_specs` via shared extractor (`pyproject.toml` + requirements files) | `Node(type=\"Dependency\")` with `details.policy_violation/scope` | `dependency_risk_policy_violation` | implemented |
-| `side_effect_emit_contract` | Mandatory side-effect after critical write (event, notification, webhook, job) | `ArtifactBundle.side_effect_requirements` + `side_effect_emits` contract fields (plugins not implemented yet) | None yet | `missing_required_side_effect` (contract-level) | partial |
-| `authorization_boundary_enforced` | Authz checks on critical path writes | `ArtifactBundle.authorization_boundaries` contract field (plugins not implemented yet) | None yet | `critical_write_missing_authz` (contract-level) | partial |
+| `side_effect_emit_contract` | Mandatory side-effect after critical write (event, notification, webhook, job) | `ArtifactBundle.side_effect_requirements` + `side_effect_emits` | None yet | `missing_required_side_effect` | partial |
+| `authorization_boundary_enforced` | Authz checks on critical path writes | `ArtifactBundle.authorization_boundaries` (Express middleware extraction implemented) | None yet | `critical_write_missing_authz` | partial |
+| `write_contract_integrity` | Data-integrity and boundary-contract anomalies in write paths | `ArtifactBundle.write_contract_issues` (Express-first extraction) | None yet | `input_normalization_char_split`, `response_field_contract_mismatch`, `db_insert_binding_mismatch`, `critical_write_scope_missing_entity_filter`, `stale_write_without_conflict_guard`, `reading_time_round_down_to_zero`, `priority_formula_precedence_risk`, `overdue_date_string_comparison` | partial |
+| `session_lifecycle_consistency` | Consistency of token/session storage lifecycle across login/logout flows | `ArtifactBundle.session_lifecycle_issues` (Express-first extraction) | None yet | `session_token_key_mismatch` | partial |
+| `html_render_safety` | Unsafe HTML sink usage for untrusted content | `ArtifactBundle.html_render_issues` (Express-first extraction) | None yet | `stored_xss_unsafe_innerhtml` | partial |
+| `ui_ergonomics` | UI state/layout quality risks affecting interaction reliability | `ArtifactBundle.ui_ergonomics_issues` (Express-first extraction) | None yet | `pagination_page_not_normalized`, `save_button_partial_form_enabled`, `mobile_layout_min_width_overflow` | partial |
 
 ## Rule-to-Signal Dependency
 
@@ -32,26 +36,33 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 | `dependency_risk_policy_violation` | `dependency_version_policy` |
 | `missing_required_side_effect` | `side_effect_emit_contract` |
 | `critical_write_missing_authz` | `http_write_surface`, `authorization_boundary_enforced` |
+| `input_normalization_char_split` | `write_contract_integrity` (`issue_type=char_split_normalization`) |
+| `response_field_contract_mismatch` | `write_contract_integrity` (`issue_type=response_field_alias_mismatch`) |
+| `db_insert_binding_mismatch` | `write_contract_integrity` (`issue_type=db_insert_binding_mismatch`) |
+| `critical_write_scope_missing_entity_filter` | `write_contract_integrity` (`issue_type=write_scope_missing_entity_filter`) |
+| `stale_write_without_conflict_guard` | `write_contract_integrity` (`issue_type=stale_write_without_conflict_guard`) |
+| `reading_time_round_down_to_zero` | `write_contract_integrity` (`issue_type=reading_time_rounding_floor_missing`) |
+| `priority_formula_precedence_risk` | `write_contract_integrity` (`issue_type=priority_ternary_constant_branch`) |
+| `overdue_date_string_comparison` | `write_contract_integrity` (`issue_type=date_string_compare_with_iso`) |
+| `session_token_key_mismatch` | `session_lifecycle_consistency` |
+| `stored_xss_unsafe_innerhtml` | `html_render_safety` |
+| `pagination_page_not_normalized` | `ui_ergonomics` (`issue_type=pagination_page_not_normalized_after_mutation`) |
+| `save_button_partial_form_enabled` | `ui_ergonomics` (`issue_type=save_button_partial_form_enabled`) |
+| `mobile_layout_min_width_overflow` | `ui_ergonomics` (`issue_type=mobile_layout_min_width_overflow`) |
 
 ## Current Gaps Blocking Higher Coverage
 
-1. Side-effect contract exists in artifact/signal schema but no stack plugin extracts it yet.
-2. Authorization contract exists in artifact/signal schema but no stack plugin extracts it yet.
-3. Contract binding is FastAPI-oriented (`pydantic_models`) and only partially generalized for Django/DRF.
+1. Side-effect contract extraction remains incomplete across supported stacks.
+2. New integrity/session/html signals are Express-first and need parity extraction strategy for other stacks.
+3. Contract binding is still FastAPI-oriented (`pydantic_models`) and only partially generalized for Django/DRF.
 
 ## Recommended Next Capability Pack (Highest ROI)
 
-1. Implement plugin extraction for `side_effect_emit_contract`.
-   - Collector artifacts: required emit operations + observed emit operations per write endpoint.
-   - Rule: `missing_required_side_effect`.
-   - Eval: one pass case, one fail case (missing emit).
-2. Implement plugin extraction for `authorization_boundary_enforced`.
-   - Collector artifacts: endpoint auth decorators/permissions/policy checks.
-   - Rule: `critical_write_missing_authz`.
-   - Eval: endpoint with and without authz guard.
-3. Generalize contract binding beyond Pydantic naming.
-   - Normalize request/response model extraction for Django serializers.
-   - Add deterministic rule hook once confidence is high.
+1. Stabilize capability-depth pack (`write_contract_integrity`, `session_lifecycle_consistency`, `html_render_safety`) for `express_node`.
+   - Add parity eval repos for positive/negative paths and tune conservative defaults.
+2. Expand side-effect and authz capability extraction parity across supported stacks.
+3. Generalize request/response contract extraction beyond Pydantic naming.
+4. Promote support-level only after trust-gate stability (precision/evidence/verification KPIs).
 
 ## Plugin Contract for New Backends
 

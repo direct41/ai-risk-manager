@@ -3,14 +3,17 @@ from __future__ import annotations
 from ai_risk_manager.collectors.plugins.base import CollectorPlugin, StackId
 from ai_risk_manager.collectors.plugins.contract import PluginConformanceReport, evaluate_plugin_conformance
 from ai_risk_manager.collectors.plugins.django import DjangoCollectorPlugin
+from ai_risk_manager.collectors.plugins.express import ExpressCollectorPlugin
 from ai_risk_manager.collectors.plugins.fastapi import FastAPICollectorPlugin
 from ai_risk_manager.collectors.plugins.sdk import CapabilitySignalPlugin
 
 _FASTAPI_PLUGIN = FastAPICollectorPlugin()
 _DJANGO_PLUGIN = DjangoCollectorPlugin()
+_EXPRESS_PLUGIN = ExpressCollectorPlugin()
 _PLUGINS: dict[StackId, CollectorPlugin] = {
     "fastapi_pytest": _FASTAPI_PLUGIN,
     "django_drf": _DJANGO_PLUGIN,
+    "express_node": _EXPRESS_PLUGIN,
 }
 
 

@@ -159,6 +159,30 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Security and reliability smoke checks run in CI.
 - Deployment docs define baseline secure configuration and known limits.
 
+## Epic 11: Capability Depth for Existing Stacks (P0)
+- Status: Planned
+- Outcome: materially reduce false-negative rate on high-impact backend and web-app risk classes without core rule forks
+
+### Stories
+1. [ ] P0 capability pack: data-integrity and boundary contracts.
+   - Add shared signals/rules for:
+     - write contract integrity (input/output field mismatches, suspicious normalization patterns)
+     - write scope boundary (critical update/delete missing entity filter)
+     - stale write conflict guard (client timestamp/version overwrite without compare-and-set control)
+     - session lifecycle consistency (login/logout key mismatch for active tokens)
+2. [ ] P1 capability pack: frontend security sinks.
+   - Add shared signal/rule for unsafe HTML sink usage (stored-XSS class) with evidence references.
+3. [ ] P2 capability pack (policy-default optional): low-impact UI ergonomics.
+   - Add conservative heuristics for pagination/page-index drift and form-completeness gating issues.
+4. [ ] Add parity eval suites for pass/fail paths (`express_node` first), then extend to other supported stacks where feasible.
+5. [ ] Keep new rules policy-configurable and conservative by default to protect precision KPIs.
+
+### Definition of Done
+- New capabilities are represented in stack-agnostic signal model and deterministic rules.
+- No stack-specific rule forks are added in core.
+- Trust/eval gates show no net precision regression; evidence completeness stays >= 95%.
+- At least one parity pass/fail case per new capability is present in eval repos.
+
 ## Delivery Sequence (Gate-Based)
 1. Epic 1
 2. Epic 2
@@ -170,3 +194,4 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 8. Epic 8
 9. Epic 9
 10. Epic 10
+11. Epic 11

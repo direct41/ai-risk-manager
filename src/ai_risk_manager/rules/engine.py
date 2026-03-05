@@ -4,7 +4,7 @@ from typing import cast
 
 from ai_risk_manager.graph.builder import build_graph
 from ai_risk_manager.signals.types import SignalBundle
-from ai_risk_manager.schemas.types import Finding, FindingsReport, Graph, RiskPolicy, Severity
+from ai_risk_manager.schemas.types import Confidence, Finding, FindingsReport, Graph, RiskPolicy, Severity
 
 DEPENDENCY_VIOLATIONS_BY_POLICY: dict[RiskPolicy, set[str]] = {
     "conservative": {"direct_reference", "wildcard_version"},
@@ -50,6 +50,7 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
                     recommendation=f"Add API/service tests for endpoint '{api.name}', including success and error paths.",
                     origin="deterministic",
                     evidence_refs=[api.source_ref],
+                    generated_without_llm=True,
                 )
             )
 
@@ -60,7 +61,7 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
         source_ref = next((t.source_ref for t in graph.declared_transitions if t.source == source and t.target == target), "unknown")
         finding_id = f"missing_transition_handler:{source}->{target}"
         findings.append(
-            Finding(
+                Finding(
                 id=finding_id,
                 rule_id="missing_transition_handler",
                 title=f"Declared transition '{source} -> {target}' has no handler",
@@ -71,10 +72,11 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
                 source_ref=source_ref,
                 suppression_key=finding_id,
                 recommendation=f"Implement handler logic for transition '{source} -> {target}' or remove stale declaration.",
-                origin="deterministic",
-                evidence_refs=[source_ref],
+                    origin="deterministic",
+                    evidence_refs=[source_ref],
+                    generated_without_llm=True,
+                )
             )
-        )
 
     for transition in graph.handled_transitions:
         if transition.invariant_guarded:
@@ -84,7 +86,7 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
             continue
         finding_id = f"broken_invariant_on_transition:{transition.machine}:{transition.source}->{transition.target}"
         findings.append(
-            Finding(
+                Finding(
                 id=finding_id,
                 rule_id="broken_invariant_on_transition",
                 title=f"Transition '{transition.source} -> {transition.target}' lacks invariant guard",
@@ -103,10 +105,11 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
                     f"Add explicit guard checks for transition '{transition.source} -> {transition.target}' "
                     f"in handler '{transition.machine}' (assertions/validation/policy checks)."
                 ),
-                origin="deterministic",
-                evidence_refs=[transition.source_ref],
+                    origin="deterministic",
+                    evidence_refs=[transition.source_ref],
+                    generated_without_llm=True,
+                )
             )
-        )
 
     for dep in dependency_nodes:
         violation = str(dep.details.get("policy_violation") or "").strip()
@@ -131,7 +134,7 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
 
         finding_id = f"dependency_risk_policy_violation:{dep.id}"
         findings.append(
-            Finding(
+                Finding(
                 id=finding_id,
                 rule_id="dependency_risk_policy_violation",
                 title=f"Dependency '{dep.name}' violates version policy ({violation})",
@@ -144,10 +147,11 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
                 source_ref=dep.source_ref,
                 suppression_key=finding_id,
                 recommendation=recommendation,
-                origin="deterministic",
-                evidence_refs=[dep.source_ref],
+                    origin="deterministic",
+                    evidence_refs=[dep.source_ref],
+                    generated_without_llm=True,
+                )
             )
-        )
 
     return FindingsReport(findings=findings, generated_without_llm=True)
 
@@ -156,6 +160,10 @@ def _run_signal_only_rules(signals: SignalBundle) -> list[Finding]:
     findings: list[Finding] = []
     findings.extend(_run_missing_required_side_effect_rule(signals))
     findings.extend(_run_critical_write_missing_authz_rule(signals))
+    findings.extend(_run_write_contract_integrity_rule(signals))
+    findings.extend(_run_session_lifecycle_consistency_rule(signals))
+    findings.extend(_run_html_render_safety_rule(signals))
+    findings.extend(_run_ui_ergonomics_rule(signals))
     return findings
 
 
@@ -206,6 +214,7 @@ def _run_missing_required_side_effect_rule(signals: SignalBundle) -> list[Findin
                 ),
                 origin="deterministic",
                 evidence_refs=[source_ref],
+                generated_without_llm=True,
             )
         )
 
@@ -261,8 +270,438 @@ def _run_critical_write_missing_authz_rule(signals: SignalBundle) -> list[Findin
                 ),
                 origin="deterministic",
                 evidence_refs=[signal.source_ref],
+                generated_without_llm=True,
             )
         )
+
+    return findings
+
+
+def _run_write_contract_integrity_rule(signals: SignalBundle) -> list[Finding]:
+    findings: list[Finding] = []
+    for signal in signals.signals:
+        if signal.kind != "write_contract_integrity":
+            continue
+
+        issue_type = str(signal.attributes.get("issue_type", "")).strip()
+        owner_name = str(signal.attributes.get("owner_name", "")).strip() or "unknown"
+        snippet = str(signal.attributes.get("snippet", "")).strip()
+        confidence = cast(Confidence, signal.confidence)
+
+        if issue_type == "char_split_normalization":
+            field_name = str(signal.attributes.get("field_name", "")).strip() or "unknown"
+            finding_id = f"input_normalization_char_split:{owner_name}:{field_name}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="input_normalization_char_split",
+                    title=f"Suspicious char-split normalization for field '{field_name}'",
+                    description=(
+                        "Detected request-field normalization that splits input into characters before persistence, "
+                        "which can corrupt list-like payload semantics."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' normalizes field '{field_name}' via character split "
+                        f"(evidence snippet: {snippet or 'n/a'})."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        f"Replace character-level split normalization for '{field_name}' with delimiter-aware parsing "
+                        "(for example CSV split/trim) or require array input at the boundary."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "response_field_alias_mismatch":
+            consumer_field = str(signal.attributes.get("consumer_field", "")).strip() or "unknown"
+            producer_field = str(signal.attributes.get("producer_field", "")).strip() or "unknown"
+            finding_id = f"response_field_contract_mismatch:{owner_name}:{consumer_field}:{producer_field}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="response_field_contract_mismatch",
+                    title=f"Response field contract mismatch for '{consumer_field}'",
+                    description=(
+                        "Consumer code references a response field that does not match producer field naming, "
+                        "which can silently break UI state rendering."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Consumer expects '{consumer_field}' while producer exposes '{producer_field}' "
+                        f"(owner: '{owner_name}')."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        f"Align producer/consumer field contract for '{consumer_field}' (or add explicit mapping) "
+                        "to avoid stale or incorrect UI state."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "db_insert_binding_mismatch":
+            column = str(signal.attributes.get("column", "")).strip() or "unknown"
+            value_field = str(signal.attributes.get("value_field", "")).strip() or "unknown"
+            finding_id = f"db_insert_binding_mismatch:{owner_name}:{column}:{value_field}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="db_insert_binding_mismatch",
+                    title=f"DB insert binding mismatch for column '{column}'",
+                    description=(
+                        "Insert value bindings appear to map a request field to a different target column, "
+                        "which can persist swapped or corrupted data."
+                    ),
+                    severity="high",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' binds field '{value_field}' into column '{column}'."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        f"Align insert binding order for column '{column}' with its corresponding request/domain field."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "write_scope_missing_entity_filter":
+            missing_filter = str(signal.attributes.get("missing_filter", "")).strip() or "entity id"
+            finding_id = f"critical_write_scope_missing_entity_filter:{owner_name}:{missing_filter}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="critical_write_scope_missing_entity_filter",
+                    title=f"Critical write scope may be too broad in '{owner_name}'",
+                    description=(
+                        "A write query updates/deletes data without expected entity-level filter, "
+                        "which can impact multiple records unintentionally."
+                    ),
+                    severity="high",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' issues a critical write without '{missing_filter}' guard."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        f"Add entity-level filter ('{missing_filter}') to write scope and keep tenant/user guard in place."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "stale_write_without_conflict_guard":
+            finding_id = f"stale_write_without_conflict_guard:{owner_name}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="stale_write_without_conflict_guard",
+                    title=f"Potential stale write without conflict guard in '{owner_name}'",
+                    description=(
+                        "Write path applies client-sourced freshness data without compare-and-set/version check, "
+                        "which can overwrite newer updates."
+                    ),
+                    severity="high",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' updates mutable content with client freshness token "
+                        "but query predicate lacks version/updated_at guard."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Use optimistic concurrency control (version/updated_at compare-and-set) and reject stale writes."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "reading_time_rounding_floor_missing":
+            divisor = str(signal.attributes.get("divisor", "")).strip() or "unknown"
+            finding_id = f"reading_time_round_down_to_zero:{owner_name}:{divisor}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="reading_time_round_down_to_zero",
+                    title=f"Reading-time calculation may round short content to zero in '{owner_name}'",
+                    description=(
+                        "Detected reading-time computation using `Math.round(words/divisor)` without minimum floor, "
+                        "which can produce zero minutes for short but non-empty content."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' uses round-based reading-time expression with divisor '{divisor}'."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Apply minimum floor for non-empty content (for example `Math.max(1, Math.ceil(...))`)."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "priority_ternary_constant_branch":
+            flag_name = str(signal.attributes.get("flag_name", "")).strip() or "flag"
+            finding_id = f"priority_formula_precedence_risk:{owner_name}:{flag_name}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="priority_formula_precedence_risk",
+                    title=f"Priority formula may bypass boost terms in '{owner_name}'",
+                    description=(
+                        "Detected ternary branch where one branch returns a constant while the other applies additive boosts, "
+                        "which often indicates precedence/parenthesization mistakes in scoring logic."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' computes priority with ternary on '{flag_name}' and asymmetric branch complexity."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Recheck ternary grouping so pinned/base terms and boost terms are combined per intended formula."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "date_string_compare_with_iso":
+            compared_value = str(signal.attributes.get("compared_value", "")).strip() or "date value"
+            finding_id = f"overdue_date_string_comparison:{owner_name}:{compared_value}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="overdue_date_string_comparison",
+                    title=f"Overdue/date check compares raw strings in '{owner_name}'",
+                    description=(
+                        "Detected date comparison against `new Date().toISOString()` using string operators, "
+                        "which can produce timezone and format edge-case errors."
+                    ),
+                    severity="high",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' compares '{compared_value}' directly with ISO timestamp string."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Parse to `Date`/epoch before comparison and normalize timezone expectations at boundary."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+
+    return findings
+
+
+def _run_session_lifecycle_consistency_rule(signals: SignalBundle) -> list[Finding]:
+    findings: list[Finding] = []
+    for signal in signals.signals:
+        if signal.kind != "session_lifecycle_consistency":
+            continue
+
+        issue_type = str(signal.attributes.get("issue_type", "")).strip()
+        if issue_type != "storage_key_mismatch":
+            continue
+
+        owner_name = str(signal.attributes.get("owner_name", "")).strip() or "unknown"
+        set_key = str(signal.attributes.get("set_key", "")).strip() or "unknown"
+        remove_key = str(signal.attributes.get("remove_key", "")).strip() or "unknown"
+        finding_id = f"session_token_key_mismatch:{owner_name}:{set_key}:{remove_key}:{signal.id}"
+        findings.append(
+            Finding(
+                id=finding_id,
+                rule_id="session_token_key_mismatch",
+                title="Session token storage key mismatch between login and logout",
+                description=(
+                    "Token lifecycle uses inconsistent storage keys, which can leave active session state after logout."
+                ),
+                severity="high",
+                confidence=cast(Confidence, signal.confidence),
+                evidence=(
+                    f"Owner '{owner_name}' stores token under '{set_key}' but clears '{remove_key}'."
+                ),
+                source_ref=signal.source_ref,
+                suppression_key=finding_id,
+                recommendation=(
+                    "Unify login/get/logout token storage keys and verify post-logout actions require re-authentication."
+                ),
+                origin="deterministic",
+                evidence_refs=[signal.source_ref],
+                generated_without_llm=True,
+            )
+        )
+
+    return findings
+
+
+def _run_html_render_safety_rule(signals: SignalBundle) -> list[Finding]:
+    findings: list[Finding] = []
+    for signal in signals.signals:
+        if signal.kind != "html_render_safety":
+            continue
+
+        issue_type = str(signal.attributes.get("issue_type", "")).strip()
+        if issue_type != "unsanitized_innerhtml":
+            continue
+
+        owner_name = str(signal.attributes.get("owner_name", "")).strip() or "unknown"
+        sink = str(signal.attributes.get("sink", "")).strip() or "innerHTML"
+        finding_id = f"stored_xss_unsafe_innerhtml:{owner_name}:{sink}:{signal.id}"
+        findings.append(
+            Finding(
+                id=finding_id,
+                rule_id="stored_xss_unsafe_innerhtml",
+                title=f"Potential stored XSS via unsafe HTML sink in '{owner_name}'",
+                description=(
+                    "Untrusted content appears to flow into an HTML sink without sanitization or safe-text rendering."
+                ),
+                severity="high",
+                confidence=cast(Confidence, signal.confidence),
+                evidence=(
+                    f"Detected dynamic note content rendered through '{sink}' in '{owner_name}' without sanitization."
+                ),
+                source_ref=signal.source_ref,
+                suppression_key=finding_id,
+                recommendation=(
+                    "Render untrusted fields with text-safe APIs (`textContent`) or sanitize HTML before assigning to sinks."
+                ),
+                origin="deterministic",
+                evidence_refs=[signal.source_ref],
+                generated_without_llm=True,
+            )
+        )
+
+    return findings
+
+
+def _run_ui_ergonomics_rule(signals: SignalBundle) -> list[Finding]:
+    findings: list[Finding] = []
+    for signal in signals.signals:
+        if signal.kind != "ui_ergonomics":
+            continue
+
+        issue_type = str(signal.attributes.get("issue_type", "")).strip()
+        owner_name = str(signal.attributes.get("owner_name", "")).strip() or "unknown"
+        confidence = cast(Confidence, signal.confidence)
+
+        if issue_type == "pagination_page_not_normalized_after_mutation":
+            finding_id = f"pagination_page_not_normalized:{owner_name}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="pagination_page_not_normalized",
+                    title=f"Pagination page index may stay out of bounds in '{owner_name}'",
+                    description=(
+                        "Pagination flow updates/deletes data but does not normalize current page against new max page, "
+                        "which can leave UI on empty page."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' uses mutable pagination state without explicit post-mutation page normalization."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "After list mutations, clamp `state.page` to `maxPage` and reload when current page becomes empty."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "save_button_partial_form_enabled":
+            condition = str(signal.attributes.get("condition", "")).strip() or "title || content"
+            finding_id = f"save_button_partial_form_enabled:{owner_name}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="save_button_partial_form_enabled",
+                    title="Save button can be enabled with partially filled form",
+                    description=(
+                        "Form submit gating appears to use OR-condition for required fields, "
+                        "which can allow incomplete submissions."
+                    ),
+                    severity="low",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' enables submit using condition '{condition}'."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Use AND-condition for required fields and keep button disabled until all mandatory inputs are present."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "mobile_layout_min_width_overflow":
+            min_width_px = str(signal.attributes.get("min_width_px", "")).strip() or "unknown"
+            finding_id = f"mobile_layout_min_width_overflow:{owner_name}:{min_width_px}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="mobile_layout_min_width_overflow",
+                    title="Fixed minimum width can force horizontal scroll on narrow screens",
+                    description=(
+                        "Layout container declares large fixed `min-width`, which can break mobile viewport fit."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' sets `min-width: {min_width_px}px`."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Remove large fixed min-width for main container or override it in mobile breakpoints."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
 
     return findings
 

@@ -1437,6 +1437,33 @@ def test_pipeline_dependency_severity_is_lower_for_development_scope(tmp_path: P
     assert dev_range[0].severity == "low"
 
 
+def test_pipeline_marks_deterministic_findings_as_generated_without_llm(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/orders')\n"
+        "def create_order():\n"
+        "    return {'ok': True}\n",
+    )
+
+    result, code, _ = run_pipeline(
+        RunContext(
+            repo_path=tmp_path,
+            mode="full",
+            base=None,
+            output_dir=tmp_path / ".riskmap",
+            provider="auto",
+            no_llm=True,
+        )
+    )
+    assert code == 0
+    assert result is not None
+    assert result.findings.generated_without_llm is True
+    assert result.findings.findings
+    assert all(finding.generated_without_llm for finding in result.findings.findings)
+
+
 def test_report_uses_effective_ci_mode_after_support_level_resolution(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",

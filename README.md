@@ -1,6 +1,6 @@
 # AI Risk Manager
 
-AI Risk Manager is a QA risk-mapping tool for Python backends (FastAPI and Django/DRF).
+AI Risk Manager is a QA risk-mapping tool for backend-heavy codebases (FastAPI, Django/DRF, Express/Node).
 
 It answers two practical questions before merge/release:
 - Which backend flows are risky now?
@@ -68,6 +68,7 @@ Important for PR delta (`new/resolved/unchanged`):
 - Stack plugins:
   - `fastapi_pytest`
   - `django_drf`
+  - `express_node`
 - Local/CI assistant for risk mapping.
 - Not a generic multi-language SAST replacement.
 - API supports optional token auth, request guardrails, and correlation/audit controls for service usage.
@@ -79,6 +80,19 @@ Deterministic rules:
 - `dependency_risk_policy_violation`
 - `missing_required_side_effect` (contract-level; plugin extraction in progress)
 - `critical_write_missing_authz` (contract-level; plugin extraction in progress)
+- `input_normalization_char_split`
+- `response_field_contract_mismatch`
+- `db_insert_binding_mismatch`
+- `critical_write_scope_missing_entity_filter`
+- `stale_write_without_conflict_guard`
+- `session_token_key_mismatch`
+- `stored_xss_unsafe_innerhtml`
+- `reading_time_round_down_to_zero`
+- `priority_formula_precedence_risk`
+- `overdue_date_string_comparison`
+- `pagination_page_not_normalized`
+- `save_button_partial_form_enabled`
+- `mobile_layout_min_width_overflow`
 
 ## CI Rollout Controls
 
@@ -228,6 +242,8 @@ Use `AIRISK_EVAL_ENFORCE_THRESHOLDS=0 make eval` for non-blocking local runs.
 - `exit 2`: repository does not match supported plugin patterns in strict levels.
 - Empty PR findings: verify baseline files and changed-files detection.
 - Unknown stack with `--support-level auto`: run continues in L0 advisory mode.
+- Slow/hanging local LLM stage: tune `AIRISK_SEMANTIC_LLM_TIMEOUT_SECONDS`, `AIRISK_SEMANTIC_LLM_MAX_RETRIES`,
+  `AIRISK_QA_LLM_TIMEOUT_SECONDS`, `AIRISK_QA_LLM_MAX_RETRIES`.
 
 ## Development
 

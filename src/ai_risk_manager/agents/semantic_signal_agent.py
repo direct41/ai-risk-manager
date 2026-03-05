@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import cast
 
 from ai_risk_manager.agents.llm_runtime import LLMRuntimeError, call_llm_json
@@ -29,6 +30,24 @@ _REQUIRED_ATTRS_BY_KIND: dict[str, set[str]] = {
     "side_effect_emit_contract": {"trigger", "side_effect"},
     "authorization_boundary_enforced": {"boundary", "enforcement"},
 }
+
+
+def _semantic_llm_timeout_seconds() -> float:
+    raw = os.getenv("AIRISK_SEMANTIC_LLM_TIMEOUT_SECONDS", "20")
+    try:
+        value = float(raw)
+    except ValueError:
+        return 20.0
+    return value if value > 0 else 20.0
+
+
+def _semantic_llm_max_retries() -> int:
+    raw = os.getenv("AIRISK_SEMANTIC_LLM_MAX_RETRIES", "0")
+    try:
+        value = int(raw)
+    except ValueError:
+        return 0
+    return value if value >= 0 else 0
 
 
 def _has_non_empty_attr(attributes: dict, key: str) -> bool:
@@ -151,7 +170,12 @@ def generate_semantic_signals(
     prompt = json.dumps(prompt_payload, ensure_ascii=False)
 
     try:
-        payload = call_llm_json(provider, prompt, max_retries=2)
+        payload = call_llm_json(
+            provider,
+            prompt,
+            max_retries=_semantic_llm_max_retries(),
+            timeout_seconds=_semantic_llm_timeout_seconds(),
+        )
         bundle = _validate_semantic_signal_payload(payload)
         if not bundle.signals:
             return bundle, ["Semantic signal stage returned zero signals."]

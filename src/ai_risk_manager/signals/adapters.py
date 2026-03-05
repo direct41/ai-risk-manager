@@ -200,4 +200,76 @@ def artifact_bundle_to_signal_bundle(artifacts: ArtifactBundle) -> SignalBundle:
             )
         )
 
+    for file_path, issue_type, owner_name, line, snippet, details in artifacts.write_contract_issues:
+        supported_kinds.add("write_contract_integrity")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:write_contract:{file_path}:{issue_type}:{owner_name}:{line or 0}",
+                kind="write_contract_integrity",
+                source_ref=_line_ref(file_path, line),
+                confidence="medium",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "issue_type": issue_type,
+                    "owner_name": owner_name,
+                    "snippet": snippet,
+                    **details,
+                },
+            )
+        )
+
+    for file_path, issue_type, owner_name, line, snippet, details in artifacts.session_lifecycle_issues:
+        supported_kinds.add("session_lifecycle_consistency")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:session:{file_path}:{issue_type}:{owner_name}:{line or 0}",
+                kind="session_lifecycle_consistency",
+                source_ref=_line_ref(file_path, line),
+                confidence="medium",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "issue_type": issue_type,
+                    "owner_name": owner_name,
+                    "snippet": snippet,
+                    **details,
+                },
+            )
+        )
+
+    for file_path, issue_type, owner_name, line, snippet, details in artifacts.html_render_issues:
+        supported_kinds.add("html_render_safety")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:html:{file_path}:{issue_type}:{owner_name}:{line or 0}",
+                kind="html_render_safety",
+                source_ref=_line_ref(file_path, line),
+                confidence="high",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "issue_type": issue_type,
+                    "owner_name": owner_name,
+                    "snippet": snippet,
+                    **details,
+                },
+            )
+        )
+
+    for file_path, issue_type, owner_name, line, snippet, details in artifacts.ui_ergonomics_issues:
+        supported_kinds.add("ui_ergonomics")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:ui:{file_path}:{issue_type}:{owner_name}:{line or 0}",
+                kind="ui_ergonomics",
+                source_ref=_line_ref(file_path, line),
+                confidence="medium",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "issue_type": issue_type,
+                    "owner_name": owner_name,
+                    "snippet": snippet,
+                    **details,
+                },
+            )
+        )
+
     return SignalBundle(signals=signals, supported_kinds=supported_kinds)

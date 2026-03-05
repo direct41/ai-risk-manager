@@ -62,6 +62,7 @@ CI_MODE_MATRIX: dict[AppliedSupportLevel, dict[CIMode, CIMode]] = {
 DEFAULT_SUPPORT_LEVEL_BY_STACK: dict[str, AppliedSupportLevel] = {
     "fastapi_pytest": "l2",
     "django_drf": "l2",
+    "express_node": "l2",
     "unknown": "l0",
 }
 _SUPPORT_LEVEL_DOWNGRADE: dict[AppliedSupportLevel, AppliedSupportLevel] = {

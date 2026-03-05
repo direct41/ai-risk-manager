@@ -17,6 +17,12 @@ def test_registry_returns_django_plugin() -> None:
     assert plugin.stack_id == "django_drf"
 
 
+def test_registry_returns_express_plugin() -> None:
+    plugin = get_plugin_for_stack("express_node")
+    assert plugin is not None
+    assert plugin.stack_id == "express_node"
+
+
 def test_registry_returns_none_for_unknown_stack() -> None:
     assert get_plugin_for_stack("unknown") is None
 
@@ -51,6 +57,184 @@ def test_registry_returns_signal_plugin_for_django() -> None:
     assert plugin is not None
     assert "http_write_surface" in plugin.supported_signal_kinds
     assert "dependency_version_policy" in plugin.supported_signal_kinds
+
+
+def test_registry_returns_signal_plugin_for_express() -> None:
+    plugin = get_signal_plugin_for_stack("express_node")
+    assert plugin is not None
+    assert "http_write_surface" in plugin.supported_signal_kinds
+    assert "dependency_version_policy" in plugin.supported_signal_kinds
+    assert "authorization_boundary_enforced" in plugin.supported_signal_kinds
+    assert "write_contract_integrity" in plugin.supported_signal_kinds
+    assert "ui_ergonomics" in plugin.supported_signal_kinds
+
+
+def test_express_plugin_collects_write_endpoints_and_package_dependencies(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "server" / "app.js",
+        "const express = require('express');\n"
+        "const app = express();\n"
+        "app.post('/api/notes', async (_req, res) => res.json({ ok: true }));\n"
+        "app.delete('/api/notes/:id', async (_req, res) => res.status(204).send());\n",
+    )
+    write_file(
+        tmp_path / "package.json",
+        "{\n"
+        '  "dependencies": {\n'
+        '    "express": "^4.19.2",\n'
+        '    "sqlite3": "5.1.7"\n'
+        "  },\n"
+        '  "devDependencies": {\n'
+        '    "vitest": "^1.6.0"\n'
+        "  }\n"
+        "}\n",
+    )
+
+    plugin = get_plugin_for_stack("express_node")
+    assert plugin is not None
+    bundle = plugin.collect(tmp_path)
+
+    assert any(endpoint[2] == "POST" and endpoint[3] == "/api/notes" for endpoint in bundle.write_endpoints)
+    assert any(endpoint[2] == "DELETE" and endpoint[3] == "/api/notes/:id" for endpoint in bundle.write_endpoints)
+    assert all(endpoint[1] != "async" for endpoint in bundle.write_endpoints)
+
+    violations = {(name, violation, scope) for _, name, _, _, violation, scope in bundle.dependency_specs}
+    assert ("express", "range_not_pinned", "runtime") in violations
+    assert ("sqlite3", None, "runtime") in violations
+    assert ("vitest", "range_not_pinned", "development") in violations
+
+
+def test_express_plugin_extracts_auth_middleware_boundaries(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "server" / "app.js",
+        "const express = require('express');\n"
+        "const app = express();\n"
+        "app.post('/public/reset', (_req, res) => res.json({ ok: true }));\n"
+        "app.use('/api', (req, res, next) => {\n"
+        "  const token = req.header('x-session-token');\n"
+        "  if (token !== 'demo') {\n"
+        "    return res.status(401).json({ error: 'Unauthorized' });\n"
+        "  }\n"
+        "  next();\n"
+        "});\n"
+        "app.post('/api/notes', (_req, res) => res.json({ ok: true }));\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("express_node")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    protected = {
+        row[1]
+        for row in artifacts.authorization_boundaries
+        if row[2] == "middleware"
+    }
+    assert "post_api_notes_11" in protected
+    assert "post_public_reset_3" not in protected
+
+    kinds = {signal.kind for signal in signals.signals}
+    assert "authorization_boundary_enforced" in kinds
+
+
+def test_express_plugin_extracts_integrity_session_and_html_safety_issues(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "server" / "services" / "notesService.js",
+        "function mapRow(row) {\n"
+        "  return { id: row.id, is_archived: row.is_archived };\n"
+        "}\n"
+        "async function createNote(input) {\n"
+        "  const tagsCsv = String(input.tags || '').split('').join(',');\n"
+        "  await db.run(`INSERT INTO notes (title, content, tags) VALUES (?, ?, ?)`, [input.content, input.title, tagsCsv]);\n"
+        "}\n"
+        "async function archiveNote(userId, id) {\n"
+        "  await db.run(`UPDATE notes SET is_archived = 1 WHERE user_id = ?`, [userId]);\n"
+        "}\n"
+        "async function autosaveNote(userId, id, input) {\n"
+        "  const clientUpdatedAt = input.updatedAt || new Date().toISOString();\n"
+        "  await db.run(`UPDATE notes SET content = ?, updated_at = ? WHERE id = ? AND user_id = ?`, [input.content, clientUpdatedAt, id, userId]);\n"
+        "}\n",
+    )
+    write_file(
+        tmp_path / "public" / "app.js",
+        "const state = { page: 1, limit: 5, total: 0 };\n"
+        "function renderNotes(state, refs) {\n"
+        "  refs.notesContainer.innerHTML = state.notes.map((note) => `<h3>${note.title}</h3><p>${note.archived}</p>`).join('');\n"
+        "}\n"
+        "async function loadNotes() {\n"
+        "  const payload = await apiFetch('/api/notes?page=' + state.page + '&limit=' + state.limit);\n"
+        "  state.total = payload.total;\n"
+        "}\n"
+        "async function handleCardClick(action) {\n"
+        "  if (action === 'delete') {\n"
+        "    await apiFetch('/api/notes/1', { method: 'DELETE' });\n"
+        "    await loadNotes();\n"
+        "  }\n"
+        "}\n"
+        "function updateSaveButtonState(title, content, refs) {\n"
+        "  refs.saveBtn.disabled = !(title || content);\n"
+        "}\n"
+        "function login(payload) {\n"
+        "  localStorage.setItem('sessionToken', payload.token);\n"
+        "}\n"
+        "function logout() {\n"
+        "  localStorage.removeItem('session_token');\n"
+        "}\n",
+    )
+    write_file(
+        tmp_path / "public" / "styles.css",
+        ".app {\n"
+        "  min-width: 980px;\n"
+        "}\n"
+        "@media (max-width: 860px) {\n"
+        "  .app { grid-template-columns: 1fr; }\n"
+        "}\n",
+    )
+    write_file(
+        tmp_path / "server" / "utils" / "noteMath.js",
+        "function calculateReadingMinutes(content) {\n"
+        "  const words = String(content || '').trim().split(/\\s+/).length;\n"
+        "  return Math.round(words / 220);\n"
+        "}\n"
+        "function isOverdue(dueDate) {\n"
+        "  return dueDate < new Date().toISOString();\n"
+        "}\n"
+        "function calculatePriorityScore({ pinned, lengthBoost, overdueBoost }) {\n"
+        "  return Number((pinned ? 2 : 1 + lengthBoost + overdueBoost).toFixed(2));\n"
+        "}\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("express_node")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    write_issue_types = {row[1] for row in artifacts.write_contract_issues}
+    assert "char_split_normalization" in write_issue_types
+    assert "db_insert_binding_mismatch" in write_issue_types
+    assert "write_scope_missing_entity_filter" in write_issue_types
+    assert "stale_write_without_conflict_guard" in write_issue_types
+    assert "response_field_alias_mismatch" in write_issue_types
+    assert "reading_time_rounding_floor_missing" in write_issue_types
+    assert "priority_ternary_constant_branch" in write_issue_types
+    assert "date_string_compare_with_iso" in write_issue_types
+
+    session_issue_types = {row[1] for row in artifacts.session_lifecycle_issues}
+    assert "storage_key_mismatch" in session_issue_types
+
+    html_issue_types = {row[1] for row in artifacts.html_render_issues}
+    assert "unsanitized_innerhtml" in html_issue_types
+
+    ui_issue_types = {row[1] for row in artifacts.ui_ergonomics_issues}
+    assert "pagination_page_not_normalized_after_mutation" in ui_issue_types
+    assert "save_button_partial_form_enabled" in ui_issue_types
+    assert "mobile_layout_min_width_overflow" in ui_issue_types
+
+    kinds = {signal.kind for signal in signals.signals}
+    assert "write_contract_integrity" in kinds
+    assert "session_lifecycle_consistency" in kinds
+    assert "html_render_safety" in kinds
+    assert "ui_ergonomics" in kinds
 
 
 def test_fastapi_plugin_collects_write_endpoint_and_warns_without_pytest(tmp_path: Path, write_file) -> None:
