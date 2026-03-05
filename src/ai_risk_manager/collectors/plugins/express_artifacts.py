@@ -796,11 +796,11 @@ def _extract_ui_ergonomics_issues(
                 )
 
     if path.suffix.lower() == ".css":
-        match = _APP_MIN_WIDTH_RE.search(text)
-        if match is not None:
-            min_width = int(match.group("value"))
+        min_width_match = _APP_MIN_WIDTH_RE.search(text)
+        if min_width_match is not None:
+            min_width = int(min_width_match.group("value"))
             if min_width >= 900:
-                line = _line_from_offset(text, match.start())
+                line = _line_from_offset(text, min_width_match.start())
                 marker = ("mobile_layout_min_width_overflow", line)
                 if marker not in seen:
                     seen.add(marker)
