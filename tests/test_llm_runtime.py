@@ -43,4 +43,4 @@ def test_invoke_cli_uses_codex_prompt_as_positional_argument() -> None:
         output = _invoke_cli("hello")
 
     assert output == "{\"ok\": true}"
-    assert mock_run.call_args.args[0] == ["codex", "hello"]
+    assert mock_run.call_args.args[0] == ["codex", "exec", "--skip-git-repo-check", "--color", "never", "hello"]

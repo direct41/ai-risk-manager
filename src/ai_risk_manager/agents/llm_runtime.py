@@ -89,8 +89,8 @@ def _invoke_cli(prompt: str) -> str:
     if configured:
         cmd = shlex.split(configured)
     elif shutil_which("codex"):
-        # Codex CLI accepts prompt as positional argument.
-        cmd = ["codex"]
+        # Use non-interactive mode to avoid TTY prompts in CI/automation.
+        cmd = ["codex", "exec", "--skip-git-repo-check", "--color", "never"]
     elif shutil_which("claude"):
         cmd = ["claude", "-p"]
     else:
