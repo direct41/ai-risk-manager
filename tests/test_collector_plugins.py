@@ -65,6 +65,7 @@ def test_registry_returns_signal_plugin_for_express() -> None:
     assert "http_write_surface" in plugin.supported_signal_kinds
     assert "dependency_version_policy" in plugin.supported_signal_kinds
     assert "authorization_boundary_enforced" in plugin.supported_signal_kinds
+    assert "write_contract_integrity" in plugin.supported_signal_kinds
 
 
 def test_express_plugin_collects_write_endpoints_and_package_dependencies(tmp_path: Path, write_file) -> None:
@@ -133,6 +134,61 @@ def test_express_plugin_extracts_auth_middleware_boundaries(tmp_path: Path, writ
 
     kinds = {signal.kind for signal in signals.signals}
     assert "authorization_boundary_enforced" in kinds
+
+
+def test_express_plugin_extracts_integrity_session_and_html_safety_issues(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "server" / "services" / "notesService.js",
+        "function mapRow(row) {\n"
+        "  return { id: row.id, is_archived: row.is_archived };\n"
+        "}\n"
+        "async function createNote(input) {\n"
+        "  const tagsCsv = String(input.tags || '').split('').join(',');\n"
+        "  await db.run(`INSERT INTO notes (title, content, tags) VALUES (?, ?, ?)`, [input.content, input.title, tagsCsv]);\n"
+        "}\n"
+        "async function archiveNote(userId, id) {\n"
+        "  await db.run(`UPDATE notes SET is_archived = 1 WHERE user_id = ?`, [userId]);\n"
+        "}\n"
+        "async function autosaveNote(userId, id, input) {\n"
+        "  const clientUpdatedAt = input.updatedAt || new Date().toISOString();\n"
+        "  await db.run(`UPDATE notes SET content = ?, updated_at = ? WHERE id = ? AND user_id = ?`, [input.content, clientUpdatedAt, id, userId]);\n"
+        "}\n",
+    )
+    write_file(
+        tmp_path / "public" / "app.js",
+        "function renderNotes(state, refs) {\n"
+        "  refs.notesContainer.innerHTML = state.notes.map((note) => `<h3>${note.title}</h3><p>${note.archived}</p>`).join('');\n"
+        "}\n"
+        "function login(payload) {\n"
+        "  localStorage.setItem('sessionToken', payload.token);\n"
+        "}\n"
+        "function logout() {\n"
+        "  localStorage.removeItem('session_token');\n"
+        "}\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("express_node")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    write_issue_types = {row[1] for row in artifacts.write_contract_issues}
+    assert "char_split_normalization" in write_issue_types
+    assert "db_insert_binding_mismatch" in write_issue_types
+    assert "write_scope_missing_entity_filter" in write_issue_types
+    assert "stale_write_without_conflict_guard" in write_issue_types
+    assert "response_field_alias_mismatch" in write_issue_types
+
+    session_issue_types = {row[1] for row in artifacts.session_lifecycle_issues}
+    assert "storage_key_mismatch" in session_issue_types
+
+    html_issue_types = {row[1] for row in artifacts.html_render_issues}
+    assert "unsanitized_innerhtml" in html_issue_types
+
+    kinds = {signal.kind for signal in signals.signals}
+    assert "write_contract_integrity" in kinds
+    assert "session_lifecycle_consistency" in kinds
+    assert "html_render_safety" in kinds
 
 
 def test_fastapi_plugin_collects_write_endpoint_and_warns_without_pytest(tmp_path: Path, write_file) -> None:

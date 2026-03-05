@@ -1,6 +1,6 @@
 # AI Risk Manager
 
-AI Risk Manager is a QA risk-mapping tool for Python backends (FastAPI and Django/DRF).
+AI Risk Manager is a QA risk-mapping tool for backend-heavy codebases (FastAPI, Django/DRF, Express/Node).
 
 It answers two practical questions before merge/release:
 - Which backend flows are risky now?
@@ -80,6 +80,13 @@ Deterministic rules:
 - `dependency_risk_policy_violation`
 - `missing_required_side_effect` (contract-level; plugin extraction in progress)
 - `critical_write_missing_authz` (contract-level; plugin extraction in progress)
+- `input_normalization_char_split`
+- `response_field_contract_mismatch`
+- `db_insert_binding_mismatch`
+- `critical_write_scope_missing_entity_filter`
+- `stale_write_without_conflict_guard`
+- `session_token_key_mismatch`
+- `stored_xss_unsafe_innerhtml`
 
 ## CI Rollout Controls
 

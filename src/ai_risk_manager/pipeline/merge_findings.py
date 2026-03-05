@@ -92,7 +92,8 @@ def merge_findings(
             f.rule_id,
         )
     )
-    merged = merged[:top_limit]
+    if ai_findings.findings:
+        merged = merged[:top_limit]
 
     generated_without_llm = all(f.generated_without_llm for f in merged) if merged else True
     return FindingsReport(findings=merged, generated_without_llm=generated_without_llm)

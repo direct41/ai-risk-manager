@@ -15,6 +15,9 @@ SignalKind = Literal[
     "dependency_version_policy",
     "side_effect_emit_contract",
     "authorization_boundary_enforced",
+    "write_contract_integrity",
+    "session_lifecycle_consistency",
+    "html_render_safety",
 ]
 
 

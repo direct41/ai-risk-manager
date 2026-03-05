@@ -48,6 +48,12 @@ class ArtifactBundle:
     # (file, emitter_name, effect_kind, effect_target, line, snippet)
     authorization_boundaries: list[tuple[str, str, str, str, int | None, str]] = field(default_factory=list)
     # (file, endpoint_name, auth_mechanism, auth_subject, line, snippet)
+    write_contract_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = field(default_factory=list)
+    # (file, issue_type, owner_name, line, snippet, details)
+    session_lifecycle_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = field(default_factory=list)
+    # (file, issue_type, owner_name, line, snippet, details)
+    html_render_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = field(default_factory=list)
+    # (file, issue_type, owner_name, line, snippet, details)
 
 
 class CollectorPlugin(Protocol):

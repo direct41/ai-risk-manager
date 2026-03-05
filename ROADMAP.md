@@ -26,12 +26,15 @@
   - confidence/evidence-based ranking in reports
   - dependency policy profiles with scope-aware severity
 
-## Next (Post Stage 8, Gate-Based)
+## Next (Post Stage 10, Gate-Based)
 
-- Universal core and hardening stages are complete through Stage 8.
+- Universal core, contract-driven expansion, and service hardening are complete through Stage 10.
 - Next delivery focus:
-  - Stage 9: add next stack plugin candidates using contract v1 + parity eval gates.
-  - Stage 10: strengthen service operations (multi-instance rate limiting, richer auth model, external audit pipeline).
+  - Stage 11: capability-depth expansion for existing stacks (`express_node` first) via shared signal model.
+    - P0: data-integrity and boundary contracts (write binding, write scope, stale-write conflict guards, session lifecycle consistency).
+    - P1: frontend security sinks (stored-XSS unsafe HTML rendering).
+    - P2: optional low-impact ergonomics heuristics (UI/page-state quality) behind conservative policy defaults.
+  - Stage 12: support-level promotion for new capability pack with parity eval and trust-gate stability checks.
 
 ## Delivery Model (Stage-Gate)
 
@@ -52,3 +55,5 @@
 6. [x] Stage 6: universal risk capability pack (`side_effect_emit_contract`, `authorization_boundary_enforced`).
 7. [x] Stage 7: contract-driven stack expansion (parity + trust gates).
 8. [x] Stage 8: service-grade hardening for deployment scenarios.
+9. [ ] Stage 11: capability-depth expansion for existing stacks.
+10. [ ] Stage 12: capability-pack promotion and trust-gate stabilization.

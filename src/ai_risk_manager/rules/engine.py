@@ -4,7 +4,7 @@ from typing import cast
 
 from ai_risk_manager.graph.builder import build_graph
 from ai_risk_manager.signals.types import SignalBundle
-from ai_risk_manager.schemas.types import Finding, FindingsReport, Graph, RiskPolicy, Severity
+from ai_risk_manager.schemas.types import Confidence, Finding, FindingsReport, Graph, RiskPolicy, Severity
 
 DEPENDENCY_VIOLATIONS_BY_POLICY: dict[RiskPolicy, set[str]] = {
     "conservative": {"direct_reference", "wildcard_version"},
@@ -160,6 +160,9 @@ def _run_signal_only_rules(signals: SignalBundle) -> list[Finding]:
     findings: list[Finding] = []
     findings.extend(_run_missing_required_side_effect_rule(signals))
     findings.extend(_run_critical_write_missing_authz_rule(signals))
+    findings.extend(_run_write_contract_integrity_rule(signals))
+    findings.extend(_run_session_lifecycle_consistency_rule(signals))
+    findings.extend(_run_html_render_safety_rule(signals))
     return findings
 
 
@@ -263,6 +266,251 @@ def _run_critical_write_missing_authz_rule(signals: SignalBundle) -> list[Findin
                     f"Add and enforce authorization boundary for endpoint '{owner_name}' "
                     "(permission/policy/decorator/guard) and expose it as "
                     "`authorization_boundary_enforced` signal."
+                ),
+                origin="deterministic",
+                evidence_refs=[signal.source_ref],
+                generated_without_llm=True,
+            )
+        )
+
+    return findings
+
+
+def _run_write_contract_integrity_rule(signals: SignalBundle) -> list[Finding]:
+    findings: list[Finding] = []
+    for signal in signals.signals:
+        if signal.kind != "write_contract_integrity":
+            continue
+
+        issue_type = str(signal.attributes.get("issue_type", "")).strip()
+        owner_name = str(signal.attributes.get("owner_name", "")).strip() or "unknown"
+        snippet = str(signal.attributes.get("snippet", "")).strip()
+        confidence = cast(Confidence, signal.confidence)
+
+        if issue_type == "char_split_normalization":
+            field_name = str(signal.attributes.get("field_name", "")).strip() or "unknown"
+            finding_id = f"input_normalization_char_split:{owner_name}:{field_name}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="input_normalization_char_split",
+                    title=f"Suspicious char-split normalization for field '{field_name}'",
+                    description=(
+                        "Detected request-field normalization that splits input into characters before persistence, "
+                        "which can corrupt list-like payload semantics."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' normalizes field '{field_name}' via character split "
+                        f"(evidence snippet: {snippet or 'n/a'})."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        f"Replace character-level split normalization for '{field_name}' with delimiter-aware parsing "
+                        "(for example CSV split/trim) or require array input at the boundary."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "response_field_alias_mismatch":
+            consumer_field = str(signal.attributes.get("consumer_field", "")).strip() or "unknown"
+            producer_field = str(signal.attributes.get("producer_field", "")).strip() or "unknown"
+            finding_id = f"response_field_contract_mismatch:{owner_name}:{consumer_field}:{producer_field}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="response_field_contract_mismatch",
+                    title=f"Response field contract mismatch for '{consumer_field}'",
+                    description=(
+                        "Consumer code references a response field that does not match producer field naming, "
+                        "which can silently break UI state rendering."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Consumer expects '{consumer_field}' while producer exposes '{producer_field}' "
+                        f"(owner: '{owner_name}')."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        f"Align producer/consumer field contract for '{consumer_field}' (or add explicit mapping) "
+                        "to avoid stale or incorrect UI state."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "db_insert_binding_mismatch":
+            column = str(signal.attributes.get("column", "")).strip() or "unknown"
+            value_field = str(signal.attributes.get("value_field", "")).strip() or "unknown"
+            finding_id = f"db_insert_binding_mismatch:{owner_name}:{column}:{value_field}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="db_insert_binding_mismatch",
+                    title=f"DB insert binding mismatch for column '{column}'",
+                    description=(
+                        "Insert value bindings appear to map a request field to a different target column, "
+                        "which can persist swapped or corrupted data."
+                    ),
+                    severity="high",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' binds field '{value_field}' into column '{column}'."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        f"Align insert binding order for column '{column}' with its corresponding request/domain field."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "write_scope_missing_entity_filter":
+            missing_filter = str(signal.attributes.get("missing_filter", "")).strip() or "entity id"
+            finding_id = f"critical_write_scope_missing_entity_filter:{owner_name}:{missing_filter}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="critical_write_scope_missing_entity_filter",
+                    title=f"Critical write scope may be too broad in '{owner_name}'",
+                    description=(
+                        "A write query updates/deletes data without expected entity-level filter, "
+                        "which can impact multiple records unintentionally."
+                    ),
+                    severity="high",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' issues a critical write without '{missing_filter}' guard."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        f"Add entity-level filter ('{missing_filter}') to write scope and keep tenant/user guard in place."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "stale_write_without_conflict_guard":
+            finding_id = f"stale_write_without_conflict_guard:{owner_name}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="stale_write_without_conflict_guard",
+                    title=f"Potential stale write without conflict guard in '{owner_name}'",
+                    description=(
+                        "Write path applies client-sourced freshness data without compare-and-set/version check, "
+                        "which can overwrite newer updates."
+                    ),
+                    severity="high",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' updates mutable content with client freshness token "
+                        "but query predicate lacks version/updated_at guard."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Use optimistic concurrency control (version/updated_at compare-and-set) and reject stale writes."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+
+    return findings
+
+
+def _run_session_lifecycle_consistency_rule(signals: SignalBundle) -> list[Finding]:
+    findings: list[Finding] = []
+    for signal in signals.signals:
+        if signal.kind != "session_lifecycle_consistency":
+            continue
+
+        issue_type = str(signal.attributes.get("issue_type", "")).strip()
+        if issue_type != "storage_key_mismatch":
+            continue
+
+        owner_name = str(signal.attributes.get("owner_name", "")).strip() or "unknown"
+        set_key = str(signal.attributes.get("set_key", "")).strip() or "unknown"
+        remove_key = str(signal.attributes.get("remove_key", "")).strip() or "unknown"
+        finding_id = f"session_token_key_mismatch:{owner_name}:{set_key}:{remove_key}:{signal.id}"
+        findings.append(
+            Finding(
+                id=finding_id,
+                rule_id="session_token_key_mismatch",
+                title="Session token storage key mismatch between login and logout",
+                description=(
+                    "Token lifecycle uses inconsistent storage keys, which can leave active session state after logout."
+                ),
+                severity="high",
+                confidence=cast(Confidence, signal.confidence),
+                evidence=(
+                    f"Owner '{owner_name}' stores token under '{set_key}' but clears '{remove_key}'."
+                ),
+                source_ref=signal.source_ref,
+                suppression_key=finding_id,
+                recommendation=(
+                    "Unify login/get/logout token storage keys and verify post-logout actions require re-authentication."
+                ),
+                origin="deterministic",
+                evidence_refs=[signal.source_ref],
+                generated_without_llm=True,
+            )
+        )
+
+    return findings
+
+
+def _run_html_render_safety_rule(signals: SignalBundle) -> list[Finding]:
+    findings: list[Finding] = []
+    for signal in signals.signals:
+        if signal.kind != "html_render_safety":
+            continue
+
+        issue_type = str(signal.attributes.get("issue_type", "")).strip()
+        if issue_type != "unsanitized_innerhtml":
+            continue
+
+        owner_name = str(signal.attributes.get("owner_name", "")).strip() or "unknown"
+        sink = str(signal.attributes.get("sink", "")).strip() or "innerHTML"
+        finding_id = f"stored_xss_unsafe_innerhtml:{owner_name}:{sink}:{signal.id}"
+        findings.append(
+            Finding(
+                id=finding_id,
+                rule_id="stored_xss_unsafe_innerhtml",
+                title=f"Potential stored XSS via unsafe HTML sink in '{owner_name}'",
+                description=(
+                    "Untrusted content appears to flow into an HTML sink without sanitization or safe-text rendering."
+                ),
+                severity="high",
+                confidence=cast(Confidence, signal.confidence),
+                evidence=(
+                    f"Detected dynamic note content rendered through '{sink}' in '{owner_name}' without sanitization."
+                ),
+                source_ref=signal.source_ref,
+                suppression_key=finding_id,
+                recommendation=(
+                    "Render untrusted fields with text-safe APIs (`textContent`) or sanitize HTML before assigning to sinks."
                 ),
                 origin="deterministic",
                 evidence_refs=[signal.source_ref],

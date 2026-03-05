@@ -48,6 +48,9 @@ class ExpressCollectorPlugin(CapabilitySignalPluginMixin):
         "test_to_endpoint_coverage",
         "dependency_version_policy",
         "authorization_boundary_enforced",
+        "write_contract_integrity",
+        "session_lifecycle_consistency",
+        "html_render_safety",
     }
     unsupported_signal_kinds = {
         "request_contract_binding",

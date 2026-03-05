@@ -70,6 +70,7 @@ riskmap analyze \
 
 - `fastapi_pytest`
 - `django_drf`
+- `express_node`
 
 Extractor собирает:
 
@@ -84,6 +85,15 @@ Extractor собирает:
 - `missing_transition_handler`
 - `broken_invariant_on_transition`
 - `dependency_risk_policy_violation`
+- `missing_required_side_effect`
+- `critical_write_missing_authz`
+- `input_normalization_char_split`
+- `response_field_contract_mismatch`
+- `db_insert_binding_mismatch`
+- `critical_write_scope_missing_entity_filter`
+- `stale_write_without_conflict_guard`
+- `session_token_key_mismatch`
+- `stored_xss_unsafe_innerhtml`
 
 Опционально добавляется semantic AI stage (если включен LLM backend).
 
@@ -95,7 +105,7 @@ Extractor собирает:
 
 ## Ограничения текущей версии
 
-- В `v0.1.x` поддерживаются extractor plugins `fastapi_pytest` и `django_drf`.
+- В `v0.1.x` поддерживаются extractor plugins `fastapi_pytest`, `django_drf`, `express_node`.
 - Инструмент не является generic multi-language SAST.
 - API имеет базовые сервисные защиты (token auth, rate/payload guardrails, audit/correlation controls).
 - Universal/mixed-stack стратегия пока в roadmap, это не текущий shipped scope.

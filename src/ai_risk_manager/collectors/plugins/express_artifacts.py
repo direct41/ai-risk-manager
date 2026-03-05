@@ -45,6 +45,32 @@ _AUTH_HINT_RE = re.compile(
     re.IGNORECASE,
 )
 _AUTH_DENY_RE = re.compile(r"(status\s*\(\s*(401|403)\s*\)|unauthori[sz]ed|forbidden)", re.IGNORECASE)
+_DB_RUN_INSERT_RE = re.compile(
+    r"db\.run\(\s*`(?P<sql>\s*INSERT[\s\S]*?)`\s*,\s*\[(?P<args>[\s\S]*?)\]\s*,?\s*\)",
+    re.IGNORECASE,
+)
+_DB_RUN_UPDATE_RE = re.compile(
+    r"db\.run\(\s*`(?P<sql>\s*UPDATE[\s\S]*?)`\s*,\s*\[(?P<args>[\s\S]*?)\]\s*,?\s*\)",
+    re.IGNORECASE,
+)
+_FUNCTION_HEADER_RE = re.compile(
+    r"\b(?:async\s+)?function\s+(?P<name>[A-Za-z_$][A-Za-z0-9_$]*)\s*\((?P<params>[^)]*)\)",
+    re.IGNORECASE,
+)
+_INPUT_CHAR_SPLIT_RE = re.compile(
+    r"input\.(?P<field>[A-Za-z_$][A-Za-z0-9_$]*)[^\n;]*?\.split\(\s*(?P<quote>['\"])\s*(?P=quote)\s*\)",
+    re.IGNORECASE,
+)
+_ROW_FIELD_RE = re.compile(r"\b(?P<key>[A-Za-z_][A-Za-z0-9_]*)\s*:\s*[^,\n]*\brow\.", re.MULTILINE)
+_NOTE_FIELD_RE = re.compile(r"\bnote\.(?P<field>[A-Za-z_][A-Za-z0-9_]*)")
+_LOCAL_STORAGE_RE = re.compile(
+    r"localStorage\.(?P<op>setItem|getItem|removeItem)\(\s*(?P<quote>['\"])(?P<key>[^'\"]+)(?P=quote)",
+    re.IGNORECASE,
+)
+_INPUT_UPDATED_AT_VAR_RE = re.compile(
+    r"\b(?:const|let|var)\s+(?P<name>[A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*input\.updatedAt\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -266,6 +292,307 @@ def _extract_test_http_calls(path: Path, repo_path: Path, text: str, source_line
     return rows
 
 
+def _normalize_key_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def _to_snake_case(value: str) -> str:
+    step = re.sub(r"([A-Z])", r"_\1", value).lower()
+    return re.sub(r"[^a-z0-9_]+", "_", step).strip("_")
+
+
+def _split_args(args_block: str) -> list[str]:
+    return [part.strip() for part in args_block.split(",") if part.strip()]
+
+
+def _indexed_functions(text: str) -> list[tuple[int, str, set[str]]]:
+    rows: list[tuple[int, str, set[str]]] = []
+    for match in _FUNCTION_HEADER_RE.finditer(text):
+        params = {
+            token.strip()
+            for token in re.split(r"[\s,]+", match.group("params"))
+            if token.strip()
+        }
+        rows.append((match.start(), match.group("name"), params))
+    return rows
+
+
+def _owner_for_offset(functions: list[tuple[int, str, set[str]]], offset: int) -> tuple[str, set[str]]:
+    owner_name = "module_scope"
+    owner_params: set[str] = set()
+    for start, name, params in functions:
+        if start > offset:
+            break
+        owner_name = name
+        owner_params = params
+    return owner_name, owner_params
+
+
+def _extract_row_mapped_fields(text: str, source_lines: list[str]) -> dict[str, tuple[int, str]]:
+    fields: dict[str, tuple[int, str]] = {}
+    for match in _ROW_FIELD_RE.finditer(text):
+        field_name = match.group("key")
+        line = _line_from_offset(text, match.start())
+        fields[field_name] = (line, _line_snippet(source_lines, line))
+    return fields
+
+
+def _extract_note_field_usages(text: str, source_lines: list[str]) -> list[tuple[str, int, str]]:
+    rows: list[tuple[str, int, str]] = []
+    for match in _NOTE_FIELD_RE.finditer(text):
+        field_name = match.group("field")
+        line = _line_from_offset(text, match.start())
+        rows.append((field_name, line, _line_snippet(source_lines, line)))
+    return rows
+
+
+def _extract_response_field_alias_issues(
+    backend_fields: dict[str, tuple[str, int, str]],
+    frontend_fields: list[tuple[str, str, int, str]],
+) -> list[tuple[str, str, str, int | None, str, dict[str, str]]]:
+    issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
+    if not backend_fields:
+        return issues
+
+    backend_keys = set(backend_fields.keys())
+    seen: set[tuple[str, str]] = set()
+    for file_path, consumer_field, line, snippet in frontend_fields:
+        if consumer_field in backend_keys:
+            continue
+        snake_field = _to_snake_case(consumer_field)
+        candidates = [f"is_{consumer_field}", f"is_{snake_field}"]
+        producer_field = next((field for field in candidates if field in backend_keys), "")
+        if not producer_field:
+            continue
+        marker = (consumer_field, producer_field)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        issues.append(
+            (
+                file_path,
+                "response_field_alias_mismatch",
+                "response_contract",
+                line,
+                snippet,
+                {
+                    "consumer_field": consumer_field,
+                    "producer_field": producer_field,
+                },
+            )
+        )
+    return issues
+
+
+def _extract_write_contract_issues(
+    path: Path,
+    repo_path: Path,
+    text: str,
+    source_lines: list[str],
+) -> list[tuple[str, str, str, int | None, str, dict[str, str]]]:
+    rel_path = str(path.relative_to(repo_path))
+    functions = _indexed_functions(text)
+    issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
+    seen: set[tuple[str, str, int]] = set()
+
+    for match in _INPUT_CHAR_SPLIT_RE.finditer(text):
+        line = _line_from_offset(text, match.start())
+        owner_name, _owner_params = _owner_for_offset(functions, match.start())
+        field_name = match.group("field")
+        marker = ("char_split_normalization", owner_name, line)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        issues.append(
+            (
+                rel_path,
+                "char_split_normalization",
+                owner_name,
+                line,
+                _line_snippet(source_lines, line),
+                {"field_name": field_name},
+            )
+        )
+
+    for match in _DB_RUN_INSERT_RE.finditer(text):
+        sql = match.group("sql")
+        args = match.group("args")
+        line = _line_from_offset(text, match.start())
+        owner_name, _owner_params = _owner_for_offset(functions, match.start())
+
+        col_match = re.search(r"INSERT\s+INTO\s+[^(]+\((?P<cols>[\s\S]*?)\)\s*VALUES", sql, re.IGNORECASE)
+        if col_match is None:
+            continue
+        columns = [
+            token.strip().strip("`\"' ")
+            for token in col_match.group("cols").split(",")
+            if token.strip()
+        ]
+        args_expr = _split_args(args)
+        for idx, column in enumerate(columns):
+            if idx >= len(args_expr):
+                break
+            expr = args_expr[idx]
+            input_match = re.search(r"\binput\.(?P<field>[A-Za-z_$][A-Za-z0-9_$]*)\b", expr)
+            if input_match is None:
+                continue
+            value_field = input_match.group("field")
+            if _normalize_key_name(column) == _normalize_key_name(value_field):
+                continue
+            marker = ("db_insert_binding_mismatch", column, line)
+            if marker in seen:
+                continue
+            seen.add(marker)
+            issues.append(
+                (
+                    rel_path,
+                    "db_insert_binding_mismatch",
+                    owner_name,
+                    line,
+                    _line_snippet(source_lines, line),
+                    {
+                        "column": column,
+                        "value_field": value_field,
+                    },
+                )
+            )
+
+    client_updated_vars = {
+        match.group("name")
+        for match in _INPUT_UPDATED_AT_VAR_RE.finditer(text)
+    }
+    for match in _DB_RUN_UPDATE_RE.finditer(text):
+        sql = match.group("sql")
+        args = match.group("args")
+        line = _line_from_offset(text, match.start())
+        owner_name, owner_params = _owner_for_offset(functions, match.start())
+        sql_flat = " ".join(sql.lower().split())
+        if " where " not in sql_flat:
+            continue
+        where_clause = sql_flat.split(" where ", 1)[1]
+
+        has_entity_filter = bool(re.search(r"\bid\s*=", where_clause))
+        if "id" in owner_params and not has_entity_filter and "user_id" in where_clause:
+            marker = ("write_scope_missing_entity_filter", owner_name, line)
+            if marker not in seen:
+                seen.add(marker)
+                issues.append(
+                    (
+                        rel_path,
+                        "write_scope_missing_entity_filter",
+                        owner_name,
+                        line,
+                        _line_snippet(source_lines, line),
+                        {"missing_filter": "id"},
+                    )
+                )
+
+        if "updated_at" not in sql_flat:
+            continue
+        has_conflict_guard = bool(re.search(r"\b(updated_at|version)\b\s*=", where_clause))
+        if has_conflict_guard:
+            continue
+        args_expr = _split_args(args)
+        client_updated_used = any("input.updatedAt" in expr for expr in args_expr)
+        if not client_updated_used:
+            client_updated_used = any(expr in client_updated_vars for expr in args_expr)
+        if not client_updated_used:
+            continue
+        marker = ("stale_write_without_conflict_guard", owner_name, line)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        issues.append(
+            (
+                rel_path,
+                "stale_write_without_conflict_guard",
+                owner_name,
+                line,
+                _line_snippet(source_lines, line),
+                {},
+            )
+        )
+
+    return issues
+
+
+def _extract_session_lifecycle_issues(
+    path: Path,
+    repo_path: Path,
+    text: str,
+    source_lines: list[str],
+) -> list[tuple[str, str, str, int | None, str, dict[str, str]]]:
+    rel_path = str(path.relative_to(repo_path))
+    events: dict[str, list[tuple[str, str, int, str]]] = {"setItem": [], "getItem": [], "removeItem": []}
+    for match in _LOCAL_STORAGE_RE.finditer(text):
+        op = match.group("op")
+        key = match.group("key")
+        line = _line_from_offset(text, match.start())
+        events[op].append((key, _normalize_key_name(key), line, _line_snippet(source_lines, line)))
+
+    issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
+    seen: set[tuple[str, str]] = set()
+    for set_key, set_norm, _set_line, _set_snippet in events["setItem"]:
+        for remove_key, remove_norm, remove_line, remove_snippet in events["removeItem"]:
+            if set_norm != remove_norm:
+                continue
+            if set_key == remove_key:
+                continue
+            marker = (set_key, remove_key)
+            if marker in seen:
+                continue
+            seen.add(marker)
+            issues.append(
+                (
+                    rel_path,
+                    "storage_key_mismatch",
+                    "localStorage",
+                    remove_line,
+                    remove_snippet,
+                    {
+                        "set_key": set_key,
+                        "remove_key": remove_key,
+                    },
+                )
+            )
+    return issues
+
+
+def _extract_html_render_issues(
+    path: Path,
+    repo_path: Path,
+    text: str,
+    source_lines: list[str],
+) -> list[tuple[str, str, str, int | None, str, dict[str, str]]]:
+    rel_path = str(path.relative_to(repo_path))
+    issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
+    seen: set[tuple[str, int]] = set()
+    for match in re.finditer(r"(?P<target>[A-Za-z0-9_$.]+)\.innerHTML\s*=\s*(?P<expr>[\s\S]*?);", text):
+        expr = match.group("expr")
+        if "${" not in expr or "note." not in expr:
+            continue
+        if "sanitize" in expr.lower():
+            continue
+        line = _line_from_offset(text, match.start())
+        marker = (match.group("target"), line)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        issues.append(
+            (
+                rel_path,
+                "unsanitized_innerhtml",
+                "renderNotes",
+                line,
+                _line_snippet(source_lines, line),
+                {
+                    "sink": f"{match.group('target')}.innerHTML",
+                },
+            )
+        )
+    return issues
+
+
 def scan_express_signals(repo_path: Path) -> ExpressSignals:
     all_files = _iter_files(repo_path)
     js_files = _iter_js_files(all_files)
@@ -304,6 +631,11 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
     test_cases: list[tuple[str, str, int | None, str]] = []
     test_http_calls: list[tuple[str, str, str, str, int | None, str]] = []
     auth_middleware_by_file: dict[str, list[tuple[str, int, str]]] = {}
+    write_contract_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
+    session_lifecycle_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
+    html_render_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
+    backend_row_fields: dict[str, tuple[str, int, str]] = {}
+    frontend_note_fields: list[tuple[str, str, int, str]] = []
     for path in js_files:
         text = _read_text(path)
         if not text:
@@ -317,8 +649,22 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
         write_endpoints.extend(file_endpoints)
         rel_path = str(path.relative_to(repo_path))
         auth_middleware_by_file[rel_path] = _extract_auth_middleware(path, repo_path, text, source_lines)
+        write_contract_issues.extend(_extract_write_contract_issues(path, repo_path, text, source_lines))
+        session_lifecycle_issues.extend(_extract_session_lifecycle_issues(path, repo_path, text, source_lines))
+        html_render_issues.extend(_extract_html_render_issues(path, repo_path, text, source_lines))
+
+        for key, (line, snippet) in _extract_row_mapped_fields(text, source_lines).items():
+            backend_row_fields[key] = (rel_path, line, snippet)
+        for field_name, line, snippet in _extract_note_field_usages(text, source_lines):
+            frontend_note_fields.append((rel_path, field_name, line, snippet))
 
     authorization_boundaries = _extract_authorization_boundaries(write_endpoints, auth_middleware_by_file)
+    write_contract_issues.extend(
+        _extract_response_field_alias_issues(
+            backend_row_fields,
+            frontend_note_fields,
+        )
+    )
 
     return ArtifactBundle(
         all_files=all_files,
@@ -328,6 +674,9 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
         test_http_calls=test_http_calls,
         dependency_specs=extract_dependency_specs(repo_path, all_files),
         authorization_boundaries=authorization_boundaries,
+        write_contract_issues=write_contract_issues,
+        session_lifecycle_issues=session_lifecycle_issues,
+        html_render_issues=html_render_issues,
     )
 
 

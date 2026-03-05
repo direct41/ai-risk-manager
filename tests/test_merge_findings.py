@@ -74,3 +74,18 @@ def test_merge_keeps_deterministic_generated_without_llm_flag_per_finding() -> N
     assert len(merged.findings) == 1
     assert merged.generated_without_llm is True
     assert merged.findings[0].generated_without_llm is True
+
+
+def test_merge_does_not_truncate_deterministic_findings_when_ai_is_empty() -> None:
+    deterministic_rows = [
+        ensure_fingerprint(_finding(fid=f"d-{idx}", source_ref=f"app/api_{idx}.py:10"))
+        for idx in range(1, 26)
+    ]
+    merged = merge_findings(
+        FindingsReport(findings=deterministic_rows, generated_without_llm=True),
+        FindingsReport(findings=[], generated_without_llm=True),
+        min_confidence="low",
+        top_limit=5,
+    )
+
+    assert len(merged.findings) == 25
