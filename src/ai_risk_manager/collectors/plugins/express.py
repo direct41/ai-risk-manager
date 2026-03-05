@@ -47,13 +47,13 @@ class ExpressCollectorPlugin(CapabilitySignalPluginMixin):
         "http_write_surface",
         "test_to_endpoint_coverage",
         "dependency_version_policy",
+        "authorization_boundary_enforced",
     }
     unsupported_signal_kinds = {
         "request_contract_binding",
         "state_transition_declared",
         "state_transition_handled_guarded",
         "side_effect_emit_contract",
-        "authorization_boundary_enforced",
     }
 
     def probe(self, repo_path: Path) -> StackProbeResult | None:

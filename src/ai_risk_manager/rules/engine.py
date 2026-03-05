@@ -50,6 +50,7 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
                     recommendation=f"Add API/service tests for endpoint '{api.name}', including success and error paths.",
                     origin="deterministic",
                     evidence_refs=[api.source_ref],
+                    generated_without_llm=True,
                 )
             )
 
@@ -60,7 +61,7 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
         source_ref = next((t.source_ref for t in graph.declared_transitions if t.source == source and t.target == target), "unknown")
         finding_id = f"missing_transition_handler:{source}->{target}"
         findings.append(
-            Finding(
+                Finding(
                 id=finding_id,
                 rule_id="missing_transition_handler",
                 title=f"Declared transition '{source} -> {target}' has no handler",
@@ -71,10 +72,11 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
                 source_ref=source_ref,
                 suppression_key=finding_id,
                 recommendation=f"Implement handler logic for transition '{source} -> {target}' or remove stale declaration.",
-                origin="deterministic",
-                evidence_refs=[source_ref],
+                    origin="deterministic",
+                    evidence_refs=[source_ref],
+                    generated_without_llm=True,
+                )
             )
-        )
 
     for transition in graph.handled_transitions:
         if transition.invariant_guarded:
@@ -84,7 +86,7 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
             continue
         finding_id = f"broken_invariant_on_transition:{transition.machine}:{transition.source}->{transition.target}"
         findings.append(
-            Finding(
+                Finding(
                 id=finding_id,
                 rule_id="broken_invariant_on_transition",
                 title=f"Transition '{transition.source} -> {transition.target}' lacks invariant guard",
@@ -103,10 +105,11 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
                     f"Add explicit guard checks for transition '{transition.source} -> {transition.target}' "
                     f"in handler '{transition.machine}' (assertions/validation/policy checks)."
                 ),
-                origin="deterministic",
-                evidence_refs=[transition.source_ref],
+                    origin="deterministic",
+                    evidence_refs=[transition.source_ref],
+                    generated_without_llm=True,
+                )
             )
-        )
 
     for dep in dependency_nodes:
         violation = str(dep.details.get("policy_violation") or "").strip()
@@ -131,7 +134,7 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
 
         finding_id = f"dependency_risk_policy_violation:{dep.id}"
         findings.append(
-            Finding(
+                Finding(
                 id=finding_id,
                 rule_id="dependency_risk_policy_violation",
                 title=f"Dependency '{dep.name}' violates version policy ({violation})",
@@ -144,10 +147,11 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
                 source_ref=dep.source_ref,
                 suppression_key=finding_id,
                 recommendation=recommendation,
-                origin="deterministic",
-                evidence_refs=[dep.source_ref],
+                    origin="deterministic",
+                    evidence_refs=[dep.source_ref],
+                    generated_without_llm=True,
+                )
             )
-        )
 
     return FindingsReport(findings=findings, generated_without_llm=True)
 
@@ -206,6 +210,7 @@ def _run_missing_required_side_effect_rule(signals: SignalBundle) -> list[Findin
                 ),
                 origin="deterministic",
                 evidence_refs=[source_ref],
+                generated_without_llm=True,
             )
         )
 
@@ -261,6 +266,7 @@ def _run_critical_write_missing_authz_rule(signals: SignalBundle) -> list[Findin
                 ),
                 origin="deterministic",
                 evidence_refs=[signal.source_ref],
+                generated_without_llm=True,
             )
         )
 

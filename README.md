@@ -229,6 +229,8 @@ Use `AIRISK_EVAL_ENFORCE_THRESHOLDS=0 make eval` for non-blocking local runs.
 - `exit 2`: repository does not match supported plugin patterns in strict levels.
 - Empty PR findings: verify baseline files and changed-files detection.
 - Unknown stack with `--support-level auto`: run continues in L0 advisory mode.
+- Slow/hanging local LLM stage: tune `AIRISK_SEMANTIC_LLM_TIMEOUT_SECONDS`, `AIRISK_SEMANTIC_LLM_MAX_RETRIES`,
+  `AIRISK_QA_LLM_TIMEOUT_SECONDS`, `AIRISK_QA_LLM_MAX_RETRIES`.
 
 ## Development
 

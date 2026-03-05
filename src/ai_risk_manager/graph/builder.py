@@ -50,7 +50,9 @@ def _is_path_param(segment: str) -> bool:
     token = segment.strip()
     if not token:
         return False
-    return token.startswith("{") and token.endswith("}")
+    if token.startswith("{") and token.endswith("}"):
+        return True
+    return token.startswith(":") and len(token) > 1
 
 
 def _route_paths_match(api_path: str, observed_path: str) -> bool:

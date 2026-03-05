@@ -16,6 +16,7 @@ def _finding(
     source_ref: str = "app/api.py:10",
     origin: str = "deterministic",
     evidence_refs: list[str] | None = None,
+    generated_without_llm: bool = False,
 ) -> Finding:
     return Finding(
         id=fid,
@@ -30,6 +31,7 @@ def _finding(
         recommendation="add tests",
         origin=cast(FindingOrigin, origin),
         evidence_refs=[source_ref] if evidence_refs is None else evidence_refs,
+        generated_without_llm=generated_without_llm,
     )
 
 
@@ -58,3 +60,17 @@ def test_merge_drops_findings_without_evidence_refs() -> None:
         top_limit=20,
     )
     assert not merged.findings
+
+
+def test_merge_keeps_deterministic_generated_without_llm_flag_per_finding() -> None:
+    deterministic = ensure_fingerprint(_finding(fid="d3", generated_without_llm=True))
+    merged = merge_findings(
+        FindingsReport(findings=[deterministic], generated_without_llm=True),
+        FindingsReport(findings=[], generated_without_llm=True),
+        min_confidence="low",
+        top_limit=20,
+    )
+
+    assert len(merged.findings) == 1
+    assert merged.generated_without_llm is True
+    assert merged.findings[0].generated_without_llm is True

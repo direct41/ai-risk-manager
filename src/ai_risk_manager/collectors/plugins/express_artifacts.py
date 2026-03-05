@@ -39,6 +39,12 @@ _TEST_CASE_RE = re.compile(
     re.IGNORECASE,
 )
 _TEST_HINT_RE = re.compile(r"\b(?:describe|it|test)\s*\(", re.IGNORECASE)
+_APP_USE_PREFIX_RE = re.compile(r"\bapp\.use\s*\(\s*(?P<quote>['\"`])(?P<prefix>/[^'\"`]*)?(?P=quote)\s*,", re.IGNORECASE)
+_AUTH_HINT_RE = re.compile(
+    r"(req\.(?:header|get)\s*\(|authorization|x-session-token|x-api-key|bearer|token)",
+    re.IGNORECASE,
+)
+_AUTH_DENY_RE = re.compile(r"(status\s*\(\s*(401|403)\s*\)|unauthori[sz]ed|forbidden)", re.IGNORECASE)
 
 
 @dataclass
@@ -98,6 +104,26 @@ def _normalize_endpoint_name(method: str, route_path: str, line: int, handler: s
     return f"{method.lower()}_{normalized_path}_{line}"
 
 
+def _normalize_route_path(path: str) -> str:
+    raw = path.strip()
+    if not raw:
+        return "/"
+    if not raw.startswith("/"):
+        raw = f"/{raw}"
+    raw = re.sub(r"/{2,}", "/", raw)
+    if len(raw) > 1:
+        raw = raw.rstrip("/")
+    return raw
+
+
+def _path_has_prefix(route_path: str, prefix: str) -> bool:
+    normalized_route = _normalize_route_path(route_path)
+    normalized_prefix = _normalize_route_path(prefix)
+    if normalized_prefix == "/":
+        return True
+    return normalized_route == normalized_prefix or normalized_route.startswith(f"{normalized_prefix}/")
+
+
 def _extract_write_endpoints(path: Path, repo_path: Path, text: str, source_lines: list[str]) -> list[tuple[str, str, str, str, int, str]]:
     endpoints: list[tuple[str, str, str, str, int, str]] = []
     rel_path = str(path.relative_to(repo_path))
@@ -122,6 +148,90 @@ def _extract_write_endpoints(path: Path, repo_path: Path, text: str, source_line
             )
         )
     return endpoints
+
+
+def _extract_auth_middleware(path: Path, repo_path: Path, text: str, source_lines: list[str]) -> list[tuple[str, int, str]]:
+    matches: list[tuple[str, int, str]] = []
+    for start_offset, block in _iter_app_use_blocks(text):
+        prefix_match = _APP_USE_PREFIX_RE.search(block)
+        if prefix_match is None:
+            continue
+        prefix = (prefix_match.group("prefix") or "/").strip() or "/"
+        body = block[prefix_match.end() :]
+        if not (_AUTH_HINT_RE.search(body) and _AUTH_DENY_RE.search(body)):
+            continue
+        line = _line_from_offset(text, start_offset)
+        matches.append((prefix, line, _line_snippet(source_lines, line)))
+    return matches
+
+
+def _iter_app_use_blocks(text: str) -> list[tuple[int, str]]:
+    blocks: list[tuple[int, str]] = []
+    for match in re.finditer(r"\bapp\.use\s*\(", text, re.IGNORECASE):
+        start = match.start()
+        open_idx = text.find("(", start)
+        if open_idx == -1:
+            continue
+        end_idx = _balanced_paren_end(text, open_idx)
+        if end_idx is None:
+            continue
+        blocks.append((start, text[start : end_idx + 1]))
+    return blocks
+
+
+def _balanced_paren_end(text: str, open_idx: int) -> int | None:
+    depth = 0
+    in_string: str | None = None
+    escaped = False
+    for idx in range(open_idx, len(text)):
+        ch = text[idx]
+        if in_string is not None:
+            if escaped:
+                escaped = False
+                continue
+            if ch == "\\":
+                escaped = True
+                continue
+            if ch == in_string:
+                in_string = None
+            continue
+
+        if ch in {"'", '"', "`"}:
+            in_string = ch
+            continue
+        if ch == "(":
+            depth += 1
+            continue
+        if ch == ")":
+            depth -= 1
+            if depth == 0:
+                return idx
+    return None
+
+
+def _extract_authorization_boundaries(
+    write_endpoints: list[tuple[str, str, str, str, int | None, str]],
+    auth_middleware_by_file: dict[str, list[tuple[str, int, str]]],
+) -> list[tuple[str, str, str, str, int | None, str]]:
+    boundaries: list[tuple[str, str, str, str, int | None, str]] = []
+    for file_path, endpoint_name, _method, route_path, endpoint_line, _snippet in write_endpoints:
+        candidates = auth_middleware_by_file.get(file_path, [])
+        if not candidates:
+            continue
+        best: tuple[str, int, str] | None = None
+        for prefix, line, snippet in candidates:
+            if endpoint_line is not None and endpoint_line < line:
+                # Express middleware order matters: middleware declared after route does not guard that route.
+                continue
+            if not _path_has_prefix(route_path, prefix):
+                continue
+            if best is None or len(prefix) > len(best[0]):
+                best = (prefix, line, snippet)
+        if best is None:
+            continue
+        prefix, line, snippet = best
+        boundaries.append((file_path, endpoint_name, "middleware", f"path:{prefix}", line, snippet))
+    return boundaries
 
 
 def _nearest_test_name(source_lines: list[str], line: int) -> str:
@@ -193,6 +303,7 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
     write_endpoints: list[tuple[str, str, str, str, int | None, str]] = []
     test_cases: list[tuple[str, str, int | None, str]] = []
     test_http_calls: list[tuple[str, str, str, str, int | None, str]] = []
+    auth_middleware_by_file: dict[str, list[tuple[str, int, str]]] = {}
     for path in js_files:
         text = _read_text(path)
         if not text:
@@ -202,7 +313,12 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
             test_cases.extend(_extract_test_cases(path, repo_path, source_lines))
             test_http_calls.extend(_extract_test_http_calls(path, repo_path, text, source_lines))
             continue
-        write_endpoints.extend(_extract_write_endpoints(path, repo_path, text, source_lines))
+        file_endpoints = _extract_write_endpoints(path, repo_path, text, source_lines)
+        write_endpoints.extend(file_endpoints)
+        rel_path = str(path.relative_to(repo_path))
+        auth_middleware_by_file[rel_path] = _extract_auth_middleware(path, repo_path, text, source_lines)
+
+    authorization_boundaries = _extract_authorization_boundaries(write_endpoints, auth_middleware_by_file)
 
     return ArtifactBundle(
         all_files=all_files,
@@ -211,6 +327,7 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
         test_cases=test_cases,
         test_http_calls=test_http_calls,
         dependency_specs=extract_dependency_specs(repo_path, all_files),
+        authorization_boundaries=authorization_boundaries,
     )
 
 

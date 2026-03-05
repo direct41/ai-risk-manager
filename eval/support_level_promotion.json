@@ -16,6 +16,14 @@
         "milestone8_django_dependency"
       ],
       "required_consecutive_trust_passes": 2
+    },
+    "express_node": {
+      "eligible_level": "l2",
+      "required_cases": [
+        "milestone10_express_authz_gap",
+        "milestone11_express_balanced"
+      ],
+      "required_consecutive_trust_passes": 2
     }
   }
 }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import cast
 
 from ai_risk_manager.agents.llm_runtime import LLMRuntimeError, call_llm_json
@@ -9,6 +10,24 @@ from ai_risk_manager.schemas.types import Confidence, Finding, FindingsReport, G
 _MAX_CONTEXT_ITEMS = 120
 _ALLOWED_SEVERITY: set[str] = {"critical", "high", "medium", "low"}
 _ALLOWED_CONFIDENCE: set[str] = {"high", "medium", "low"}
+
+
+def _semantic_llm_timeout_seconds() -> float:
+    raw = os.getenv("AIRISK_SEMANTIC_LLM_TIMEOUT_SECONDS", "20")
+    try:
+        value = float(raw)
+    except ValueError:
+        return 20.0
+    return value if value > 0 else 20.0
+
+
+def _semantic_llm_max_retries() -> int:
+    raw = os.getenv("AIRISK_SEMANTIC_LLM_MAX_RETRIES", "0")
+    try:
+        value = int(raw)
+    except ValueError:
+        return 0
+    return value if value >= 0 else 0
 
 
 def _graph_context(graph: Graph) -> dict:
@@ -94,7 +113,12 @@ def generate_semantic_findings(
     prompt = json.dumps(prompt_payload, ensure_ascii=False)
 
     try:
-        payload = call_llm_json(provider, prompt, max_retries=2)
+        payload = call_llm_json(
+            provider,
+            prompt,
+            max_retries=_semantic_llm_max_retries(),
+            timeout_seconds=_semantic_llm_timeout_seconds(),
+        )
         report = _validate_semantic_payload(payload)
         if not report.findings:
             return report, ["Semantic AI stage returned zero findings."]

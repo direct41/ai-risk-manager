@@ -21,6 +21,8 @@ DEFAULT_EXPANSION_GATE_CONSECUTIVE_RUNS = 4
 EXPANSION_REQUIRED_CASES = {
     "milestone7_django_viewset",
     "milestone8_django_dependency",
+    "milestone10_express_authz_gap",
+    "milestone11_express_balanced",
 }
 PERCENT_METRICS = {
     "avg_precision_proxy",
@@ -51,6 +53,11 @@ DEFAULT_SUPPORT_LEVEL_PROMOTION_POLICY: dict[str, object] = {
         "django_drf": {
             "eligible_level": "l2",
             "required_cases": ["milestone7_django_viewset", "milestone8_django_dependency"],
+            "required_consecutive_trust_passes": 2,
+        },
+        "express_node": {
+            "eligible_level": "l2",
+            "required_cases": ["milestone10_express_authz_gap", "milestone11_express_balanced"],
             "required_consecutive_trust_passes": 2,
         },
     },
@@ -113,6 +120,18 @@ CASES = [
         repo_rel="eval/repos/milestone9_django_missing_tests",
         required_rules={"critical_path_no_tests"},
         forbidden_rules={"dependency_risk_policy_violation"},
+    ),
+    EvalCase(
+        name="milestone10_express_authz_gap",
+        repo_rel="eval/repos/milestone10_express_authz_gap",
+        required_rules={"critical_path_no_tests", "critical_write_missing_authz"},
+        forbidden_rules=set(),
+    ),
+    EvalCase(
+        name="milestone11_express_balanced",
+        repo_rel="eval/repos/milestone11_express_balanced",
+        required_rules=set(),
+        forbidden_rules={"critical_path_no_tests", "critical_write_missing_authz"},
     ),
 ]
 

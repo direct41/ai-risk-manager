@@ -64,6 +64,7 @@ def test_registry_returns_signal_plugin_for_express() -> None:
     assert plugin is not None
     assert "http_write_surface" in plugin.supported_signal_kinds
     assert "dependency_version_policy" in plugin.supported_signal_kinds
+    assert "authorization_boundary_enforced" in plugin.supported_signal_kinds
 
 
 def test_express_plugin_collects_write_endpoints_and_package_dependencies(tmp_path: Path, write_file) -> None:
@@ -99,6 +100,39 @@ def test_express_plugin_collects_write_endpoints_and_package_dependencies(tmp_pa
     assert ("express", "range_not_pinned", "runtime") in violations
     assert ("sqlite3", None, "runtime") in violations
     assert ("vitest", "range_not_pinned", "development") in violations
+
+
+def test_express_plugin_extracts_auth_middleware_boundaries(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "server" / "app.js",
+        "const express = require('express');\n"
+        "const app = express();\n"
+        "app.post('/public/reset', (_req, res) => res.json({ ok: true }));\n"
+        "app.use('/api', (req, res, next) => {\n"
+        "  const token = req.header('x-session-token');\n"
+        "  if (token !== 'demo') {\n"
+        "    return res.status(401).json({ error: 'Unauthorized' });\n"
+        "  }\n"
+        "  next();\n"
+        "});\n"
+        "app.post('/api/notes', (_req, res) => res.json({ ok: true }));\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("express_node")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    protected = {
+        row[1]
+        for row in artifacts.authorization_boundaries
+        if row[2] == "middleware"
+    }
+    assert "post_api_notes_11" in protected
+    assert "post_public_reset_3" not in protected
+
+    kinds = {signal.kind for signal in signals.signals}
+    assert "authorization_boundary_enforced" in kinds
 
 
 def test_fastapi_plugin_collects_write_endpoint_and_warns_without_pytest(tmp_path: Path, write_file) -> None:
