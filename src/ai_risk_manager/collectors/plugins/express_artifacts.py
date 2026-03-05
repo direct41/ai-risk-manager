@@ -92,7 +92,7 @@ def _line_snippet(source_lines: list[str], line: int, *, window: int = 3) -> str
 
 
 def _normalize_endpoint_name(method: str, route_path: str, line: int, handler: str | None) -> str:
-    if handler:
+    if handler and handler not in {"async", "function"}:
         return handler
     normalized_path = re.sub(r"[^a-zA-Z0-9]+", "_", route_path).strip("_").lower() or "root"
     return f"{method.lower()}_{normalized_path}_{line}"

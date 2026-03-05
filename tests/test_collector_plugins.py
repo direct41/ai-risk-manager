@@ -71,8 +71,8 @@ def test_express_plugin_collects_write_endpoints_and_package_dependencies(tmp_pa
         tmp_path / "server" / "app.js",
         "const express = require('express');\n"
         "const app = express();\n"
-        "app.post('/api/notes', (_req, res) => res.json({ ok: true }));\n"
-        "app.delete('/api/notes/:id', (_req, res) => res.status(204).send());\n",
+        "app.post('/api/notes', async (_req, res) => res.json({ ok: true }));\n"
+        "app.delete('/api/notes/:id', async (_req, res) => res.status(204).send());\n",
     )
     write_file(
         tmp_path / "package.json",
@@ -93,6 +93,7 @@ def test_express_plugin_collects_write_endpoints_and_package_dependencies(tmp_pa
 
     assert any(endpoint[2] == "POST" and endpoint[3] == "/api/notes" for endpoint in bundle.write_endpoints)
     assert any(endpoint[2] == "DELETE" and endpoint[3] == "/api/notes/:id" for endpoint in bundle.write_endpoints)
+    assert all(endpoint[1] != "async" for endpoint in bundle.write_endpoints)
 
     violations = {(name, violation, scope) for _, name, _, _, violation, scope in bundle.dependency_specs}
     assert ("express", "range_not_pinned", "runtime") in violations
