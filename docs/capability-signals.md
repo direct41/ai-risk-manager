@@ -9,7 +9,7 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 - `partial`: extracted for some stacks or not yet enforced by deterministic rules.
 - `missing`: not extracted as a first-class capability yet.
 
-## Core 11 Signals
+## Core 12 Signals
 
 | Signal | Meaning | Current extraction source | Graph expression | Rule coverage | Status |
 |---|---|---|---|---|---|
@@ -24,6 +24,7 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 | `write_contract_integrity` | Data-integrity and boundary-contract anomalies in write paths | `ArtifactBundle.write_contract_issues` (Express-first extraction) | None yet | `input_normalization_char_split`, `response_field_contract_mismatch`, `db_insert_binding_mismatch`, `critical_write_scope_missing_entity_filter`, `stale_write_without_conflict_guard`, `reading_time_round_down_to_zero`, `priority_formula_precedence_risk`, `overdue_date_string_comparison` | partial |
 | `session_lifecycle_consistency` | Consistency of token/session storage lifecycle across login/logout flows | `ArtifactBundle.session_lifecycle_issues` (Express-first extraction) | None yet | `session_token_key_mismatch` | partial |
 | `html_render_safety` | Unsafe HTML sink usage for untrusted content | `ArtifactBundle.html_render_issues` (Express-first extraction) | None yet | `stored_xss_unsafe_innerhtml` | partial |
+| `ui_ergonomics` | UI state/layout quality risks affecting interaction reliability | `ArtifactBundle.ui_ergonomics_issues` (Express-first extraction) | None yet | `pagination_page_not_normalized`, `save_button_partial_form_enabled`, `mobile_layout_min_width_overflow` | partial |
 
 ## Rule-to-Signal Dependency
 
@@ -45,6 +46,9 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 | `overdue_date_string_comparison` | `write_contract_integrity` (`issue_type=date_string_compare_with_iso`) |
 | `session_token_key_mismatch` | `session_lifecycle_consistency` |
 | `stored_xss_unsafe_innerhtml` | `html_render_safety` |
+| `pagination_page_not_normalized` | `ui_ergonomics` (`issue_type=pagination_page_not_normalized_after_mutation`) |
+| `save_button_partial_form_enabled` | `ui_ergonomics` (`issue_type=save_button_partial_form_enabled`) |
+| `mobile_layout_min_width_overflow` | `ui_ergonomics` (`issue_type=mobile_layout_min_width_overflow`) |
 
 ## Current Gaps Blocking Higher Coverage
 

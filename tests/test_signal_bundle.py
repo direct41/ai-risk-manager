@@ -140,6 +140,16 @@ def test_artifact_bundle_to_signal_bundle_maps_integrity_and_frontend_safety_con
                 {"sink": "refs.notesContainer.innerHTML"},
             )
         ],
+        ui_ergonomics_issues=[
+            (
+                "public/app.js",
+                "pagination_page_not_normalized_after_mutation",
+                "loadNotes",
+                114,
+                "async function loadNotes()",
+                {"state_field": "state.page"},
+            )
+        ],
     )
 
     bundle = artifact_bundle_to_signal_bundle(artifacts)
@@ -148,6 +158,8 @@ def test_artifact_bundle_to_signal_bundle_maps_integrity_and_frontend_safety_con
     assert "write_contract_integrity" in kinds
     assert "session_lifecycle_consistency" in kinds
     assert "html_render_safety" in kinds
+    assert "ui_ergonomics" in kinds
     assert "write_contract_integrity" in bundle.supported_kinds
     assert "session_lifecycle_consistency" in bundle.supported_kinds
     assert "html_render_safety" in bundle.supported_kinds
+    assert "ui_ergonomics" in bundle.supported_kinds

@@ -160,3 +160,52 @@ def test_write_contract_integrity_reports_note_math_unit_logic_risks() -> None:
     assert "reading_time_round_down_to_zero" in rule_ids
     assert "priority_formula_precedence_risk" in rule_ids
     assert "overdue_date_string_comparison" in rule_ids
+
+
+def test_ui_ergonomics_reports_pagination_save_and_mobile_layout_issues() -> None:
+    findings = run_rules(
+        SignalBundle(
+            signals=[
+                CapabilitySignal(
+                    id="sig-pagination",
+                    kind="ui_ergonomics",
+                    source_ref="public/app.js:114",
+                    confidence="medium",
+                    evidence_refs=["public/app.js:114"],
+                    attributes={
+                        "issue_type": "pagination_page_not_normalized_after_mutation",
+                        "owner_name": "loadNotes",
+                    },
+                ),
+                CapabilitySignal(
+                    id="sig-save",
+                    kind="ui_ergonomics",
+                    source_ref="public/app.js:146",
+                    confidence="medium",
+                    evidence_refs=["public/app.js:146"],
+                    attributes={
+                        "issue_type": "save_button_partial_form_enabled",
+                        "owner_name": "updateSaveButtonState",
+                        "condition": "title || content",
+                    },
+                ),
+                CapabilitySignal(
+                    id="sig-mobile",
+                    kind="ui_ergonomics",
+                    source_ref="public/styles.css:25",
+                    confidence="medium",
+                    evidence_refs=["public/styles.css:25"],
+                    attributes={
+                        "issue_type": "mobile_layout_min_width_overflow",
+                        "owner_name": ".app",
+                        "min_width_px": "980",
+                    },
+                ),
+            ],
+            supported_kinds={"ui_ergonomics"},
+        )
+    )
+    rule_ids = {row.rule_id for row in findings.findings}
+    assert "pagination_page_not_normalized" in rule_ids
+    assert "save_button_partial_form_enabled" in rule_ids
+    assert "mobile_layout_min_width_overflow" in rule_ids

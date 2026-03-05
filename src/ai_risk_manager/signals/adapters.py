@@ -254,4 +254,22 @@ def artifact_bundle_to_signal_bundle(artifacts: ArtifactBundle) -> SignalBundle:
             )
         )
 
+    for file_path, issue_type, owner_name, line, snippet, details in artifacts.ui_ergonomics_issues:
+        supported_kinds.add("ui_ergonomics")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:ui:{file_path}:{issue_type}:{owner_name}:{line or 0}",
+                kind="ui_ergonomics",
+                source_ref=_line_ref(file_path, line),
+                confidence="medium",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "issue_type": issue_type,
+                    "owner_name": owner_name,
+                    "snippet": snippet,
+                    **details,
+                },
+            )
+        )
+
     return SignalBundle(signals=signals, supported_kinds=supported_kinds)

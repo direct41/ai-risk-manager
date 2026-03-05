@@ -10,6 +10,7 @@ from ai_risk_manager.collectors.plugins.dependency_artifacts import extract_depe
 
 WRITE_METHODS = ("post", "put", "patch", "delete")
 JS_SUFFIXES = {".js", ".cjs", ".mjs", ".ts", ".tsx"}
+CSS_SUFFIXES = {".css"}
 EXCLUDED_DIRS = {
     ".git",
     ".venv",
@@ -87,6 +88,11 @@ _ISO_NOW_COMPARE_RE_REVERSE = re.compile(
     r"new\s+Date\(\)\.toISOString\(\)\s*(?P<op><=|>=|<|>)\s*(?P<right>[A-Za-z_$][A-Za-z0-9_$.]*)",
     re.IGNORECASE,
 )
+_SAVE_BUTTON_OR_RE = re.compile(
+    r"\b[A-Za-z0-9_$.]+\.disabled\s*=\s*!\(\s*title\s*\|\|\s*content\s*\)",
+    re.IGNORECASE,
+)
+_APP_MIN_WIDTH_RE = re.compile(r"\.app\s*\{[\s\S]*?\bmin-width\s*:\s*(?P<value>\d+)px\s*;", re.IGNORECASE)
 
 
 @dataclass
@@ -115,6 +121,10 @@ def _iter_files(repo_path: Path) -> list[Path]:
 
 def _iter_js_files(all_files: list[Path]) -> list[Path]:
     return [path for path in all_files if path.suffix.lower() in JS_SUFFIXES]
+
+
+def _iter_css_files(all_files: list[Path]) -> list[Path]:
+    return [path for path in all_files if path.suffix.lower() in CSS_SUFFIXES]
 
 
 def _is_test_file(path: Path) -> bool:
@@ -722,6 +732,92 @@ def _extract_html_render_issues(
     return issues
 
 
+def _extract_ui_ergonomics_issues(
+    path: Path,
+    repo_path: Path,
+    text: str,
+    source_lines: list[str],
+) -> list[tuple[str, str, str, int | None, str, dict[str, str]]]:
+    rel_path = str(path.relative_to(repo_path))
+    issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
+    seen: set[tuple[str, int]] = set()
+    lowered = text.lower()
+
+    for match in _SAVE_BUTTON_OR_RE.finditer(text):
+        line = _line_from_offset(text, match.start())
+        marker = ("save_button_partial_form_enabled", line)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        issues.append(
+            (
+                rel_path,
+                "save_button_partial_form_enabled",
+                "updateSaveButtonState",
+                line,
+                _line_snippet(source_lines, line),
+                {"condition": "title || content"},
+            )
+        )
+
+    if (
+        "state.page" in lowered
+        and "state.total = payload.total" in lowered
+        and "action === 'delete'" in lowered
+        and "await loadnotes()" in lowered
+    ):
+        has_normalization = any(
+            token in lowered
+            for token in (
+                "math.min(state.page",
+                "state.page = maxpage",
+                "if (state.page > maxpage)",
+                "if (payload.items.length === 0 && state.page > 1)",
+                "if (state.notes.length === 0 && state.page > 1)",
+            )
+        )
+        if not has_normalization:
+            line = 1
+            load_idx = text.find("async function loadNotes")
+            if load_idx != -1:
+                line = _line_from_offset(text, load_idx)
+            marker = ("pagination_page_not_normalized_after_mutation", line)
+            if marker not in seen:
+                seen.add(marker)
+                issues.append(
+                    (
+                        rel_path,
+                        "pagination_page_not_normalized_after_mutation",
+                        "loadNotes",
+                        line,
+                        _line_snippet(source_lines, line),
+                        {"state_field": "state.page"},
+                    )
+                )
+
+    if path.suffix.lower() == ".css":
+        match = _APP_MIN_WIDTH_RE.search(text)
+        if match is not None:
+            min_width = int(match.group("value"))
+            if min_width >= 900:
+                line = _line_from_offset(text, match.start())
+                marker = ("mobile_layout_min_width_overflow", line)
+                if marker not in seen:
+                    seen.add(marker)
+                    issues.append(
+                        (
+                            rel_path,
+                            "mobile_layout_min_width_overflow",
+                            ".app",
+                            line,
+                            _line_snippet(source_lines, line),
+                            {"min_width_px": str(min_width)},
+                        )
+                    )
+
+    return issues
+
+
 def scan_express_signals(repo_path: Path) -> ExpressSignals:
     all_files = _iter_files(repo_path)
     js_files = _iter_js_files(all_files)
@@ -754,6 +850,7 @@ def scan_express_signals(repo_path: Path) -> ExpressSignals:
 def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
     all_files = _iter_files(repo_path)
     js_files = _iter_js_files(all_files)
+    css_files = _iter_css_files(all_files)
     test_files = [path for path in js_files if _is_test_file(path)]
 
     write_endpoints: list[tuple[str, str, str, str, int | None, str]] = []
@@ -763,6 +860,7 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
     write_contract_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
     session_lifecycle_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
     html_render_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
+    ui_ergonomics_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
     backend_row_fields: dict[str, tuple[str, int, str]] = {}
     frontend_note_fields: list[tuple[str, str, int, str]] = []
     for path in js_files:
@@ -781,11 +879,19 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
         write_contract_issues.extend(_extract_write_contract_issues(path, repo_path, text, source_lines))
         session_lifecycle_issues.extend(_extract_session_lifecycle_issues(path, repo_path, text, source_lines))
         html_render_issues.extend(_extract_html_render_issues(path, repo_path, text, source_lines))
+        ui_ergonomics_issues.extend(_extract_ui_ergonomics_issues(path, repo_path, text, source_lines))
 
         for key, (line, snippet) in _extract_row_mapped_fields(text, source_lines).items():
             backend_row_fields[key] = (rel_path, line, snippet)
         for field_name, line, snippet in _extract_note_field_usages(text, source_lines):
             frontend_note_fields.append((rel_path, field_name, line, snippet))
+
+    for path in css_files:
+        text = _read_text(path)
+        if not text:
+            continue
+        source_lines = text.splitlines()
+        ui_ergonomics_issues.extend(_extract_ui_ergonomics_issues(path, repo_path, text, source_lines))
 
     authorization_boundaries = _extract_authorization_boundaries(write_endpoints, auth_middleware_by_file)
     write_contract_issues.extend(
@@ -806,6 +912,7 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
         write_contract_issues=write_contract_issues,
         session_lifecycle_issues=session_lifecycle_issues,
         html_render_issues=html_render_issues,
+        ui_ergonomics_issues=ui_ergonomics_issues,
     )
 
 

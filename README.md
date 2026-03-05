@@ -90,6 +90,9 @@ Deterministic rules:
 - `reading_time_round_down_to_zero`
 - `priority_formula_precedence_risk`
 - `overdue_date_string_comparison`
+- `pagination_page_not_normalized`
+- `save_button_partial_form_enabled`
+- `mobile_layout_min_width_overflow`
 
 ## CI Rollout Controls
 

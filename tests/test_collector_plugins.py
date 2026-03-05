@@ -66,6 +66,7 @@ def test_registry_returns_signal_plugin_for_express() -> None:
     assert "dependency_version_policy" in plugin.supported_signal_kinds
     assert "authorization_boundary_enforced" in plugin.supported_signal_kinds
     assert "write_contract_integrity" in plugin.supported_signal_kinds
+    assert "ui_ergonomics" in plugin.supported_signal_kinds
 
 
 def test_express_plugin_collects_write_endpoints_and_package_dependencies(tmp_path: Path, write_file) -> None:
@@ -156,14 +157,37 @@ def test_express_plugin_extracts_integrity_session_and_html_safety_issues(tmp_pa
     )
     write_file(
         tmp_path / "public" / "app.js",
+        "const state = { page: 1, limit: 5, total: 0 };\n"
         "function renderNotes(state, refs) {\n"
         "  refs.notesContainer.innerHTML = state.notes.map((note) => `<h3>${note.title}</h3><p>${note.archived}</p>`).join('');\n"
+        "}\n"
+        "async function loadNotes() {\n"
+        "  const payload = await apiFetch('/api/notes?page=' + state.page + '&limit=' + state.limit);\n"
+        "  state.total = payload.total;\n"
+        "}\n"
+        "async function handleCardClick(action) {\n"
+        "  if (action === 'delete') {\n"
+        "    await apiFetch('/api/notes/1', { method: 'DELETE' });\n"
+        "    await loadNotes();\n"
+        "  }\n"
+        "}\n"
+        "function updateSaveButtonState(title, content, refs) {\n"
+        "  refs.saveBtn.disabled = !(title || content);\n"
         "}\n"
         "function login(payload) {\n"
         "  localStorage.setItem('sessionToken', payload.token);\n"
         "}\n"
         "function logout() {\n"
         "  localStorage.removeItem('session_token');\n"
+        "}\n",
+    )
+    write_file(
+        tmp_path / "public" / "styles.css",
+        ".app {\n"
+        "  min-width: 980px;\n"
+        "}\n"
+        "@media (max-width: 860px) {\n"
+        "  .app { grid-template-columns: 1fr; }\n"
         "}\n",
     )
     write_file(
@@ -201,10 +225,16 @@ def test_express_plugin_extracts_integrity_session_and_html_safety_issues(tmp_pa
     html_issue_types = {row[1] for row in artifacts.html_render_issues}
     assert "unsanitized_innerhtml" in html_issue_types
 
+    ui_issue_types = {row[1] for row in artifacts.ui_ergonomics_issues}
+    assert "pagination_page_not_normalized_after_mutation" in ui_issue_types
+    assert "save_button_partial_form_enabled" in ui_issue_types
+    assert "mobile_layout_min_width_overflow" in ui_issue_types
+
     kinds = {signal.kind for signal in signals.signals}
     assert "write_contract_integrity" in kinds
     assert "session_lifecycle_consistency" in kinds
     assert "html_render_safety" in kinds
+    assert "ui_ergonomics" in kinds
 
 
 def test_fastapi_plugin_collects_write_endpoint_and_warns_without_pytest(tmp_path: Path, write_file) -> None:

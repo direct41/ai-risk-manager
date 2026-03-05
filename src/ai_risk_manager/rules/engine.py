@@ -163,6 +163,7 @@ def _run_signal_only_rules(signals: SignalBundle) -> list[Finding]:
     findings.extend(_run_write_contract_integrity_rule(signals))
     findings.extend(_run_session_lifecycle_consistency_rule(signals))
     findings.extend(_run_html_render_safety_rule(signals))
+    findings.extend(_run_ui_ergonomics_rule(signals))
     return findings
 
 
@@ -604,6 +605,103 @@ def _run_html_render_safety_rule(signals: SignalBundle) -> list[Finding]:
                 generated_without_llm=True,
             )
         )
+
+    return findings
+
+
+def _run_ui_ergonomics_rule(signals: SignalBundle) -> list[Finding]:
+    findings: list[Finding] = []
+    for signal in signals.signals:
+        if signal.kind != "ui_ergonomics":
+            continue
+
+        issue_type = str(signal.attributes.get("issue_type", "")).strip()
+        owner_name = str(signal.attributes.get("owner_name", "")).strip() or "unknown"
+        confidence = cast(Confidence, signal.confidence)
+
+        if issue_type == "pagination_page_not_normalized_after_mutation":
+            finding_id = f"pagination_page_not_normalized:{owner_name}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="pagination_page_not_normalized",
+                    title=f"Pagination page index may stay out of bounds in '{owner_name}'",
+                    description=(
+                        "Pagination flow updates/deletes data but does not normalize current page against new max page, "
+                        "which can leave UI on empty page."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' uses mutable pagination state without explicit post-mutation page normalization."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "After list mutations, clamp `state.page` to `maxPage` and reload when current page becomes empty."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "save_button_partial_form_enabled":
+            condition = str(signal.attributes.get("condition", "")).strip() or "title || content"
+            finding_id = f"save_button_partial_form_enabled:{owner_name}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="save_button_partial_form_enabled",
+                    title="Save button can be enabled with partially filled form",
+                    description=(
+                        "Form submit gating appears to use OR-condition for required fields, "
+                        "which can allow incomplete submissions."
+                    ),
+                    severity="low",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' enables submit using condition '{condition}'."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Use AND-condition for required fields and keep button disabled until all mandatory inputs are present."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "mobile_layout_min_width_overflow":
+            min_width_px = str(signal.attributes.get("min_width_px", "")).strip() or "unknown"
+            finding_id = f"mobile_layout_min_width_overflow:{owner_name}:{min_width_px}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="mobile_layout_min_width_overflow",
+                    title="Fixed minimum width can force horizontal scroll on narrow screens",
+                    description=(
+                        "Layout container declares large fixed `min-width`, which can break mobile viewport fit."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' sets `min-width: {min_width_px}px`."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Remove large fixed min-width for main container or override it in mobile breakpoints."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
 
     return findings
 
