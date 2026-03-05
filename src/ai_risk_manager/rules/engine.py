@@ -436,6 +436,93 @@ def _run_write_contract_integrity_rule(signals: SignalBundle) -> list[Finding]:
                     generated_without_llm=True,
                 )
             )
+            continue
+
+        if issue_type == "reading_time_rounding_floor_missing":
+            divisor = str(signal.attributes.get("divisor", "")).strip() or "unknown"
+            finding_id = f"reading_time_round_down_to_zero:{owner_name}:{divisor}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="reading_time_round_down_to_zero",
+                    title=f"Reading-time calculation may round short content to zero in '{owner_name}'",
+                    description=(
+                        "Detected reading-time computation using `Math.round(words/divisor)` without minimum floor, "
+                        "which can produce zero minutes for short but non-empty content."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' uses round-based reading-time expression with divisor '{divisor}'."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Apply minimum floor for non-empty content (for example `Math.max(1, Math.ceil(...))`)."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "priority_ternary_constant_branch":
+            flag_name = str(signal.attributes.get("flag_name", "")).strip() or "flag"
+            finding_id = f"priority_formula_precedence_risk:{owner_name}:{flag_name}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="priority_formula_precedence_risk",
+                    title=f"Priority formula may bypass boost terms in '{owner_name}'",
+                    description=(
+                        "Detected ternary branch where one branch returns a constant while the other applies additive boosts, "
+                        "which often indicates precedence/parenthesization mistakes in scoring logic."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' computes priority with ternary on '{flag_name}' and asymmetric branch complexity."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Recheck ternary grouping so pinned/base terms and boost terms are combined per intended formula."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "date_string_compare_with_iso":
+            compared_value = str(signal.attributes.get("compared_value", "")).strip() or "date value"
+            finding_id = f"overdue_date_string_comparison:{owner_name}:{compared_value}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="overdue_date_string_comparison",
+                    title=f"Overdue/date check compares raw strings in '{owner_name}'",
+                    description=(
+                        "Detected date comparison against `new Date().toISOString()` using string operators, "
+                        "which can produce timezone and format edge-case errors."
+                    ),
+                    severity="high",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' compares '{compared_value}' directly with ISO timestamp string."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Parse to `Date`/epoch before comparison and normalize timezone expectations at boundary."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
 
     return findings
 

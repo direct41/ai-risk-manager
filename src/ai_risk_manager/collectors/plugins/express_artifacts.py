@@ -71,6 +71,22 @@ _INPUT_UPDATED_AT_VAR_RE = re.compile(
     r"\b(?:const|let|var)\s+(?P<name>[A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*input\.updatedAt\b",
     re.IGNORECASE,
 )
+_READING_ROUND_RE = re.compile(
+    r"Math\.round\(\s*(?P<numerator>[^)]+?)\s*/\s*(?P<divisor>\d+)\s*\)",
+    re.IGNORECASE,
+)
+_PRIORITY_TERNARY_RE = re.compile(
+    r"\(\s*(?P<flag>[A-Za-z_$][A-Za-z0-9_$]*)\s*\?\s*(?P<true_expr>[^:()]+)\s*:\s*(?P<false_expr>[^()]+)\)\s*\.toFixed\(",
+    re.IGNORECASE,
+)
+_ISO_NOW_COMPARE_RE = re.compile(
+    r"\b(?P<left>[A-Za-z_$][A-Za-z0-9_$.]*)\s*(?P<op><=|>=|<|>)\s*new\s+Date\(\)\.toISOString\(\)",
+    re.IGNORECASE,
+)
+_ISO_NOW_COMPARE_RE_REVERSE = re.compile(
+    r"new\s+Date\(\)\.toISOString\(\)\s*(?P<op><=|>=|<|>)\s*(?P<right>[A-Za-z_$][A-Za-z0-9_$.]*)",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -510,6 +526,119 @@ def _extract_write_contract_issues(
                 line,
                 _line_snippet(source_lines, line),
                 {},
+            )
+        )
+
+    for match in _READING_ROUND_RE.finditer(text):
+        line = _line_from_offset(text, match.start())
+        owner_name, _owner_params = _owner_for_offset(functions, match.start())
+        owner_lower = owner_name.lower()
+        numerator = match.group("numerator")
+        numerator_lower = numerator.lower()
+        if "read" not in owner_lower and "minute" not in owner_lower:
+            continue
+        if "word" not in numerator_lower and "content" not in numerator_lower and "text" not in numerator_lower:
+            continue
+        marker = ("reading_time_rounding_floor_missing", owner_name, line)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        issues.append(
+            (
+                rel_path,
+                "reading_time_rounding_floor_missing",
+                owner_name,
+                line,
+                _line_snippet(source_lines, line),
+                {
+                    "expression": match.group(0).strip(),
+                    "divisor": match.group("divisor"),
+                },
+            )
+        )
+
+    for match in _PRIORITY_TERNARY_RE.finditer(text):
+        line = _line_from_offset(text, match.start())
+        owner_name, _owner_params = _owner_for_offset(functions, match.start())
+        owner_lower = owner_name.lower()
+        if "priority" not in owner_lower:
+            continue
+        false_expr = match.group("false_expr").strip()
+        false_expr_lower = false_expr.lower()
+        if "+" not in false_expr or "boost" not in false_expr_lower:
+            continue
+        marker = ("priority_ternary_constant_branch", owner_name, line)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        issues.append(
+            (
+                rel_path,
+                "priority_ternary_constant_branch",
+                owner_name,
+                line,
+                _line_snippet(source_lines, line),
+                {
+                    "flag_name": match.group("flag").strip(),
+                    "true_branch": match.group("true_expr").strip(),
+                    "false_branch": false_expr,
+                },
+            )
+        )
+
+    for match in _ISO_NOW_COMPARE_RE.finditer(text):
+        line = _line_from_offset(text, match.start())
+        owner_name, _owner_params = _owner_for_offset(functions, match.start())
+        compared_value = match.group("left").strip()
+        owner_lower = owner_name.lower()
+        compared_lower = compared_value.lower()
+        if not any(token in owner_lower for token in {"overdue", "date", "deadline"}) and not any(
+            token in compared_lower for token in {"due", "date", "deadline"}
+        ):
+            continue
+        marker = ("date_string_compare_with_iso", owner_name, line)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        issues.append(
+            (
+                rel_path,
+                "date_string_compare_with_iso",
+                owner_name,
+                line,
+                _line_snippet(source_lines, line),
+                {
+                    "compared_value": compared_value,
+                    "operator": match.group("op"),
+                },
+            )
+        )
+
+    for match in _ISO_NOW_COMPARE_RE_REVERSE.finditer(text):
+        line = _line_from_offset(text, match.start())
+        owner_name, _owner_params = _owner_for_offset(functions, match.start())
+        compared_value = match.group("right").strip()
+        owner_lower = owner_name.lower()
+        compared_lower = compared_value.lower()
+        if not any(token in owner_lower for token in {"overdue", "date", "deadline"}) and not any(
+            token in compared_lower for token in {"due", "date", "deadline"}
+        ):
+            continue
+        marker = ("date_string_compare_with_iso", owner_name, line)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        issues.append(
+            (
+                rel_path,
+                "date_string_compare_with_iso",
+                owner_name,
+                line,
+                _line_snippet(source_lines, line),
+                {
+                    "compared_value": compared_value,
+                    "operator": match.group("op"),
+                },
             )
         )
 

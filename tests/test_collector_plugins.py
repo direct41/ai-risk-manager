@@ -166,6 +166,19 @@ def test_express_plugin_extracts_integrity_session_and_html_safety_issues(tmp_pa
         "  localStorage.removeItem('session_token');\n"
         "}\n",
     )
+    write_file(
+        tmp_path / "server" / "utils" / "noteMath.js",
+        "function calculateReadingMinutes(content) {\n"
+        "  const words = String(content || '').trim().split(/\\s+/).length;\n"
+        "  return Math.round(words / 220);\n"
+        "}\n"
+        "function isOverdue(dueDate) {\n"
+        "  return dueDate < new Date().toISOString();\n"
+        "}\n"
+        "function calculatePriorityScore({ pinned, lengthBoost, overdueBoost }) {\n"
+        "  return Number((pinned ? 2 : 1 + lengthBoost + overdueBoost).toFixed(2));\n"
+        "}\n",
+    )
 
     plugin = get_signal_plugin_for_stack("express_node")
     assert plugin is not None
@@ -178,6 +191,9 @@ def test_express_plugin_extracts_integrity_session_and_html_safety_issues(tmp_pa
     assert "write_scope_missing_entity_filter" in write_issue_types
     assert "stale_write_without_conflict_guard" in write_issue_types
     assert "response_field_alias_mismatch" in write_issue_types
+    assert "reading_time_rounding_floor_missing" in write_issue_types
+    assert "priority_ternary_constant_branch" in write_issue_types
+    assert "date_string_compare_with_iso" in write_issue_types
 
     session_issue_types = {row[1] for row in artifacts.session_lifecycle_issues}
     assert "storage_key_mismatch" in session_issue_types

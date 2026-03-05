@@ -110,3 +110,53 @@ def test_html_render_safety_reports_unsafe_innerhtml_sink() -> None:
         )
     )
     assert any(row.rule_id == "stored_xss_unsafe_innerhtml" for row in findings.findings)
+
+
+def test_write_contract_integrity_reports_note_math_unit_logic_risks() -> None:
+    findings = run_rules(
+        SignalBundle(
+            signals=[
+                CapabilitySignal(
+                    id="sig-reading-round",
+                    kind="write_contract_integrity",
+                    source_ref="server/utils/noteMath.js:8",
+                    confidence="medium",
+                    evidence_refs=["server/utils/noteMath.js:8"],
+                    attributes={
+                        "issue_type": "reading_time_rounding_floor_missing",
+                        "owner_name": "calculateReadingMinutes",
+                        "divisor": "220",
+                    },
+                ),
+                CapabilitySignal(
+                    id="sig-priority-ternary",
+                    kind="write_contract_integrity",
+                    source_ref="server/utils/noteMath.js:23",
+                    confidence="medium",
+                    evidence_refs=["server/utils/noteMath.js:23"],
+                    attributes={
+                        "issue_type": "priority_ternary_constant_branch",
+                        "owner_name": "calculatePriorityScore",
+                        "flag_name": "pinned",
+                    },
+                ),
+                CapabilitySignal(
+                    id="sig-date-compare",
+                    kind="write_contract_integrity",
+                    source_ref="server/utils/noteMath.js:16",
+                    confidence="high",
+                    evidence_refs=["server/utils/noteMath.js:16"],
+                    attributes={
+                        "issue_type": "date_string_compare_with_iso",
+                        "owner_name": "isOverdue",
+                        "compared_value": "dueDate",
+                    },
+                ),
+            ],
+            supported_kinds={"write_contract_integrity"},
+        )
+    )
+    rule_ids = {row.rule_id for row in findings.findings}
+    assert "reading_time_round_down_to_zero" in rule_ids
+    assert "priority_formula_precedence_risk" in rule_ids
+    assert "overdue_date_string_comparison" in rule_ids

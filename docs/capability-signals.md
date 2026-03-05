@@ -21,7 +21,7 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 | `dependency_version_policy` | Supply-chain risk from mutable dependency specs | `ArtifactBundle.dependency_specs` via shared extractor (`pyproject.toml` + requirements files) | `Node(type=\"Dependency\")` with `details.policy_violation/scope` | `dependency_risk_policy_violation` | implemented |
 | `side_effect_emit_contract` | Mandatory side-effect after critical write (event, notification, webhook, job) | `ArtifactBundle.side_effect_requirements` + `side_effect_emits` | None yet | `missing_required_side_effect` | partial |
 | `authorization_boundary_enforced` | Authz checks on critical path writes | `ArtifactBundle.authorization_boundaries` (Express middleware extraction implemented) | None yet | `critical_write_missing_authz` | partial |
-| `write_contract_integrity` | Data-integrity and boundary-contract anomalies in write paths | `ArtifactBundle.write_contract_issues` (Express-first extraction) | None yet | `input_normalization_char_split`, `response_field_contract_mismatch`, `db_insert_binding_mismatch`, `critical_write_scope_missing_entity_filter`, `stale_write_without_conflict_guard` | partial |
+| `write_contract_integrity` | Data-integrity and boundary-contract anomalies in write paths | `ArtifactBundle.write_contract_issues` (Express-first extraction) | None yet | `input_normalization_char_split`, `response_field_contract_mismatch`, `db_insert_binding_mismatch`, `critical_write_scope_missing_entity_filter`, `stale_write_without_conflict_guard`, `reading_time_round_down_to_zero`, `priority_formula_precedence_risk`, `overdue_date_string_comparison` | partial |
 | `session_lifecycle_consistency` | Consistency of token/session storage lifecycle across login/logout flows | `ArtifactBundle.session_lifecycle_issues` (Express-first extraction) | None yet | `session_token_key_mismatch` | partial |
 | `html_render_safety` | Unsafe HTML sink usage for untrusted content | `ArtifactBundle.html_render_issues` (Express-first extraction) | None yet | `stored_xss_unsafe_innerhtml` | partial |
 
@@ -40,6 +40,9 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 | `db_insert_binding_mismatch` | `write_contract_integrity` (`issue_type=db_insert_binding_mismatch`) |
 | `critical_write_scope_missing_entity_filter` | `write_contract_integrity` (`issue_type=write_scope_missing_entity_filter`) |
 | `stale_write_without_conflict_guard` | `write_contract_integrity` (`issue_type=stale_write_without_conflict_guard`) |
+| `reading_time_round_down_to_zero` | `write_contract_integrity` (`issue_type=reading_time_rounding_floor_missing`) |
+| `priority_formula_precedence_risk` | `write_contract_integrity` (`issue_type=priority_ternary_constant_branch`) |
+| `overdue_date_string_comparison` | `write_contract_integrity` (`issue_type=date_string_compare_with_iso`) |
 | `session_token_key_mismatch` | `session_lifecycle_consistency` |
 | `stored_xss_unsafe_innerhtml` | `html_render_safety` |
 

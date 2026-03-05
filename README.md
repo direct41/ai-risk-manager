@@ -87,6 +87,9 @@ Deterministic rules:
 - `stale_write_without_conflict_guard`
 - `session_token_key_mismatch`
 - `stored_xss_unsafe_innerhtml`
+- `reading_time_round_down_to_zero`
+- `priority_formula_precedence_risk`
+- `overdue_date_string_comparison`
 
 ## CI Rollout Controls
 
