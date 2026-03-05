@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import re
 import tomllib
@@ -8,6 +9,8 @@ DependencySpecRow = tuple[str, str, str, int | None, str | None, str]
 
 _DEPENDENCY_LINE_RE = re.compile(r"^\s*([A-Za-z0-9_.-]+(?:\[[^\]]+\])?)\s*(.*)$")
 _DEV_SCOPE_MARKERS = ("dev", "test", "lint", "docs", "qa", "type", "ci")
+_SEMVER_EXACT_RE = re.compile(r"^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
+_NPM_DIRECT_REFERENCE_PREFIXES = ("git+", "git://", "github:", "http://", "https://", "file:", "link:", "workspace:")
 
 
 def _clean_dependency_name(name: str) -> str:
@@ -17,18 +20,29 @@ def _clean_dependency_name(name: str) -> str:
     return base.strip().lower()
 
 
+def _is_exact_version_pin(spec: str) -> bool:
+    value = spec.strip()
+    if not value:
+        return False
+    if value.startswith(("==", "===")):
+        return "*" not in value
+    return _SEMVER_EXACT_RE.fullmatch(value) is not None
+
+
 def _dependency_policy_violation(raw_spec: str) -> str | None:
     spec = raw_spec.strip()
     if not spec:
         return "unpinned_version"
-    lowered = spec.lower()
-    if any(token in lowered for token in ("git+", "http://", "https://", "file:", " @ ")):
-        return "direct_reference"
-    if "==" in spec or "===" in spec:
-        if "*" in spec:
-            return "wildcard_version"
+    if _is_exact_version_pin(spec):
         return None
-    if any(token in spec for token in (">", "<", "~=", "!=", ",")):
+    lowered = spec.lower()
+    if any(lowered.startswith(prefix) for prefix in _NPM_DIRECT_REFERENCE_PREFIXES):
+        return "direct_reference"
+    if any(token in lowered for token in ("git+", "git://", "github:", "http://", "https://", "file:", "link:", "workspace:", " @ ")):
+        return "direct_reference"
+    if "*" in spec or re.search(r"(^|[.])x($|[.])", lowered):
+        return "wildcard_version"
+    if any(token in spec for token in (">", "<", "~=", "!=", ",", "^", "~", "||", " - ")):
         return "range_not_pinned"
     return "unpinned_version"
 
@@ -186,7 +200,46 @@ def _extract_requirements_dependencies(repo_path: Path, all_files: list[Path]) -
     return result
 
 
+def _extract_package_json_dependencies(repo_path: Path) -> list[DependencySpecRow]:
+    path = repo_path / "package.json"
+    if not path.is_file():
+        return []
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return []
+
+    lines = text.splitlines()
+    result: list[DependencySpecRow] = []
+    for field_name, scope in (("dependencies", "runtime"), ("devDependencies", "development")):
+        field = payload.get(field_name)
+        if not isinstance(field, dict):
+            continue
+        for raw_name, raw_spec in field.items():
+            if not isinstance(raw_name, str) or not isinstance(raw_spec, str):
+                continue
+            dep_name = _clean_dependency_name(raw_name)
+            result.append(
+                (
+                    str(path.relative_to(repo_path)),
+                    dep_name,
+                    raw_spec,
+                    _line_of_text_match(lines, f'"{raw_name}"'),
+                    _dependency_policy_violation(raw_spec),
+                    scope,
+                )
+            )
+    return result
+
+
 def extract_dependency_specs(repo_path: Path, all_files: list[Path]) -> list[DependencySpecRow]:
     rows = _extract_pyproject_dependencies(repo_path)
     rows.extend(_extract_requirements_dependencies(repo_path, all_files))
+    rows.extend(_extract_package_json_dependencies(repo_path))
     return rows

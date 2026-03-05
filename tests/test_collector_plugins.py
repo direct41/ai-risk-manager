@@ -17,6 +17,12 @@ def test_registry_returns_django_plugin() -> None:
     assert plugin.stack_id == "django_drf"
 
 
+def test_registry_returns_express_plugin() -> None:
+    plugin = get_plugin_for_stack("express_node")
+    assert plugin is not None
+    assert plugin.stack_id == "express_node"
+
+
 def test_registry_returns_none_for_unknown_stack() -> None:
     assert get_plugin_for_stack("unknown") is None
 
@@ -51,6 +57,47 @@ def test_registry_returns_signal_plugin_for_django() -> None:
     assert plugin is not None
     assert "http_write_surface" in plugin.supported_signal_kinds
     assert "dependency_version_policy" in plugin.supported_signal_kinds
+
+
+def test_registry_returns_signal_plugin_for_express() -> None:
+    plugin = get_signal_plugin_for_stack("express_node")
+    assert plugin is not None
+    assert "http_write_surface" in plugin.supported_signal_kinds
+    assert "dependency_version_policy" in plugin.supported_signal_kinds
+
+
+def test_express_plugin_collects_write_endpoints_and_package_dependencies(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "server" / "app.js",
+        "const express = require('express');\n"
+        "const app = express();\n"
+        "app.post('/api/notes', (_req, res) => res.json({ ok: true }));\n"
+        "app.delete('/api/notes/:id', (_req, res) => res.status(204).send());\n",
+    )
+    write_file(
+        tmp_path / "package.json",
+        "{\n"
+        '  "dependencies": {\n'
+        '    "express": "^4.19.2",\n'
+        '    "sqlite3": "5.1.7"\n'
+        "  },\n"
+        '  "devDependencies": {\n'
+        '    "vitest": "^1.6.0"\n'
+        "  }\n"
+        "}\n",
+    )
+
+    plugin = get_plugin_for_stack("express_node")
+    assert plugin is not None
+    bundle = plugin.collect(tmp_path)
+
+    assert any(endpoint[2] == "POST" and endpoint[3] == "/api/notes" for endpoint in bundle.write_endpoints)
+    assert any(endpoint[2] == "DELETE" and endpoint[3] == "/api/notes/:id" for endpoint in bundle.write_endpoints)
+
+    violations = {(name, violation, scope) for _, name, _, _, violation, scope in bundle.dependency_specs}
+    assert ("express", "range_not_pinned", "runtime") in violations
+    assert ("sqlite3", None, "runtime") in violations
+    assert ("vitest", "range_not_pinned", "development") in violations
 
 
 def test_fastapi_plugin_collects_write_endpoint_and_warns_without_pytest(tmp_path: Path, write_file) -> None:

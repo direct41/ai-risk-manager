@@ -11,6 +11,7 @@ from ai_risk_manager.collectors.plugins.contract import (
     evaluate_plugin_conformance,
 )
 from ai_risk_manager.collectors.plugins.django import DjangoCollectorPlugin
+from ai_risk_manager.collectors.plugins.express import ExpressCollectorPlugin
 from ai_risk_manager.collectors.plugins.fastapi import FastAPICollectorPlugin
 from ai_risk_manager.collectors.plugins.registry import (
     evaluate_registered_plugin_conformance,
@@ -25,6 +26,7 @@ __all__ = [
     "CollectorPlugin",
     "DetectionConfidence",
     "DjangoCollectorPlugin",
+    "ExpressCollectorPlugin",
     "FastAPICollectorPlugin",
     "PLUGIN_CONTRACT_VERSION",
     "PluginConformanceReport",

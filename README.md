@@ -68,6 +68,7 @@ Important for PR delta (`new/resolved/unchanged`):
 - Stack plugins:
   - `fastapi_pytest`
   - `django_drf`
+  - `express_node`
 - Local/CI assistant for risk mapping.
 - Not a generic multi-language SAST replacement.
 - API supports optional token auth, request guardrails, and correlation/audit controls for service usage.
