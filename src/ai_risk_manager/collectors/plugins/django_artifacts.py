@@ -8,6 +8,7 @@ import re
 
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle
 from ai_risk_manager.collectors.plugins.dependency_artifacts import extract_dependency_specs
+from ai_risk_manager.collectors.plugins.python_write_contract_artifacts import extract_python_write_contract_issues
 
 WRITE_METHODS = ("post", "put", "patch", "delete")
 ROUTE_METHODS = WRITE_METHODS + ("get",)
@@ -748,6 +749,16 @@ def collect_django_artifacts(repo_path: Path) -> ArtifactBundle:
                 bundle.test_cases.append((relative, case, line, snippet))
             for test_name, method, route_path, line, snippet in _extract_test_http_calls(tree, source_lines, route_name_map):
                 bundle.test_http_calls.append((relative, test_name, method, route_path, line, snippet))
+
+        owner_names = {endpoint_name for file_ref, endpoint_name, *_ in bundle.write_endpoints if file_ref == relative}
+        bundle.write_contract_issues.extend(
+            extract_python_write_contract_issues(
+                tree=tree,
+                source_lines=source_lines,
+                relative_path=relative,
+                owner_names=owner_names,
+            )
+        )
 
     return bundle
 

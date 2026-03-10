@@ -47,6 +47,7 @@ class DjangoCollectorPlugin(CapabilitySignalPluginMixin):
         "test_to_ingress_coverage",
         "test_to_endpoint_coverage",
         "dependency_version_policy",
+        "write_contract_integrity",
     }
     unsupported_signal_kinds = {
         "request_contract_binding",

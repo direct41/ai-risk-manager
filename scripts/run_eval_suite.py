@@ -268,6 +268,44 @@ CASES = [
         required_ingress_families={"event_consumer"},
         required_coverage_families={"event_consumer"},
     ),
+    EvalCase(
+        name="milestone18_fastapi_integrity_gap",
+        repo_rel="eval/repos/milestone18_fastapi_integrity_gap",
+        required_rules={
+            "critical_write_scope_missing_entity_filter",
+            "stale_write_without_conflict_guard",
+        },
+        forbidden_rules={"critical_path_no_tests"},
+    ),
+    EvalCase(
+        name="milestone18_fastapi_integrity_balanced",
+        repo_rel="eval/repos/milestone18_fastapi_integrity_balanced",
+        required_rules=set(),
+        forbidden_rules={
+            "critical_write_scope_missing_entity_filter",
+            "stale_write_without_conflict_guard",
+            "critical_path_no_tests",
+        },
+    ),
+    EvalCase(
+        name="milestone19_django_integrity_gap",
+        repo_rel="eval/repos/milestone19_django_integrity_gap",
+        required_rules={
+            "critical_write_scope_missing_entity_filter",
+            "stale_write_without_conflict_guard",
+        },
+        forbidden_rules={"critical_path_no_tests"},
+    ),
+    EvalCase(
+        name="milestone19_django_integrity_balanced",
+        repo_rel="eval/repos/milestone19_django_integrity_balanced",
+        required_rules=set(),
+        forbidden_rules={
+            "critical_write_scope_missing_entity_filter",
+            "stale_write_without_conflict_guard",
+            "critical_path_no_tests",
+        },
+    ),
 ]
 
 

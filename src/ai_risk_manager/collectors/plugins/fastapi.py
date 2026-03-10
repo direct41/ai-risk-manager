@@ -48,6 +48,7 @@ class FastAPICollectorPlugin(CapabilitySignalPluginMixin):
         "state_transition_handled_guarded",
         "test_to_endpoint_coverage",
         "dependency_version_policy",
+        "write_contract_integrity",
     }
     unsupported_signal_kinds = {
         "side_effect_emit_contract",

@@ -310,6 +310,63 @@ def test_express_plugin_extracts_event_consumer_ingress_surfaces(tmp_path: Path,
     assert "event_consumer" in signal_ingress_families
 
 
+def test_fastapi_plugin_extracts_write_contract_integrity_issues(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "main.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.patch('/notes/{note_id}')\n"
+        "def update_note(note_id: str, payload):\n"
+        "    client_updated_at = payload.updated_at\n"
+        "    db.execute(\"UPDATE notes SET content = :content, updated_at = :updated_at WHERE user_id = :user_id\")\n"
+        "    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_notes.py", "def test_update_note(client):\n    client.patch('/notes/1')\n")
+
+    plugin = get_signal_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    issue_types = {row[1] for row in artifacts.write_contract_issues}
+    assert "write_scope_missing_entity_filter" in issue_types
+    assert "stale_write_without_conflict_guard" in issue_types
+    kinds = {signal.kind for signal in signals.signals}
+    assert "write_contract_integrity" in kinds
+
+
+def test_django_plugin_extracts_write_contract_integrity_issues(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "views.py",
+        "from rest_framework.viewsets import ViewSet\n"
+        "class NotesViewSet(ViewSet):\n"
+        "    def partial_update(self, request, pk=None):\n"
+        "        client_updated_at = request.data['updated_at']\n"
+        "        Note.objects.filter(user_id=request.user.id).update(content=request.data['content'], updated_at=client_updated_at)\n"
+        "        return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "app" / "urls.py",
+        "from rest_framework.routers import DefaultRouter\n"
+        "from .views import NotesViewSet\n"
+        "router = DefaultRouter()\n"
+        "router.register('notes', NotesViewSet, basename='notes')\n"
+        "urlpatterns = router.urls\n",
+    )
+    write_file(tmp_path / "tests" / "test_notes.py", "def test_update_note(client):\n    client.patch('/notes/1/')\n")
+
+    plugin = get_signal_plugin_for_stack("django_drf")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    issue_types = {row[1] for row in artifacts.write_contract_issues}
+    assert "write_scope_missing_entity_filter" in issue_types
+    assert "stale_write_without_conflict_guard" in issue_types
+    kinds = {signal.kind for signal in signals.signals}
+    assert "write_contract_integrity" in kinds
+
+
 def test_fastapi_plugin_collects_write_endpoint_and_warns_without_pytest(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",
