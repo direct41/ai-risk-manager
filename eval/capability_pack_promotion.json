@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "packs": {
+    "express_stage11_p0_integrity": {
+      "stack_id": "express_node",
+      "eligible_level": "l2",
+      "required_cases": [
+        "milestone12_express_integrity_gap",
+        "milestone12_express_integrity_balanced"
+      ],
+      "required_consecutive_trust_passes": 2
+    },
+    "express_stage11_p1_html_sink": {
+      "stack_id": "express_node",
+      "eligible_level": "l2",
+      "required_cases": [
+        "milestone13_express_html_gap",
+        "milestone13_express_html_balanced"
+      ],
+      "required_consecutive_trust_passes": 2
+    },
+    "express_stage11_p2_ui_ergonomics": {
+      "stack_id": "express_node",
+      "eligible_level": "l2",
+      "required_cases": [
+        "milestone14_express_ui_gap",
+        "milestone14_express_ui_balanced"
+      ],
+      "required_consecutive_trust_passes": 2
+    }
+  }
+}

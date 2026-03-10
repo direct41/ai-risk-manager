@@ -195,3 +195,18 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 9. Epic 9
 10. Epic 10
 11. Epic 11
+
+## Epic 12: Capability-Pack Promotion Stabilization (P1)
+- Status: Completed
+- Outcome: new capability packs are promoted through explicit eval evidence instead of implicit stack-level readiness
+
+### Stories
+1. [x] Add capability-pack promotion policy separate from stack promotion.
+2. [x] Publish eval artifact for pack-level promotion readiness.
+3. [x] Gate pack readiness on parity cases plus consecutive trust-pass history.
+4. [x] Surface pack readiness in eval summary for review and rollout decisions.
+
+### Definition of Done
+- Eval produces a dedicated `capability_pack_promotion.json` artifact.
+- Each promoted pack has explicit required cases and trust-pass thresholds.
+- Summary output shows which capability packs are eligible or blocked and why.

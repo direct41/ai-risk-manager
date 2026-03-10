@@ -15,6 +15,7 @@ OUTPUT_ROOT = REPO_ROOT / "eval" / "results"
 HISTORY_ROOT = REPO_ROOT / "eval" / ".history"
 TRUST_THRESHOLDS_PATH = REPO_ROOT / "eval" / "trust_thresholds.json"
 SUPPORT_LEVEL_PROMOTION_PATH = REPO_ROOT / "eval" / "support_level_promotion.json"
+CAPABILITY_PACK_PROMOTION_PATH = REPO_ROOT / "eval" / "capability_pack_promotion.json"
 DEFAULT_HISTORY_PATH = HISTORY_ROOT / "trust_gate_history.jsonl"
 DEFAULT_TREND_WINDOW = 12
 DEFAULT_EXPANSION_GATE_CONSECUTIVE_RUNS = 4
@@ -64,6 +65,38 @@ DEFAULT_SUPPORT_LEVEL_PROMOTION_POLICY: dict[str, object] = {
                 "milestone12_express_integrity_balanced",
                 "milestone13_express_html_gap",
                 "milestone13_express_html_balanced",
+                "milestone14_express_ui_gap",
+                "milestone14_express_ui_balanced",
+            ],
+            "required_consecutive_trust_passes": 2,
+        },
+    },
+}
+DEFAULT_CAPABILITY_PACK_PROMOTION_POLICY: dict[str, object] = {
+    "version": 1,
+    "packs": {
+        "express_stage11_p0_integrity": {
+            "stack_id": "express_node",
+            "eligible_level": "l2",
+            "required_cases": [
+                "milestone12_express_integrity_gap",
+                "milestone12_express_integrity_balanced",
+            ],
+            "required_consecutive_trust_passes": 2,
+        },
+        "express_stage11_p1_html_sink": {
+            "stack_id": "express_node",
+            "eligible_level": "l2",
+            "required_cases": [
+                "milestone13_express_html_gap",
+                "milestone13_express_html_balanced",
+            ],
+            "required_consecutive_trust_passes": 2,
+        },
+        "express_stage11_p2_ui_ergonomics": {
+            "stack_id": "express_node",
+            "eligible_level": "l2",
+            "required_cases": [
                 "milestone14_express_ui_gap",
                 "milestone14_express_ui_balanced",
             ],
@@ -495,6 +528,52 @@ def load_support_level_promotion_policy(path: Path = SUPPORT_LEVEL_PROMOTION_PAT
     }
 
 
+def load_capability_pack_promotion_policy(path: Path = CAPABILITY_PACK_PROMOTION_PATH) -> dict[str, object]:
+    policy: dict[str, object] = dict(DEFAULT_CAPABILITY_PACK_PROMOTION_POLICY)
+    if not path.is_file():
+        return policy
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return policy
+    if not isinstance(payload, dict):
+        return policy
+
+    version = payload.get("version", 1)
+    packs = payload.get("packs", {})
+    if not isinstance(version, int) or not isinstance(packs, dict):
+        return policy
+
+    normalized_packs: dict[str, dict[str, object]] = {}
+    for pack_id, raw in packs.items():
+        if not isinstance(pack_id, str) or not isinstance(raw, dict):
+            continue
+        stack_id = raw.get("stack_id", "")
+        eligible_level = raw.get("eligible_level", "l2")
+        required_cases = raw.get("required_cases", [])
+        required_passes = raw.get("required_consecutive_trust_passes", 1)
+        if (
+            isinstance(stack_id, str)
+            and isinstance(eligible_level, str)
+            and isinstance(required_cases, list)
+            and isinstance(required_passes, int)
+            and required_passes >= 1
+        ):
+            normalized_packs[pack_id] = {
+                "stack_id": stack_id,
+                "eligible_level": eligible_level,
+                "required_cases": [str(item) for item in required_cases if isinstance(item, str)],
+                "required_consecutive_trust_passes": required_passes,
+            }
+
+    if not normalized_packs:
+        return policy
+    return {
+        "version": version,
+        "packs": normalized_packs,
+    }
+
+
 def run_case(case: EvalCase) -> dict:
     repo_path = REPO_ROOT / case.repo_rel
     out_dir = OUTPUT_ROOT / case.name
@@ -779,6 +858,61 @@ def build_support_level_promotion_payload(
     }
 
 
+def build_capability_pack_promotion_payload(
+    *,
+    results: list[dict],
+    trend_history: list[dict],
+    trust_gate_payload: dict[str, object],
+    policy: dict[str, object],
+) -> dict[str, object]:
+    result_by_case = {str(row.get("case")): str(row.get("status")) for row in results}
+    trust_passed = str(trust_gate_payload.get("status")) == "passed"
+    consecutive_trust_passes = _count_consecutive_trust_passes(trend_history)
+    packs_policy = policy.get("packs", {})
+    pack_rows: list[dict[str, object]] = []
+    for pack_id, raw in packs_policy.items():
+        if not isinstance(pack_id, str) or not isinstance(raw, dict):
+            continue
+        stack_id = str(raw.get("stack_id", "unknown"))
+        eligible_level = str(raw.get("eligible_level", "l2"))
+        required_cases = [str(item) for item in raw.get("required_cases", []) if isinstance(item, str)]
+        required_passes = int(raw.get("required_consecutive_trust_passes", 1))
+        missing_cases = [case for case in required_cases if case not in result_by_case]
+        failing_cases = [case for case in required_cases if result_by_case.get(case) not in {None, "passed"}]
+        trust_ok = trust_passed and consecutive_trust_passes >= required_passes
+        reasons: list[str] = []
+        if not trust_ok:
+            reasons.append(
+                "trust gate requirement not satisfied "
+                f"(consecutive={consecutive_trust_passes}, required={required_passes}, status={trust_gate_payload.get('status')})"
+            )
+        if missing_cases:
+            reasons.append(f"missing required eval cases: {missing_cases}")
+        if failing_cases:
+            reasons.append(f"required eval cases not passed: {failing_cases}")
+
+        pack_rows.append(
+            {
+                "pack_id": pack_id,
+                "stack_id": stack_id,
+                "eligible_level": eligible_level,
+                "status": "eligible" if not reasons else "blocked",
+                "required_cases": required_cases,
+                "missing_cases": missing_cases,
+                "failing_cases": failing_cases,
+                "required_consecutive_trust_passes": required_passes,
+                "consecutive_trust_passes": consecutive_trust_passes,
+                "reasons": reasons,
+            }
+        )
+
+    return {
+        "version": policy.get("version", 1),
+        "status": "ready" if pack_rows and all(row["status"] == "eligible" for row in pack_rows) else "blocked",
+        "packs": pack_rows,
+    }
+
+
 def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_gates: bool) -> int:
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     (OUTPUT_ROOT / "summary.json").write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -815,6 +949,17 @@ def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_
     )
     (OUTPUT_ROOT / "support_level_promotion.json").write_text(
         json.dumps(support_level_promotion_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    capability_pack_policy = load_capability_pack_promotion_policy()
+    capability_pack_promotion_payload = build_capability_pack_promotion_payload(
+        results=results,
+        trend_history=trend_history,
+        trust_gate_payload=gate_payload,
+        policy=capability_pack_policy,
+    )
+    (OUTPUT_ROOT / "capability_pack_promotion.json").write_text(
+        json.dumps(capability_pack_promotion_payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
@@ -890,6 +1035,21 @@ def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_
         )
         if stack_row["reasons"]:
             lines.append(f"  - reasons: {', '.join(str(item) for item in stack_row['reasons'])}")
+    lines.extend(
+        [
+            "",
+            "## Capability-Pack Promotion",
+            "",
+            f"- Gate status: `{str(capability_pack_promotion_payload['status']).upper()}`",
+        ]
+    )
+    for pack_row in capability_pack_promotion_payload["packs"]:
+        lines.append(
+            f"- {pack_row['pack_id']} ({pack_row['stack_id']}) -> {pack_row['eligible_level']}: "
+            f"`{str(pack_row['status']).upper()}`"
+        )
+        if pack_row["reasons"]:
+            lines.append(f"  - reasons: {', '.join(str(item) for item in pack_row['reasons'])}")
     lines.append("")
 
     lines.extend(

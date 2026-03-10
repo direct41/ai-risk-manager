@@ -30,7 +30,6 @@
 
 - Universal core, contract-driven expansion, service hardening, and capability-depth expansion are complete through Stage 11.
 - Next delivery focus:
-  - Stage 12: support-level promotion for new capability pack with parity eval and trust-gate stability checks.
   - After Stage 12: broaden the same capability model beyond `express_node` without introducing stack-specific rule forks.
 
 ## Delivery Model (Stage-Gate)
@@ -53,4 +52,4 @@
 7. [x] Stage 7: contract-driven stack expansion (parity + trust gates).
 8. [x] Stage 8: service-grade hardening for deployment scenarios.
 9. [x] Stage 11: capability-depth expansion for existing stacks.
-10. [ ] Stage 12: capability-pack promotion and trust-gate stabilization.
+10. [x] Stage 12: capability-pack promotion and trust-gate stabilization.
