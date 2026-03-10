@@ -64,6 +64,7 @@ Important for PR delta (`new/resolved/unchanged`):
 - `graph.json` and `graph.analysis.json`: analysis graph used for findings (may include semantic enrichment).
 - `graph.deterministic.json`: deterministic graph before semantic enrichment.
 - `run_metrics.json`: quality and run metrics.
+- run/report summary now also exposes `repository_support_state` (`supported`, `partial`, `unsupported`) so advisory generic runs are explicit.
 
 ## Current Scope (v0.1.x)
 

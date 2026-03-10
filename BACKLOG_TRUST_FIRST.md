@@ -242,19 +242,24 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Trust/eval gates remain green after parity rollout.
 
 ## Epic 15: Advisory AI Extraction For Partial Support (P1)
-- Status: Planned
+- Status: In Progress
 - Outcome: the product can analyze partially supported repositories without pretending they have deterministic parity
 
 ### Stories
-1. [ ] Define evidence-bound AI extraction contract for generic repository analysis.
-2. [ ] Introduce advisory-only support level behavior for AI-assisted partial coverage.
-3. [ ] Add deterministic verification anchors and explicit drop rules for unverifiable AI claims.
+1. [x] Define evidence-bound AI extraction contract for generic repository analysis.
+2. [x] Introduce advisory-only support level behavior for AI-assisted partial coverage.
+3. [x] Add deterministic verification anchors and explicit drop rules for unverifiable AI claims.
 4. [ ] Add eval scenarios for "supported", "partial", and "unsupported but advisory" repository states.
 
 ### Definition of Done
 - AI-assisted findings without evidence are dropped automatically.
 - Partially supported repositories receive explicit support-level labeling and conservative rollout behavior.
 - Eval artifacts show trust metrics separately for deterministic and AI-assisted paths.
+
+### Foundation Slice Done
+- `l0` runs can now use a generic advisory AI agent with evidence-bound payload validation.
+- Run summary/report now expose `repository_support_state` (`supported|partial|unsupported`).
+- AI findings with unverifiable `evidence_refs` are dropped before final output.
 
 ## Epic 16: External Plugin Distribution Model (P2)
 - Status: Planned

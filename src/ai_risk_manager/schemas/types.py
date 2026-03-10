@@ -17,6 +17,7 @@ AppliedSupportLevel = Literal["l0", "l1", "l2"]
 RiskPolicy = Literal["conservative", "balanced", "aggressive"]
 CompetitiveMode = Literal["deterministic", "hybrid"]
 GraphMode = Literal["deterministic", "enriched"]
+RepositorySupportState = Literal["supported", "partial", "unsupported"]
 TestType = Literal["api", "integration", "unit", "e2e"]
 PreflightStatus = Literal["PASS", "WARN", "FAIL"]
 AnalysisScope = Literal["impacted", "full", "full_fallback"]
@@ -175,6 +176,7 @@ class RunSummary:
     competitive_mode: CompetitiveMode = "deterministic"
     graph_mode_applied: GraphMode = "deterministic"
     semantic_signal_count: int = 0
+    repository_support_state: RepositorySupportState = "supported"
 
 
 @dataclass

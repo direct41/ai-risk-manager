@@ -84,7 +84,9 @@ def _session_subscript_key(node: ast.AST) -> str | None:
     if not (isinstance(value, ast.Attribute) and value.attr == "session"):
         return None
 
-    slice_node = cast(ast.AST, getattr(node.slice, "value", node.slice))
+    slice_node: ast.AST = node.slice
+    if type(slice_node).__name__ == "Index":  # pragma: no cover - py<3.9 compatibility
+        slice_node = cast(ast.AST, getattr(slice_node, "value"))
     return _constant_str(slice_node)
 
 

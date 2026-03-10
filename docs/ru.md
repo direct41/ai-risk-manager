@@ -36,6 +36,7 @@ AIRISK_SAMPLE_REPO=/path/to/local/sample riskmap analyze --sample --no-llm
 - `.riskmap/graph.deterministic.json` — детерминированный граф до semantic-обогащения.
 - `.riskmap/findings.json` — машинный формат findings.
 - `.riskmap/test_plan.json` — приоритизированные тестовые действия.
+- В summary/report также смотрите `repository_support_state`: `supported`, `partial` или `unsupported`.
 
 ## Запуск на реальном репозитории
 
@@ -135,6 +136,7 @@ Extractor собирает:
 - `soft`: блокирует при новых `high|critical` findings.
 - `block-new-critical`: блокирует только при `new + critical + high confidence + verified evidence`.
 - Для `--support-level auto` предупреждения preflight понижают уровень поддержки на один шаг (`l2 -> l1`, `l1 -> l0`).
+- Для generic/advisory запусков summary явно показывает `repository_support_state`, чтобы partial/unsupported режим не выглядел как полноценная deterministic parity.
 
 ## API (sync)
 
