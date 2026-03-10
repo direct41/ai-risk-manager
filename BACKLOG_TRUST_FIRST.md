@@ -160,22 +160,22 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Deployment docs define baseline secure configuration and known limits.
 
 ## Epic 11: Capability Depth for Existing Stacks (P0)
-- Status: Planned
+- Status: Completed
 - Outcome: materially reduce false-negative rate on high-impact backend and web-app risk classes without core rule forks
 
 ### Stories
-1. [ ] P0 capability pack: data-integrity and boundary contracts.
+1. [x] P0 capability pack: data-integrity and boundary contracts.
    - Add shared signals/rules for:
      - write contract integrity (input/output field mismatches, suspicious normalization patterns)
      - write scope boundary (critical update/delete missing entity filter)
      - stale write conflict guard (client timestamp/version overwrite without compare-and-set control)
      - session lifecycle consistency (login/logout key mismatch for active tokens)
-2. [ ] P1 capability pack: frontend security sinks.
+2. [x] P1 capability pack: frontend security sinks.
    - Add shared signal/rule for unsafe HTML sink usage (stored-XSS class) with evidence references.
-3. [ ] P2 capability pack (policy-default optional): low-impact UI ergonomics.
+3. [x] P2 capability pack (policy-default optional): low-impact UI ergonomics.
    - Add conservative heuristics for pagination/page-index drift and form-completeness gating issues.
-4. [ ] Add parity eval suites for pass/fail paths (`express_node` first), then extend to other supported stacks where feasible.
-5. [ ] Keep new rules policy-configurable and conservative by default to protect precision KPIs.
+4. [x] Add parity eval suites for pass/fail paths (`express_node` first), then extend to other supported stacks where feasible.
+5. [x] Keep new rules policy-configurable and conservative by default to protect precision KPIs.
 
 ### Definition of Done
 - New capabilities are represented in stack-agnostic signal model and deterministic rules.
