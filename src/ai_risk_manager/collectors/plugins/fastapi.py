@@ -49,10 +49,13 @@ class FastAPICollectorPlugin(CapabilitySignalPluginMixin):
         "test_to_endpoint_coverage",
         "dependency_version_policy",
         "write_contract_integrity",
+        "session_lifecycle_consistency",
     }
     unsupported_signal_kinds = {
         "side_effect_emit_contract",
         "authorization_boundary_enforced",
+        "html_render_safety",
+        "ui_ergonomics",
     }
 
     def probe(self, repo_path: Path) -> StackProbeResult | None:

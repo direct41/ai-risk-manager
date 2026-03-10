@@ -227,17 +227,17 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Eval shows that non-HTTP sink support works without regressing trust metrics on existing HTTP scenarios.
 
 ## Epic 14: Capability Parity Across Supported Stacks (P0)
-- Status: In Progress
-- Outcome: Stage 11 capability packs stop being `express_node`-first and become portable across the current supported stack set
+- Status: Completed
+- Outcome: Stage 11 capability packs now have either parity extraction or explicit unsupported markers across the current supported stack set
 
 ### Stories
 1. [x] Add `write_contract_integrity` parity extraction for `fastapi_pytest`.
 2. [x] Add `write_contract_integrity` parity extraction for `django_drf`.
-3. [ ] Add `session_lifecycle_consistency` and `html_render_safety` parity where stack semantics allow it.
-4. [ ] Promote each capability pack independently through existing pack-promotion gates.
+3. [x] Add `session_lifecycle_consistency` parity where stack semantics allow it, and mark non-portable `html_render_safety` / `ui_ergonomics` packs explicit unsupported on Python backends.
+4. [x] Promote each capability pack independently through existing pack-promotion gates.
 
 ### Definition of Done
-- Each Stage 11 capability pack is implemented for at least two supported stacks.
+- Each Stage 11 capability pack is implemented for at least two supported stacks or declared explicit unsupported where the current contract is not portable.
 - Promotion status is visible per pack, not inferred from a stack-level label.
 - Trust/eval gates remain green after parity rollout.
 

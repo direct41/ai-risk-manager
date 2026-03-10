@@ -102,6 +102,42 @@ DEFAULT_CAPABILITY_PACK_PROMOTION_POLICY: dict[str, object] = {
             ],
             "required_consecutive_trust_passes": 2,
         },
+        "fastapi_stage14_write_contract_integrity": {
+            "stack_id": "fastapi_pytest",
+            "eligible_level": "l2",
+            "required_cases": [
+                "milestone18_fastapi_integrity_gap",
+                "milestone18_fastapi_integrity_balanced",
+            ],
+            "required_consecutive_trust_passes": 2,
+        },
+        "fastapi_stage14_session_lifecycle": {
+            "stack_id": "fastapi_pytest",
+            "eligible_level": "l2",
+            "required_cases": [
+                "milestone20_fastapi_session_gap",
+                "milestone20_fastapi_session_balanced",
+            ],
+            "required_consecutive_trust_passes": 2,
+        },
+        "django_stage14_write_contract_integrity": {
+            "stack_id": "django_drf",
+            "eligible_level": "l2",
+            "required_cases": [
+                "milestone19_django_integrity_gap",
+                "milestone19_django_integrity_balanced",
+            ],
+            "required_consecutive_trust_passes": 2,
+        },
+        "django_stage14_session_lifecycle": {
+            "stack_id": "django_drf",
+            "eligible_level": "l2",
+            "required_cases": [
+                "milestone21_django_session_gap",
+                "milestone21_django_session_balanced",
+            ],
+            "required_consecutive_trust_passes": 2,
+        },
     },
 }
 
@@ -303,6 +339,36 @@ CASES = [
         forbidden_rules={
             "critical_write_scope_missing_entity_filter",
             "stale_write_without_conflict_guard",
+            "critical_path_no_tests",
+        },
+    ),
+    EvalCase(
+        name="milestone20_fastapi_session_gap",
+        repo_rel="eval/repos/milestone20_fastapi_session_gap",
+        required_rules={"session_token_key_mismatch"},
+        forbidden_rules={"critical_path_no_tests"},
+    ),
+    EvalCase(
+        name="milestone20_fastapi_session_balanced",
+        repo_rel="eval/repos/milestone20_fastapi_session_balanced",
+        required_rules=set(),
+        forbidden_rules={
+            "session_token_key_mismatch",
+            "critical_path_no_tests",
+        },
+    ),
+    EvalCase(
+        name="milestone21_django_session_gap",
+        repo_rel="eval/repos/milestone21_django_session_gap",
+        required_rules={"session_token_key_mismatch"},
+        forbidden_rules={"critical_path_no_tests"},
+    ),
+    EvalCase(
+        name="milestone21_django_session_balanced",
+        repo_rel="eval/repos/milestone21_django_session_balanced",
+        required_rules=set(),
+        forbidden_rules={
+            "session_token_key_mismatch",
             "critical_path_no_tests",
         },
     ),

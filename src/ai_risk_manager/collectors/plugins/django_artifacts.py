@@ -8,7 +8,10 @@ import re
 
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle
 from ai_risk_manager.collectors.plugins.dependency_artifacts import extract_dependency_specs
-from ai_risk_manager.collectors.plugins.python_write_contract_artifacts import extract_python_write_contract_issues
+from ai_risk_manager.collectors.plugins.python_write_contract_artifacts import (
+    extract_python_session_lifecycle_issues,
+    extract_python_write_contract_issues,
+)
 
 WRITE_METHODS = ("post", "put", "patch", "delete")
 ROUTE_METHODS = WRITE_METHODS + ("get",)
@@ -757,6 +760,13 @@ def collect_django_artifacts(repo_path: Path) -> ArtifactBundle:
                 source_lines=source_lines,
                 relative_path=relative,
                 owner_names=owner_names,
+            )
+        )
+        bundle.session_lifecycle_issues.extend(
+            extract_python_session_lifecycle_issues(
+                tree=tree,
+                source_lines=source_lines,
+                relative_path=relative,
             )
         )
 

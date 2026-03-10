@@ -31,6 +31,9 @@ def test_registry_returns_signal_plugin_for_fastapi() -> None:
     plugin = get_signal_plugin_for_stack("fastapi_pytest")
     assert plugin is not None
     assert "http_write_surface" in plugin.supported_signal_kinds
+    assert "session_lifecycle_consistency" in plugin.supported_signal_kinds
+    assert "html_render_safety" in plugin.unsupported_signal_kinds
+    assert "ui_ergonomics" in plugin.unsupported_signal_kinds
 
 
 def test_fastapi_plugin_collect_signals_from_artifacts(tmp_path: Path, write_file) -> None:
@@ -57,6 +60,9 @@ def test_registry_returns_signal_plugin_for_django() -> None:
     assert plugin is not None
     assert "http_write_surface" in plugin.supported_signal_kinds
     assert "dependency_version_policy" in plugin.supported_signal_kinds
+    assert "session_lifecycle_consistency" in plugin.supported_signal_kinds
+    assert "html_render_safety" in plugin.unsupported_signal_kinds
+    assert "ui_ergonomics" in plugin.unsupported_signal_kinds
 
 
 def test_registry_returns_signal_plugin_for_express() -> None:
@@ -365,6 +371,71 @@ def test_django_plugin_extracts_write_contract_integrity_issues(tmp_path: Path, 
     assert "stale_write_without_conflict_guard" in issue_types
     kinds = {signal.kind for signal in signals.signals}
     assert "write_contract_integrity" in kinds
+
+
+def test_fastapi_plugin_extracts_session_lifecycle_issues(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "main.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/login')\n"
+        "def login(request):\n"
+        "    request.session['sessionToken'] = 'demo'\n"
+        "    return {'ok': True}\n"
+        "@router.post('/logout')\n"
+        "def logout(request):\n"
+        "    request.session.pop('session_token', None)\n"
+        "    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_auth.py",
+        "def test_auth(client):\n    client.post('/login')\n    client.post('/logout')\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    issue_types = {row[1] for row in artifacts.session_lifecycle_issues}
+    assert "storage_key_mismatch" in issue_types
+    kinds = {signal.kind for signal in signals.signals}
+    assert "session_lifecycle_consistency" in kinds
+
+
+def test_django_plugin_extracts_session_lifecycle_issues(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "views.py",
+        "from rest_framework.decorators import api_view\n"
+        "@api_view(['POST'])\n"
+        "def login(request):\n"
+        "    request.session['sessionToken'] = 'demo'\n"
+        "    return {'ok': True}\n"
+        "@api_view(['POST'])\n"
+        "def logout(request):\n"
+        "    request.session.pop('session_token', None)\n"
+        "    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "app" / "urls.py",
+        "from django.urls import path\n"
+        "from .views import login, logout\n"
+        "urlpatterns = [path('login/', login), path('logout/', logout)]\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_auth.py",
+        "def test_auth(client):\n    client.post('/login/')\n    client.post('/logout/')\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("django_drf")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    issue_types = {row[1] for row in artifacts.session_lifecycle_issues}
+    assert "storage_key_mismatch" in issue_types
+    kinds = {signal.kind for signal in signals.signals}
+    assert "session_lifecycle_consistency" in kinds
 
 
 def test_fastapi_plugin_collects_write_endpoint_and_warns_without_pytest(tmp_path: Path, write_file) -> None:

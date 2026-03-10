@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import re
+from typing import cast
 
 _RAW_SQL_UPDATE_RE = re.compile(
     r"UPDATE\s+(?P<table>[A-Za-z_][A-Za-z0-9_]*)\s+SET[\s\S]*?WHERE\s+(?P<where>[\s\S]*?)(?:[\"'`]\s*[\),]|$)",
@@ -20,6 +21,7 @@ _ENTITY_FILTER_RE = re.compile(r"\b(?:id|pk|[A-Za-z_]+_id)\b", re.IGNORECASE)
 _TENANT_GUARD_RE = re.compile(r"\b(?:user_id|tenant_id|account_id|org_id|organization_id)\b", re.IGNORECASE)
 _FRESHNESS_GUARD_RE = re.compile(r"\b(?:updated_at|version)\b", re.IGNORECASE)
 _FILTER_KWARG_RE = re.compile(r"\b(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=")
+_SESSION_KEY_HINT_RE = re.compile(r"(session|token|auth)", re.IGNORECASE)
 
 
 def _line_snippet(source_lines: list[str], line: int, *, window: int = 3) -> str:
@@ -44,6 +46,10 @@ def _line_from_offset(block: str, offset: int, start_line: int) -> int:
     return start_line + block.count("\n", 0, offset)
 
 
+def _normalize_key_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
 def _has_entity_filter(where_clause: str) -> bool:
     tokens = {token.lower() for token in _ENTITY_FILTER_RE.findall(where_clause)}
     entity_tokens = tokens - {"user_id", "tenant_id", "account_id", "org_id", "organization_id"}
@@ -59,6 +65,89 @@ def _has_entity_filter_kwargs(filter_expr: str) -> bool:
         and name not in {"user_id", "tenant_id", "account_id", "org_id", "organization_id"}
     }
     return bool(entity_tokens)
+
+
+def _constant_str(node: ast.AST | None) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    return None
+
+
+def _looks_like_session_key(value: str) -> bool:
+    return bool(_SESSION_KEY_HINT_RE.search(value))
+
+
+def _session_subscript_key(node: ast.AST) -> str | None:
+    if not isinstance(node, ast.Subscript):
+        return None
+    value = node.value
+    if not (isinstance(value, ast.Attribute) and value.attr == "session"):
+        return None
+
+    slice_node = cast(ast.AST, getattr(node.slice, "value", node.slice))
+    return _constant_str(slice_node)
+
+
+def extract_python_session_lifecycle_issues(
+    *,
+    tree: ast.AST,
+    source_lines: list[str],
+    relative_path: str,
+) -> list[tuple[str, str, str, int | None, str, dict[str, str]]]:
+    set_events: list[tuple[str, str, int, str]] = []
+    remove_events: list[tuple[str, str, int, str]] = []
+
+    for node in ast.walk(tree):
+        line = getattr(node, "lineno", 1)
+        snippet = _line_snippet(source_lines, line)
+
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                key = _session_subscript_key(target)
+                if key and _looks_like_session_key(key):
+                    set_events.append((key, _normalize_key_name(key), line, snippet))
+        elif isinstance(node, ast.AnnAssign):
+            key = _session_subscript_key(node.target)
+            if key and _looks_like_session_key(key):
+                set_events.append((key, _normalize_key_name(key), line, snippet))
+        elif isinstance(node, ast.Delete):
+            for target in node.targets:
+                key = _session_subscript_key(target)
+                if key and _looks_like_session_key(key):
+                    remove_events.append((key, _normalize_key_name(key), line, snippet))
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if node.func.attr != "pop" or not node.args:
+                continue
+            if not (isinstance(node.func.value, ast.Attribute) and node.func.value.attr == "session"):
+                continue
+            key = _constant_str(node.args[0])
+            if key and _looks_like_session_key(key):
+                remove_events.append((key, _normalize_key_name(key), line, snippet))
+
+    issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
+    seen: set[tuple[str, str]] = set()
+    for set_key, set_norm, _set_line, _set_snippet in set_events:
+        for remove_key, remove_norm, remove_line, remove_snippet in remove_events:
+            if set_norm != remove_norm or set_key == remove_key:
+                continue
+            marker = (set_key, remove_key)
+            if marker in seen:
+                continue
+            seen.add(marker)
+            issues.append(
+                (
+                    relative_path,
+                    "storage_key_mismatch",
+                    "request.session",
+                    remove_line,
+                    remove_snippet,
+                    {
+                        "set_key": set_key,
+                        "remove_key": remove_key,
+                    },
+                )
+            )
+    return issues
 
 
 def extract_python_write_contract_issues(

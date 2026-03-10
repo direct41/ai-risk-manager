@@ -24,9 +24,9 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 | `side_effect_emit_contract` | Mandatory side-effect after critical write (event, notification, webhook, job) | `ArtifactBundle.side_effect_requirements` + `side_effect_emits` | None yet | `missing_required_side_effect` | partial |
 | `authorization_boundary_enforced` | Authz checks on critical path writes | `ArtifactBundle.authorization_boundaries` (Express middleware extraction implemented) | None yet | `critical_write_missing_authz` | partial |
 | `write_contract_integrity` | Data-integrity and boundary-contract anomalies in write paths | `ArtifactBundle.write_contract_issues` (Express-first full pack; FastAPI/Django parity includes scope/conflict heuristics via shared Python extractor) | None yet | `input_normalization_char_split`, `response_field_contract_mismatch`, `db_insert_binding_mismatch`, `critical_write_scope_missing_entity_filter`, `stale_write_without_conflict_guard`, `reading_time_round_down_to_zero`, `priority_formula_precedence_risk`, `overdue_date_string_comparison` | partial |
-| `session_lifecycle_consistency` | Consistency of token/session storage lifecycle across login/logout flows | `ArtifactBundle.session_lifecycle_issues` (Express-first extraction) | None yet | `session_token_key_mismatch` | partial |
-| `html_render_safety` | Unsafe HTML sink usage for untrusted content | `ArtifactBundle.html_render_issues` (Express-first extraction) | None yet | `stored_xss_unsafe_innerhtml` | partial |
-| `ui_ergonomics` | UI state/layout quality risks affecting interaction reliability | `ArtifactBundle.ui_ergonomics_issues` (Express-first extraction) | None yet | `pagination_page_not_normalized`, `save_button_partial_form_enabled`, `mobile_layout_min_width_overflow` | partial |
+| `session_lifecycle_consistency` | Consistency of token/session storage lifecycle across login/logout flows | `ArtifactBundle.session_lifecycle_issues` (Express localStorage extraction plus shared Python `request.session` parity for FastAPI/Django) | None yet | `session_token_key_mismatch` | implemented |
+| `html_render_safety` | Unsafe HTML sink usage for untrusted content | `ArtifactBundle.html_render_issues` (Express-first extraction; FastAPI/Django currently declare explicit unsupported because the current rule contract is sink-specific) | None yet | `stored_xss_unsafe_innerhtml` | partial |
+| `ui_ergonomics` | UI state/layout quality risks affecting interaction reliability | `ArtifactBundle.ui_ergonomics_issues` (Express-first extraction; Python backend plugins declare explicit unsupported) | None yet | `pagination_page_not_normalized`, `save_button_partial_form_enabled`, `mobile_layout_min_width_overflow` | partial |
 
 ## Rule-to-Signal Dependency
 
@@ -55,7 +55,7 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 ## Current Gaps Blocking Higher Coverage
 
 1. Side-effect contract extraction remains incomplete across supported stacks.
-2. Session/html signals are still Express-first; write-contract parity has started for FastAPI and Django.
+2. HTML/UI packs remain Express-first; Python backend plugins now declare these as explicit unsupported instead of leaving capability status implicit.
 3. Contract binding is still FastAPI-oriented (`pydantic_models`) and only partially generalized for Django/DRF.
 4. Ingress-family model now covers `http`, `webhook`, `job`, `cli_task`, and `event_consumer`, but non-HTTP extraction is still Express-first.
 
