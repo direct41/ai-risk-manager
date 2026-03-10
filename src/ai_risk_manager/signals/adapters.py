@@ -22,6 +22,28 @@ def artifact_bundle_to_signal_bundle(artifacts: ArtifactBundle) -> SignalBundle:
     signals: list[CapabilitySignal] = []
     supported_kinds: set[SignalKind] = set()
 
+    for ingress in artifacts.ingress_surfaces:
+        supported_kinds.add("ingress_surface")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:ingress:{ingress.family}:{ingress.file_path}:{ingress.owner_name}:{ingress.line or 0}",
+                kind="ingress_surface",
+                source_ref=_line_ref(ingress.file_path, ingress.line),
+                confidence="high",
+                evidence_refs=[_line_ref(ingress.file_path, ingress.line)],
+                attributes={
+                    "family": ingress.family,
+                    "protocol": ingress.protocol,
+                    "operation": ingress.operation,
+                    "owner_name": ingress.owner_name,
+                    "method": ingress.method,
+                    "target": ingress.target,
+                    "path": ingress.target,
+                    "snippet": ingress.snippet,
+                },
+            )
+        )
+
     for file_path, endpoint_name, method, route_path, line, snippet in artifacts.write_endpoints:
         ingress_family = _classify_ingress_family(endpoint_name, route_path)
         supported_kinds.add("ingress_surface")
@@ -190,6 +212,31 @@ def artifact_bundle_to_signal_bundle(artifacts: ArtifactBundle) -> SignalBundle:
                     "test_name": test_name,
                     "snippet": snippet,
                     "coverage_mode": "name_fallback_candidate",
+                },
+            )
+        )
+
+    for ingress_call in artifacts.test_ingress_calls:
+        supported_kinds.add("test_to_ingress_coverage")
+        signals.append(
+            CapabilitySignal(
+                id=(
+                    "sig:coverage:ingress:"
+                    f"{ingress_call.family}:{ingress_call.file_path}:{ingress_call.test_name}:{ingress_call.line or 0}"
+                ),
+                kind="test_to_ingress_coverage",
+                source_ref=_line_ref(ingress_call.file_path, ingress_call.line),
+                confidence="high",
+                evidence_refs=[_line_ref(ingress_call.file_path, ingress_call.line)],
+                attributes={
+                    "family": ingress_call.family,
+                    "protocol": ingress_call.protocol,
+                    "operation": ingress_call.operation,
+                    "test_name": ingress_call.test_name,
+                    "method": ingress_call.method,
+                    "target": ingress_call.target,
+                    "path": ingress_call.target,
+                    "snippet": ingress_call.snippet,
                 },
             )
         )

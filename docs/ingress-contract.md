@@ -12,12 +12,12 @@ This document defines the normalized ingress contract introduced in Stage 13.
 
 - `http`
 - `webhook`
+- `job`
+- `cli_task`
 
 Planned families:
 
-- `job`
 - `event_consumer`
-- `cli_task`
 
 ## Contract Shape
 
@@ -49,12 +49,16 @@ Planned families:
 - any write endpoint becomes `ingress_surface`
 - default family is `http`
 - routes or handlers containing `webhook` or paths under `/webhooks` or `/hooks` are classified as `webhook`
+- `queue.process(...)`, `worker.process(...)`, `agenda.define(...)` are classified as `job`
+- `program.command(...)`, `cli.command(...)`, `yargs.command(...)` are classified as `cli_task`
 - any detected test HTTP call becomes `test_to_ingress_coverage`
+- `runJob(...)` and `runCli(...)` in tests are mapped to ingress coverage heuristics
 
 ## Current Eval Coverage
 
 - `milestone15_fastapi_webhook_ingress` verifies that a non-HTTP-style sink family represented over HTTP transport is classified as `webhook`
 - the eval suite also verifies webhook test coverage through `test_to_ingress_coverage`
+- `milestone16_express_job_cli_ingress` verifies `job` and `cli_task` families plus their coverage heuristics
 
 ## Non-Goals
 

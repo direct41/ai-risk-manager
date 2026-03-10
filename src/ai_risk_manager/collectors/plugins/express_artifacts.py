@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import re
 
-from ai_risk_manager.collectors.plugins.base import ArtifactBundle
+from ai_risk_manager.collectors.plugins.base import ArtifactBundle, IngressCoverageArtifact, IngressSurfaceArtifact
 from ai_risk_manager.collectors.plugins.dependency_artifacts import extract_dependency_specs
 
 WRITE_METHODS = ("post", "put", "patch", "delete")
@@ -93,6 +93,23 @@ _SAVE_BUTTON_OR_RE = re.compile(
     re.IGNORECASE,
 )
 _APP_MIN_WIDTH_RE = re.compile(r"\.app\s*\{[\s\S]*?\bmin-width\s*:\s*(?P<value>\d+)px\s*;", re.IGNORECASE)
+_JOB_PROCESS_RE = re.compile(
+    r"\b(?:queue|worker|agenda)\.(?:process|define)\s*\(\s*(?P<quote>['\"`])(?P<name>[^'\"`]+)(?P=quote)"
+    r"(?:\s*,\s*(?P<handler>[A-Za-z_$][A-Za-z0-9_$]*))?",
+    re.IGNORECASE,
+)
+_CLI_COMMAND_RE = re.compile(
+    r"\b(?:program|cli|yargs)\.command\s*\(\s*(?P<quote>['\"`])(?P<name>[^'\"`]+)(?P=quote)",
+    re.IGNORECASE,
+)
+_RUN_JOB_TEST_RE = re.compile(
+    r"\brunJob\s*\(\s*(?P<quote>['\"`])(?P<name>[^'\"`]+)(?P=quote)\s*\)",
+    re.IGNORECASE,
+)
+_RUN_CLI_TEST_RE = re.compile(
+    r"\brunCli\s*\(\s*(?P<quote>['\"`])(?P<name>[^'\"`]+)(?P=quote)\s*\)",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -200,6 +217,97 @@ def _extract_write_endpoints(path: Path, repo_path: Path, text: str, source_line
             )
         )
     return endpoints
+
+
+def _extract_generic_ingress_surfaces(
+    path: Path,
+    repo_path: Path,
+    text: str,
+    source_lines: list[str],
+) -> list[IngressSurfaceArtifact]:
+    rel_path = str(path.relative_to(repo_path))
+    surfaces: list[IngressSurfaceArtifact] = []
+
+    for match in _JOB_PROCESS_RE.finditer(text):
+        line = _line_from_offset(text, match.start())
+        name = match.group("name").strip()
+        handler = (match.group("handler") or "").strip() or name
+        surfaces.append(
+            IngressSurfaceArtifact(
+                file_path=rel_path,
+                family="job",
+                operation="execute",
+                owner_name=handler,
+                protocol="internal",
+                target=name,
+                method="RUN",
+                line=line,
+                snippet=_line_snippet(source_lines, line),
+            )
+        )
+
+    for match in _CLI_COMMAND_RE.finditer(text):
+        line = _line_from_offset(text, match.start())
+        name = match.group("name").strip()
+        surfaces.append(
+            IngressSurfaceArtifact(
+                file_path=rel_path,
+                family="cli_task",
+                operation="execute",
+                owner_name=name,
+                protocol="cli",
+                target=name,
+                method="RUN",
+                line=line,
+                snippet=_line_snippet(source_lines, line),
+            )
+        )
+
+    return surfaces
+
+
+def _extract_test_ingress_calls(
+    path: Path,
+    repo_path: Path,
+    text: str,
+    source_lines: list[str],
+) -> list[IngressCoverageArtifact]:
+    rel_path = str(path.relative_to(repo_path))
+    rows: list[IngressCoverageArtifact] = []
+
+    for match in _RUN_JOB_TEST_RE.finditer(text):
+        line = _line_from_offset(text, match.start())
+        rows.append(
+            IngressCoverageArtifact(
+                file_path=rel_path,
+                family="job",
+                operation="execute",
+                test_name=f"runJob:{match.group('name').strip()}",
+                protocol="internal",
+                target=match.group("name").strip(),
+                method="RUN",
+                line=line,
+                snippet=_line_snippet(source_lines, line),
+            )
+        )
+
+    for match in _RUN_CLI_TEST_RE.finditer(text):
+        line = _line_from_offset(text, match.start())
+        rows.append(
+            IngressCoverageArtifact(
+                file_path=rel_path,
+                family="cli_task",
+                operation="execute",
+                test_name=f"runCli:{match.group('name').strip()}",
+                protocol="cli",
+                target=match.group("name").strip(),
+                method="RUN",
+                line=line,
+                snippet=_line_snippet(source_lines, line),
+            )
+        )
+
+    return rows
 
 
 def _extract_auth_middleware(path: Path, repo_path: Path, text: str, source_lines: list[str]) -> list[tuple[str, int, str]]:
@@ -853,8 +961,10 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
     css_files = _iter_css_files(all_files)
     test_files = [path for path in js_files if _is_test_file(path)]
 
+    ingress_surfaces: list[IngressSurfaceArtifact] = []
     write_endpoints: list[tuple[str, str, str, str, int | None, str]] = []
     test_cases: list[tuple[str, str, int | None, str]] = []
+    test_ingress_calls: list[IngressCoverageArtifact] = []
     test_http_calls: list[tuple[str, str, str, str, int | None, str]] = []
     auth_middleware_by_file: dict[str, list[tuple[str, int, str]]] = {}
     write_contract_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
@@ -870,10 +980,12 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
         source_lines = text.splitlines()
         if _is_test_file(path):
             test_cases.extend(_extract_test_cases(path, repo_path, source_lines))
+            test_ingress_calls.extend(_extract_test_ingress_calls(path, repo_path, text, source_lines))
             test_http_calls.extend(_extract_test_http_calls(path, repo_path, text, source_lines))
             continue
         file_endpoints = _extract_write_endpoints(path, repo_path, text, source_lines)
         write_endpoints.extend(file_endpoints)
+        ingress_surfaces.extend(_extract_generic_ingress_surfaces(path, repo_path, text, source_lines))
         rel_path = str(path.relative_to(repo_path))
         auth_middleware_by_file[rel_path] = _extract_auth_middleware(path, repo_path, text, source_lines)
         write_contract_issues.extend(_extract_write_contract_issues(path, repo_path, text, source_lines))
@@ -903,9 +1015,11 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
 
     return ArtifactBundle(
         all_files=all_files,
+        ingress_surfaces=ingress_surfaces,
         write_endpoints=write_endpoints,
         test_files=test_files,
         test_cases=test_cases,
+        test_ingress_calls=test_ingress_calls,
         test_http_calls=test_http_calls,
         dependency_specs=extract_dependency_specs(repo_path, all_files),
         authorization_boundaries=authorization_boundaries,

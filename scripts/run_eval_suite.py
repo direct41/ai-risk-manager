@@ -252,6 +252,14 @@ CASES = [
         required_ingress_families={"webhook"},
         required_coverage_families={"webhook"},
     ),
+    EvalCase(
+        name="milestone16_express_job_cli_ingress",
+        repo_rel="eval/repos/milestone16_express_job_cli_ingress",
+        required_rules=set(),
+        forbidden_rules={"critical_path_no_tests"},
+        required_ingress_families={"job", "cli_task"},
+        required_coverage_families={"job", "cli_task"},
+    ),
 ]
 
 

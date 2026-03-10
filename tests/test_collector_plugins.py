@@ -237,6 +237,45 @@ def test_express_plugin_extracts_integrity_session_and_html_safety_issues(tmp_pa
     assert "ui_ergonomics" in kinds
 
 
+def test_express_plugin_extracts_job_and_cli_ingress_surfaces(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "server" / "workers.js",
+        "const express = require('express');\n"
+        "const app = express();\n"
+        "queue.process('sync-notes', syncNotesJob);\n"
+        "program.command('sync-notes');\n"
+        "app.post('/api/health', (_req, res) => res.json({ ok: true }));\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_ingress.js",
+        "test('runs ingress handlers', async () => {\n"
+        "  runJob('sync-notes');\n"
+        "  runCli('sync-notes');\n"
+        "  await client.post('/api/health');\n"
+        "});\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("express_node")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    ingress_families = {row.family for row in artifacts.ingress_surfaces}
+    coverage_families = {row.family for row in artifacts.test_ingress_calls}
+    signal_ingress_families = {
+        str(signal.attributes.get("family", ""))
+        for signal in signals.signals
+        if signal.kind == "ingress_surface"
+    }
+
+    assert "job" in ingress_families
+    assert "cli_task" in ingress_families
+    assert "job" in coverage_families
+    assert "cli_task" in coverage_families
+    assert "job" in signal_ingress_families
+    assert "cli_task" in signal_ingress_families
+
+
 def test_fastapi_plugin_collects_write_endpoint_and_warns_without_pytest(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",
