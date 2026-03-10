@@ -44,7 +44,9 @@ def _preflight_from_signals(signals: ExpressSignals) -> PreflightResult:
 class ExpressCollectorPlugin(CapabilitySignalPluginMixin):
     stack_id: Literal["express_node"] = "express_node"
     supported_signal_kinds = {
+        "ingress_surface",
         "http_write_surface",
+        "test_to_ingress_coverage",
         "test_to_endpoint_coverage",
         "dependency_version_policy",
         "authorization_boundary_enforced",

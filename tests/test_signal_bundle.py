@@ -35,7 +35,9 @@ def test_artifact_bundle_to_signal_bundle_maps_core_capabilities() -> None:
     bundle = artifact_bundle_to_signal_bundle(artifacts)
     kinds = {signal.kind for signal in bundle.signals}
 
+    assert "ingress_surface" in kinds
     assert "http_write_surface" in kinds
+    assert "test_to_ingress_coverage" in kinds
     assert "request_contract_binding" in kinds
     assert "state_transition_declared" in kinds
     assert "state_transition_handled_guarded" in kinds
@@ -44,7 +46,9 @@ def test_artifact_bundle_to_signal_bundle_maps_core_capabilities() -> None:
     assert "side_effect_emit_contract" not in kinds
     assert "authorization_boundary_enforced" not in kinds
     assert bundle.supported_kinds == {
+        "ingress_surface",
         "http_write_surface",
+        "test_to_ingress_coverage",
         "request_contract_binding",
         "state_transition_declared",
         "state_transition_handled_guarded",
@@ -163,3 +167,25 @@ def test_artifact_bundle_to_signal_bundle_maps_integrity_and_frontend_safety_con
     assert "session_lifecycle_consistency" in bundle.supported_kinds
     assert "html_render_safety" in bundle.supported_kinds
     assert "ui_ergonomics" in bundle.supported_kinds
+
+
+def test_artifact_bundle_to_signal_bundle_classifies_webhook_ingress_family() -> None:
+    artifacts = ArtifactBundle(
+        write_endpoints=[
+            ("app/webhooks.py", "stripe_webhook", "post", "/webhooks/stripe", 14, "@router.post('/webhooks/stripe')"),
+        ],
+        test_http_calls=[
+            ("tests/test_webhooks.py", "test_stripe_webhook", "post", "/webhooks/stripe", 9, "client.post('/webhooks/stripe')"),
+        ],
+    )
+
+    bundle = artifact_bundle_to_signal_bundle(artifacts)
+    ingress_signals = [signal for signal in bundle.signals if signal.kind == "ingress_surface"]
+    coverage_signals = [signal for signal in bundle.signals if signal.kind == "test_to_ingress_coverage"]
+
+    assert len(ingress_signals) == 1
+    assert ingress_signals[0].attributes["family"] == "webhook"
+    assert ingress_signals[0].attributes["protocol"] == "http"
+    assert ingress_signals[0].attributes["target"] == "/webhooks/stripe"
+    assert len(coverage_signals) == 1
+    assert coverage_signals[0].attributes["family"] == "webhook"
