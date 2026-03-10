@@ -26,11 +26,16 @@
   - confidence/evidence-based ranking in reports
   - dependency policy profiles with scope-aware severity
 
-## Next (Post Stage 11, Gate-Based)
+## Next (Post Stage 12, Architecture Reset)
 
-- Universal core, contract-driven expansion, service hardening, and capability-depth expansion are complete through Stage 11.
+- Universal core, contract-driven expansion, service hardening, capability-depth expansion, and pack-level promotion gates are complete through Stage 12.
+- The next roadmap is now organized around architectural scaling constraints, not around isolated feature batches.
+- Architecture decision record: [docs/architecture-next.md](docs/architecture-next.md)
 - Next delivery focus:
-  - After Stage 12: broaden the same capability model beyond `express_node` without introducing stack-specific rule forks.
+  - Stage 13: generalize the analyzer around ingress-family contracts, not only HTTP write paths.
+  - Stage 14: bring Stage 11 capability packs to parity across existing supported stacks.
+  - Stage 15: add advisory-only AI extraction for partially supported repositories behind evidence and trust gates.
+  - Stage 16: package an external plugin distribution model only after contracts and promotion logic are stable.
 
 ## Delivery Model (Stage-Gate)
 
@@ -53,3 +58,7 @@
 8. [x] Stage 8: service-grade hardening for deployment scenarios.
 9. [x] Stage 11: capability-depth expansion for existing stacks.
 10. [x] Stage 12: capability-pack promotion and trust-gate stabilization.
+11. [ ] Stage 13: ingress contract generalization beyond HTTP.
+12. [ ] Stage 14: capability-pack parity across supported stacks.
+13. [ ] Stage 15: advisory AI extraction for partially supported repositories.
+14. [ ] Stage 16: external plugin distribution model.

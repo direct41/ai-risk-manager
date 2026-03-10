@@ -210,3 +210,63 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Eval produces a dedicated `capability_pack_promotion.json` artifact.
 - Each promoted pack has explicit required cases and trust-pass thresholds.
 - Summary output shows which capability packs are eligible or blocked and why.
+
+## Epic 13: Ingress Contract Generalization (P0)
+- Status: Planned
+- Outcome: the core analyzer stops being implicitly HTTP-centric and can reason about multiple sink families through one contract model
+
+### Stories
+1. [ ] Define versioned ingress contracts for `http`, `webhook`, `job`, `event_consumer`, and `cli/task` surfaces.
+2. [ ] Extend the common signal model so capability packs can attach to ingress families, not only current HTTP shapes.
+3. [ ] Add parity eval cases for at least one non-HTTP sink family.
+4. [ ] Keep existing runtime behavior backward-compatible for current stacks.
+
+### Definition of Done
+- New ingress contracts are versioned in-repo and mapped to current plugin boundaries.
+- Core rules remain stack-agnostic and do not add framework-specific branches.
+- Eval shows that non-HTTP sink support works without regressing trust metrics on existing HTTP scenarios.
+
+## Epic 14: Capability Parity Across Supported Stacks (P0)
+- Status: Planned
+- Outcome: Stage 11 capability packs stop being `express_node`-first and become portable across the current supported stack set
+
+### Stories
+1. [ ] Add `write_contract_integrity` parity extraction for `fastapi_pytest`.
+2. [ ] Add `write_contract_integrity` parity extraction for `django_drf`.
+3. [ ] Add `session_lifecycle_consistency` and `html_render_safety` parity where stack semantics allow it.
+4. [ ] Promote each capability pack independently through existing pack-promotion gates.
+
+### Definition of Done
+- Each Stage 11 capability pack is implemented for at least two supported stacks.
+- Promotion status is visible per pack, not inferred from a stack-level label.
+- Trust/eval gates remain green after parity rollout.
+
+## Epic 15: Advisory AI Extraction For Partial Support (P1)
+- Status: Planned
+- Outcome: the product can analyze partially supported repositories without pretending they have deterministic parity
+
+### Stories
+1. [ ] Define evidence-bound AI extraction contract for generic repository analysis.
+2. [ ] Introduce advisory-only support level behavior for AI-assisted partial coverage.
+3. [ ] Add deterministic verification anchors and explicit drop rules for unverifiable AI claims.
+4. [ ] Add eval scenarios for "supported", "partial", and "unsupported but advisory" repository states.
+
+### Definition of Done
+- AI-assisted findings without evidence are dropped automatically.
+- Partially supported repositories receive explicit support-level labeling and conservative rollout behavior.
+- Eval artifacts show trust metrics separately for deterministic and AI-assisted paths.
+
+## Epic 16: External Plugin Distribution Model (P2)
+- Status: Planned
+- Outcome: new stack analyzers can be developed and distributed without modifying core runtime boundaries
+
+### Stories
+1. [ ] Define the packaging and loading contract for external plugins.
+2. [ ] Publish a stable plugin SDK/template based on the existing contract model.
+3. [ ] Add trust and conformance gates for externally supplied plugins.
+4. [ ] Document repository and release guidance for plugin authors.
+
+### Definition of Done
+- External plugin loading is possible without weakening core trust gates.
+- Plugin authors have a stable scaffold and conformance workflow.
+- Core runtime does not become responsible for plugin-specific business logic.
