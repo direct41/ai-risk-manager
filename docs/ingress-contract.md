@@ -51,6 +51,11 @@ Planned families:
 - routes or handlers containing `webhook` or paths under `/webhooks` or `/hooks` are classified as `webhook`
 - any detected test HTTP call becomes `test_to_ingress_coverage`
 
+## Current Eval Coverage
+
+- `milestone15_fastapi_webhook_ingress` verifies that a non-HTTP-style sink family represented over HTTP transport is classified as `webhook`
+- the eval suite also verifies webhook test coverage through `test_to_ingress_coverage`
+
 ## Non-Goals
 
 - no new deterministic rules are attached to ingress families in v1

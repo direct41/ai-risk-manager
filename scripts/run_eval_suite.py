@@ -109,7 +109,8 @@ if str(REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from ai_risk_manager.collectors.plugins.contract import PLUGIN_CONTRACT_VERSION  # noqa: E402
-from ai_risk_manager.collectors.plugins.registry import evaluate_registered_plugin_conformance  # noqa: E402
+from ai_risk_manager.collectors.plugins.registry import evaluate_registered_plugin_conformance, get_signal_plugin_for_stack  # noqa: E402
+from ai_risk_manager.stacks.discovery import detect_stack  # noqa: E402
 
 
 @dataclass
@@ -118,6 +119,8 @@ class EvalCase:
     repo_rel: str
     required_rules: set[str]
     forbidden_rules: set[str]
+    required_ingress_families: set[str] | None = None
+    required_coverage_families: set[str] | None = None
 
 
 CASES = [
@@ -240,6 +243,14 @@ CASES = [
             "critical_path_no_tests",
             "critical_write_missing_authz",
         },
+    ),
+    EvalCase(
+        name="milestone15_fastapi_webhook_ingress",
+        repo_rel="eval/repos/milestone15_fastapi_webhook_ingress",
+        required_rules=set(),
+        forbidden_rules={"critical_path_no_tests"},
+        required_ingress_families={"webhook"},
+        required_coverage_families={"webhook"},
     ),
 ]
 
@@ -599,6 +610,10 @@ def run_case(case: EvalCase) -> dict:
         "flaky": False,
         "status": "failed",
         "errors": [],
+        "required_ingress_families": sorted(case.required_ingress_families or set()),
+        "required_coverage_families": sorted(case.required_coverage_families or set()),
+        "found_ingress_families": [],
+        "found_coverage_families": [],
     }
 
     try:
@@ -689,10 +704,43 @@ def run_case(case: EvalCase) -> dict:
     if result["flaky"]:
         result["errors"].append("flaky result: rule set differs across repeated runs")
 
+    if case.required_ingress_families or case.required_coverage_families:
+        _evaluate_ingress_expectations(case, repo_path, result)
+
     if not result["errors"]:
         result["status"] = "passed"
 
     return result
+
+
+def _evaluate_ingress_expectations(case: EvalCase, repo_path: Path, result: dict[str, object]) -> None:
+    detection = detect_stack(repo_path)
+    plugin = get_signal_plugin_for_stack(detection.stack_id)
+    if plugin is None:
+        result.setdefault("errors", []).append(f"no signal plugin registered for stack '{detection.stack_id}'")
+        return
+
+    artifacts = plugin.collect(repo_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+    found_ingress = {
+        str(signal.attributes.get("family", "")).strip()
+        for signal in signals.signals
+        if signal.kind == "ingress_surface"
+    }
+    found_coverage = {
+        str(signal.attributes.get("family", "")).strip()
+        for signal in signals.signals
+        if signal.kind == "test_to_ingress_coverage"
+    }
+    result["found_ingress_families"] = sorted(family for family in found_ingress if family)
+    result["found_coverage_families"] = sorted(family for family in found_coverage if family)
+
+    missing_ingress = sorted((case.required_ingress_families or set()) - found_ingress)
+    missing_coverage = sorted((case.required_coverage_families or set()) - found_coverage)
+    if missing_ingress:
+        result.setdefault("errors", []).append(f"missing required ingress families: {missing_ingress}")
+    if missing_coverage:
+        result.setdefault("errors", []).append(f"missing required ingress coverage families: {missing_coverage}")
 
 
 def compute_aggregates(results: list[dict]) -> dict[str, float]:

@@ -212,14 +212,14 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Summary output shows which capability packs are eligible or blocked and why.
 
 ## Epic 13: Ingress Contract Generalization (P0)
-- Status: Planned
+- Status: In Progress
 - Outcome: the core analyzer stops being implicitly HTTP-centric and can reason about multiple sink families through one contract model
 
 ### Stories
 1. [ ] Define versioned ingress contracts for `http`, `webhook`, `job`, `event_consumer`, and `cli/task` surfaces.
-2. [ ] Extend the common signal model so capability packs can attach to ingress families, not only current HTTP shapes.
-3. [ ] Add parity eval cases for at least one non-HTTP sink family.
-4. [ ] Keep existing runtime behavior backward-compatible for current stacks.
+2. [x] Extend the common signal model so capability packs can attach to ingress families, not only current HTTP shapes.
+3. [x] Add parity eval cases for at least one non-HTTP sink family.
+4. [x] Keep existing runtime behavior backward-compatible for current stacks.
 
 ### Definition of Done
 - New ingress contracts are versioned in-repo and mapped to current plugin boundaries.
