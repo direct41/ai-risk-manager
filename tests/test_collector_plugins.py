@@ -276,6 +276,40 @@ def test_express_plugin_extracts_job_and_cli_ingress_surfaces(tmp_path: Path, wr
     assert "cli_task" in signal_ingress_families
 
 
+def test_express_plugin_extracts_event_consumer_ingress_surfaces(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "server" / "events.js",
+        "const express = require('express');\n"
+        "const app = express();\n"
+        "bus.on('note.created', handleNoteCreated);\n"
+        "app.post('/api/health', (_req, res) => res.json({ ok: true }));\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_events.js",
+        "test('runs event consumer', async () => {\n"
+        "  emitEvent('note.created');\n"
+        "  await client.post('/api/health');\n"
+        "});\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("express_node")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    ingress_families = {row.family for row in artifacts.ingress_surfaces}
+    coverage_families = {row.family for row in artifacts.test_ingress_calls}
+    signal_ingress_families = {
+        str(signal.attributes.get("family", ""))
+        for signal in signals.signals
+        if signal.kind == "ingress_surface"
+    }
+
+    assert "event_consumer" in ingress_families
+    assert "event_consumer" in coverage_families
+    assert "event_consumer" in signal_ingress_families
+
+
 def test_fastapi_plugin_collects_write_endpoint_and_warns_without_pytest(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",

@@ -260,6 +260,14 @@ CASES = [
         required_ingress_families={"job", "cli_task"},
         required_coverage_families={"job", "cli_task"},
     ),
+    EvalCase(
+        name="milestone17_express_event_consumer_ingress",
+        repo_rel="eval/repos/milestone17_express_event_consumer_ingress",
+        required_rules=set(),
+        forbidden_rules={"critical_path_no_tests"},
+        required_ingress_families={"event_consumer"},
+        required_coverage_families={"event_consumer"},
+    ),
 ]
 
 

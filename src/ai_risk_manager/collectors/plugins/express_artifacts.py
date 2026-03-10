@@ -110,6 +110,15 @@ _RUN_CLI_TEST_RE = re.compile(
     r"\brunCli\s*\(\s*(?P<quote>['\"`])(?P<name>[^'\"`]+)(?P=quote)\s*\)",
     re.IGNORECASE,
 )
+_EVENT_CONSUMER_RE = re.compile(
+    r"\b(?:bus|consumer|subscriber|eventBus)\.(?:on|subscribe)\s*\(\s*(?P<quote>['\"`])(?P<name>[^'\"`]+)(?P=quote)"
+    r"(?:\s*,\s*(?P<handler>[A-Za-z_$][A-Za-z0-9_$]*))?",
+    re.IGNORECASE,
+)
+_EMIT_EVENT_TEST_RE = re.compile(
+    r"\bemitEvent\s*\(\s*(?P<quote>['\"`])(?P<name>[^'\"`]+)(?P=quote)\s*\)",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -263,6 +272,24 @@ def _extract_generic_ingress_surfaces(
             )
         )
 
+    for match in _EVENT_CONSUMER_RE.finditer(text):
+        line = _line_from_offset(text, match.start())
+        name = match.group("name").strip()
+        handler = (match.group("handler") or "").strip() or name
+        surfaces.append(
+            IngressSurfaceArtifact(
+                file_path=rel_path,
+                family="event_consumer",
+                operation="consume",
+                owner_name=handler,
+                protocol="event",
+                target=name,
+                method="CONSUME",
+                line=line,
+                snippet=_line_snippet(source_lines, line),
+            )
+        )
+
     return surfaces
 
 
@@ -302,6 +329,22 @@ def _extract_test_ingress_calls(
                 protocol="cli",
                 target=match.group("name").strip(),
                 method="RUN",
+                line=line,
+                snippet=_line_snippet(source_lines, line),
+            )
+        )
+
+    for match in _EMIT_EVENT_TEST_RE.finditer(text):
+        line = _line_from_offset(text, match.start())
+        rows.append(
+            IngressCoverageArtifact(
+                file_path=rel_path,
+                family="event_consumer",
+                operation="consume",
+                test_name=f"emitEvent:{match.group('name').strip()}",
+                protocol="event",
+                target=match.group("name").strip(),
+                method="CONSUME",
                 line=line,
                 snippet=_line_snippet(source_lines, line),
             )

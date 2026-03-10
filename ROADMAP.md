@@ -58,7 +58,7 @@
 8. [x] Stage 8: service-grade hardening for deployment scenarios.
 9. [x] Stage 11: capability-depth expansion for existing stacks.
 10. [x] Stage 12: capability-pack promotion and trust-gate stabilization.
-11. [ ] Stage 13: ingress contract generalization beyond HTTP.
+11. [x] Stage 13: ingress contract generalization beyond HTTP.
 12. [ ] Stage 14: capability-pack parity across supported stacks.
 13. [ ] Stage 15: advisory AI extraction for partially supported repositories.
 14. [ ] Stage 16: external plugin distribution model.

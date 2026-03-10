@@ -13,9 +13,9 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 
 | Signal | Meaning | Current extraction source | Graph expression | Rule coverage | Status |
 |---|---|---|---|---|---|
-| `ingress_surface` | Unified sink contract for mutating ingress points across families (`http`, `webhook`, `job`, `cli_task`, later `event_consumer`) | Derived in `signals.adapters` from plugin artifacts; current extraction is HTTP/webhook global with Express-first `job` and `cli_task` heuristics | None yet | foundation only | implemented |
+| `ingress_surface` | Unified sink contract for mutating ingress points across families (`http`, `webhook`, `job`, `cli_task`, `event_consumer`) | Derived in `signals.adapters` from plugin artifacts; current extraction is HTTP/webhook global with Express-first `job`, `cli_task`, and `event_consumer` heuristics | None yet | foundation only | implemented |
 | `http_write_surface` | Mutating HTTP operations (`POST/PUT/PATCH/DELETE`) | `ArtifactBundle.write_endpoints` from `fastapi_artifacts.py` and `django_artifacts.py` | `Node(type=\"API\")` with `details.method/details.path` | `critical_path_no_tests` baseline scope | implemented |
-| `test_to_ingress_coverage` | Test evidence mapped to normalized ingress families | Derived in `signals.adapters` from `test_http_calls`, test-case fallback, and Express-first `runJob`/`runCli` heuristics | None yet | foundation only | implemented |
+| `test_to_ingress_coverage` | Test evidence mapped to normalized ingress families | Derived in `signals.adapters` from `test_http_calls`, test-case fallback, and Express-first `runJob`/`runCli`/`emitEvent` heuristics | None yet | foundation only | implemented |
 | `request_contract_binding` | Request/response schema binding to write endpoints | `ArtifactBundle.endpoint_models` + `pydantic_models` (FastAPI path) | `Edge(type=\"validated_by\")` from API to Entity | indirect only (context for AI stage, no dedicated deterministic rule) | partial |
 | `state_transition_declared` | Declared state machine transitions | `ArtifactBundle.declared_transitions` | `TransitionSpec` + `Node(type=\"Transition\")` + `Edge(type=\"transitions_to\")` | `missing_transition_handler` | implemented |
 | `state_transition_handled_guarded` | Runtime status mutation and guard presence | `ArtifactBundle.handled_transitions` (`invariant_guarded`) | `Graph.handled_transitions` entries | `broken_invariant_on_transition` | implemented |
@@ -57,7 +57,7 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 1. Side-effect contract extraction remains incomplete across supported stacks.
 2. New integrity/session/html signals are Express-first and need parity extraction strategy for other stacks.
 3. Contract binding is still FastAPI-oriented (`pydantic_models`) and only partially generalized for Django/DRF.
-4. Ingress-family model now covers `http`, `webhook`, `job`, and `cli_task`, but `event_consumer` remains planned and current `job`/`cli_task` extraction is Express-first.
+4. Ingress-family model now covers `http`, `webhook`, `job`, `cli_task`, and `event_consumer`, but non-HTTP extraction is still Express-first.
 
 ## Recommended Next Capability Pack (Highest ROI)
 

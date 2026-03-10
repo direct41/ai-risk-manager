@@ -2,6 +2,8 @@
 
 AI Risk Manager is a QA risk-mapping tool for backend-heavy codebases (FastAPI, Django/DRF, Express/Node).
 
+It does not run your product business logic and it is not a web app by itself. It analyzes a backend repository before merge or release and highlights where the current implementation looks risky.
+
 It answers two practical questions before merge/release:
 - Which backend flows are risky now?
 - Which tests should we add first?
@@ -69,6 +71,12 @@ Important for PR delta (`new/resolved/unchanged`):
   - `fastapi_pytest`
   - `django_drf`
   - `express_node`
+- Normalized ingress families currently covered:
+  - `http`
+  - `webhook`
+  - `job`
+  - `cli_task`
+  - `event_consumer`
 - Local/CI assistant for risk mapping.
 - Not a generic multi-language SAST replacement.
 - API supports optional token auth, request guardrails, and correlation/audit controls for service usage.

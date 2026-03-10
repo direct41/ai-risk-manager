@@ -37,3 +37,4 @@ PLAN.md
 .riskmap/
 eval/results/
 eval/.history/
+uv.lock
