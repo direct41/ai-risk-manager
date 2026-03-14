@@ -16,6 +16,7 @@ from ai_risk_manager.collectors.plugins.python_write_contract_artifacts import (
     extract_python_session_lifecycle_issues,
     extract_python_write_contract_issues,
 )
+from ai_risk_manager.collectors.plugins.workflow_automation_artifacts import collect_workflow_automation_issues
 
 WRITE_METHODS = ("post", "put", "patch", "delete")
 ROUTE_METHODS = WRITE_METHODS + ("get",)
@@ -602,6 +603,7 @@ def collect_fastapi_artifacts(repo_path: Path) -> ArtifactBundle:
             or p.name.endswith("_test.py")
         )
     ]
+    bundle.workflow_automation_issues.extend(collect_workflow_automation_issues(repo_path, bundle.all_files))
 
     parsed: list[tuple[Path, ast.Module, str, list[str]]] = []
     for path in bundle.python_files:

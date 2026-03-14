@@ -11,6 +11,7 @@ from ai_risk_manager.collectors.plugins.generated_test_artifacts import (
     collect_generated_test_issues,
     observe_js_test_quality,
 )
+from ai_risk_manager.collectors.plugins.workflow_automation_artifacts import collect_workflow_automation_issues
 
 WRITE_METHODS = ("post", "put", "patch", "delete")
 JS_SUFFIXES = {".js", ".cjs", ".mjs", ".ts", ".tsx"}
@@ -1021,6 +1022,7 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
     generated_test_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
     backend_row_fields: dict[str, tuple[str, int, str]] = {}
     frontend_note_fields: list[tuple[str, str, int, str]] = []
+    workflow_automation_issues = collect_workflow_automation_issues(repo_path, all_files)
     for path in js_files:
         text = _read_text(path)
         if not text:
@@ -1082,6 +1084,7 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
         html_render_issues=html_render_issues,
         ui_ergonomics_issues=ui_ergonomics_issues,
         generated_test_issues=generated_test_issues,
+        workflow_automation_issues=workflow_automation_issues,
     )
 
 

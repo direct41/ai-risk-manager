@@ -165,6 +165,7 @@ def _run_signal_only_rules(signals: SignalBundle) -> list[Finding]:
     findings.extend(_run_html_render_safety_rule(signals))
     findings.extend(_run_ui_ergonomics_rule(signals))
     findings.extend(_run_generated_test_quality_rule(signals))
+    findings.extend(_run_workflow_automation_risk_rule(signals))
     return findings
 
 
@@ -770,6 +771,77 @@ def _run_generated_test_quality_rule(signals: SignalBundle) -> list[Finding]:
                     suppression_key=finding_id,
                     recommendation=(
                         "Replace nondeterministic dependencies with mocks, fake clocks, fixtures, or deterministic stubs."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+
+    return findings
+
+
+def _run_workflow_automation_risk_rule(signals: SignalBundle) -> list[Finding]:
+    findings: list[Finding] = []
+    for signal in signals.signals:
+        if signal.kind != "workflow_automation_risk":
+            continue
+
+        issue_type = str(signal.attributes.get("issue_type", "")).strip()
+        owner_name = str(signal.attributes.get("owner_name", "")).strip() or "workflow step"
+        confidence = cast(Confidence, signal.confidence)
+
+        if issue_type == "untrusted_context_to_shell":
+            context_ref = str(signal.attributes.get("context_ref", "")).strip() or "github.event.*"
+            finding_id = f"workflow_untrusted_context_to_shell:{owner_name}:{context_ref}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="workflow_untrusted_context_to_shell",
+                    title=f"Workflow step '{owner_name}' interpolates untrusted event text into shell context",
+                    description=(
+                        "GitHub event text such as issue, PR, or comment body/title appears inside a shell run step, "
+                        "which can enable prompt or command injection through repository automation."
+                    ),
+                    severity="high",
+                    confidence=confidence,
+                    evidence=(
+                        f"Workflow step '{owner_name}' references '{context_ref}' inside a shell run block."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Do not pass untrusted event text directly into shell commands. Sanitize it, treat it as data, "
+                        "or move handling into a trusted script boundary with explicit escaping."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "external_action_not_pinned":
+            action_ref = str(signal.attributes.get("action_ref", "")).strip() or "external action"
+            finding_id = f"workflow_external_action_not_pinned:{owner_name}:{action_ref}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="workflow_external_action_not_pinned",
+                    title=f"Workflow step '{owner_name}' uses an external action without commit pinning",
+                    description=(
+                        "Workflow references an external GitHub Action by mutable tag or branch instead of immutable commit SHA, "
+                        "which increases supply-chain risk in automation."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Workflow step '{owner_name}' uses mutable external action ref '{action_ref}'."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Pin external GitHub Actions to a full commit SHA and update them via controlled review."
                     ),
                     origin="deterministic",
                     evidence_refs=[signal.source_ref],
