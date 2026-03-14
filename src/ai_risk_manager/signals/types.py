@@ -7,7 +7,9 @@ from ai_risk_manager.schemas.types import Confidence
 
 SignalOrigin = Literal["deterministic", "ai"]
 SignalKind = Literal[
+    "ingress_surface",
     "http_write_surface",
+    "test_to_ingress_coverage",
     "request_contract_binding",
     "state_transition_declared",
     "state_transition_handled_guarded",

@@ -17,9 +17,12 @@ AppliedSupportLevel = Literal["l0", "l1", "l2"]
 RiskPolicy = Literal["conservative", "balanced", "aggressive"]
 CompetitiveMode = Literal["deterministic", "hybrid"]
 GraphMode = Literal["deterministic", "enriched"]
+RepositorySupportState = Literal["supported", "partial", "unsupported"]
 TestType = Literal["api", "integration", "unit", "e2e"]
 PreflightStatus = Literal["PASS", "WARN", "FAIL"]
 AnalysisScope = Literal["impacted", "full", "full_fallback"]
+IngressFamily = Literal["http", "webhook", "job", "event_consumer", "cli_task"]
+IngressOperation = Literal["write", "read", "execute", "consume"]
 
 
 @dataclass
@@ -51,6 +54,30 @@ class Graph:
     edges: list[Edge] = field(default_factory=list)
     declared_transitions: list["TransitionSpec"] = field(default_factory=list)
     handled_transitions: list["TransitionSpec"] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class IngressSurfaceContract:
+    family: IngressFamily
+    operation: IngressOperation
+    owner_name: str
+    source_ref: str
+    protocol: str = "unknown"
+    target: str = ""
+    method: str = ""
+    evidence_refs: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class IngressCoverageContract:
+    family: IngressFamily
+    operation: IngressOperation
+    test_name: str
+    source_ref: str
+    protocol: str = "unknown"
+    target: str = ""
+    method: str = ""
+    evidence_refs: tuple[str, ...] = ()
 
 
 @dataclass
@@ -149,6 +176,7 @@ class RunSummary:
     competitive_mode: CompetitiveMode = "deterministic"
     graph_mode_applied: GraphMode = "deterministic"
     semantic_signal_count: int = 0
+    repository_support_state: RepositorySupportState = "supported"
 
 
 @dataclass

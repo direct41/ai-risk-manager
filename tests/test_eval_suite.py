@@ -255,6 +255,72 @@ def test_build_support_level_promotion_payload_marks_stack_blocked_on_case_failu
     assert payload["stacks"][0]["failing_cases"] == ["milestone8_django_dependency"]
 
 
+def test_build_capability_pack_promotion_payload_blocks_pack_on_case_failure() -> None:
+    results = [
+        {"case": "milestone12_express_integrity_gap", "status": "passed"},
+        {"case": "milestone12_express_integrity_balanced", "status": "failed"},
+    ]
+    history = [
+        {"gate_status": "passed"},
+        {"gate_status": "passed"},
+    ]
+    trust_gate = {"status": "passed"}
+    policy = {
+        "version": 1,
+        "packs": {
+            "express_stage11_p0_integrity": {
+                "stack_id": "express_node",
+                "eligible_level": "l2",
+                "required_cases": [
+                    "milestone12_express_integrity_gap",
+                    "milestone12_express_integrity_balanced",
+                ],
+                "required_consecutive_trust_passes": 2,
+            }
+        },
+    }
+
+    payload = run_eval_suite.build_capability_pack_promotion_payload(
+        results=results,
+        trend_history=history,
+        trust_gate_payload=trust_gate,
+        policy=policy,
+    )
+
+    assert payload["status"] == "blocked"
+    assert payload["packs"][0]["status"] == "blocked"
+    assert payload["packs"][0]["failing_cases"] == ["milestone12_express_integrity_balanced"]
+
+
+def test_run_case_reports_missing_required_ingress_family(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    app_dir = repo_root / "app"
+    tests_dir = repo_root / "tests"
+    app_dir.mkdir(parents=True)
+    tests_dir.mkdir(parents=True)
+    (app_dir / "main.py").write_text(
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+        encoding="utf-8",
+    )
+    (tests_dir / "test_api.py").write_text(
+        "import pytest\n\ndef test_create_order(client):\n    client.post('/orders')\n",
+        encoding="utf-8",
+    )
+
+    case = run_eval_suite.EvalCase(
+        name="milestone_webhook_check",
+        repo_rel="unused",
+        required_rules=set(),
+        forbidden_rules={"critical_path_no_tests"},
+        required_ingress_families={"webhook"},
+    )
+
+    result = {"errors": [], "found_ingress_families": [], "found_coverage_families": []}
+    run_eval_suite._evaluate_ingress_expectations(case, repo_root, result)
+
+    assert any("missing required ingress families" in err for err in result["errors"])
+
+
 def test_write_summary_writes_expansion_gate_artifact(tmp_path: Path) -> None:
     output_root = tmp_path / "results"
     thresholds = dict(run_eval_suite.DEFAULT_TRUST_THRESHOLDS)
@@ -305,7 +371,10 @@ def test_write_summary_writes_expansion_gate_artifact(tmp_path: Path) -> None:
     assert plugin_payload["status"] in {"passed", "failed"}
     promotion_payload = json.loads((output_root / "support_level_promotion.json").read_text(encoding="utf-8"))
     assert promotion_payload["status"] in {"ready", "blocked"}
+    capability_payload = json.loads((output_root / "capability_pack_promotion.json").read_text(encoding="utf-8"))
+    assert capability_payload["status"] in {"ready", "blocked"}
     summary_md = (output_root / "summary.md").read_text(encoding="utf-8")
     assert "## Expansion Gate" in summary_md
     assert "## Plugin Conformance" in summary_md
     assert "## Support-Level Promotion" in summary_md
+    assert "## Capability-Pack Promotion" in summary_md

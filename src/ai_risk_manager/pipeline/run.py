@@ -8,6 +8,7 @@ import time
 from typing import Literal, cast
 
 from ai_risk_manager.agents.provider import ProviderResolution, resolve_provider
+from ai_risk_manager.agents.generic_advisory_agent import generate_generic_advisory_findings
 from ai_risk_manager.agents.qa_strategy_agent import generate_test_plan
 from ai_risk_manager.agents.semantic_risk_agent import generate_semantic_findings
 from ai_risk_manager.agents.semantic_signal_agent import generate_semantic_signals
@@ -27,11 +28,13 @@ from ai_risk_manager.schemas.types import (
     AppliedSupportLevel,
     CIMode,
     CompetitiveMode,
+    Finding,
     FindingsReport,
     GraphMode,
     Graph,
     PipelineResult,
     PreflightResult,
+    RepositorySupportState,
     RunContext,
     RunMetrics,
     RunSummary,
@@ -97,6 +100,18 @@ def _resolve_effective_ci_mode(requested: CIMode, support_level_applied: Applied
     if support_level_applied == "l1":
         return effective, f"ci_mode downgraded to soft for support_level=l1 (requested: {requested})."
     return effective, None
+
+
+def _resolve_repository_support_state(
+    *,
+    plugin: CollectorPlugin | None,
+    support_level_applied: AppliedSupportLevel,
+) -> RepositorySupportState:
+    if plugin is None:
+        return "unsupported"
+    if support_level_applied == "l0":
+        return "partial"
+    return "supported"
 
 
 def _normalize_path(path: str) -> str:
@@ -342,6 +357,7 @@ class _PreflightStage:
     plugin: CollectorPlugin | None
     support_level_applied: AppliedSupportLevel
     competitive_mode: CompetitiveMode
+    repository_support_state: RepositorySupportState
 
 
 @dataclass
@@ -425,6 +441,10 @@ def _stage_preflight(
             plugin=plugin,
             support_level_applied=support_level_applied,
             competitive_mode=competitive_mode,
+            repository_support_state=_resolve_repository_support_state(
+                plugin=plugin,
+                support_level_applied=support_level_applied,
+            ),
         ),
         None,
     )
@@ -522,12 +542,37 @@ def _resolve_provider_for_analysis(
     return provider_resolution, None
 
 
+def _combine_ai_findings(*reports: FindingsReport) -> FindingsReport:
+    combined: list[Finding] = []
+    generated_without_llm = True
+    for report in reports:
+        combined.extend(report.findings)
+        generated_without_llm = generated_without_llm and report.generated_without_llm
+    return FindingsReport(findings=combined, generated_without_llm=generated_without_llm)
+
+
+def _drop_unverifiable_ai_findings(findings: FindingsReport, repo_path: Path) -> tuple[FindingsReport, int]:
+    kept: list[Finding] = []
+    dropped = 0
+    for finding in findings.findings:
+        if finding.origin != "ai":
+            kept.append(finding)
+            continue
+        refs = [ref for ref in finding.evidence_refs if ref]
+        if refs and any(_ref_exists(repo_path, ref) for ref in refs):
+            kept.append(finding)
+            continue
+        dropped += 1
+    return FindingsReport(findings=kept, generated_without_llm=findings.generated_without_llm), dropped
+
+
 def _stage_analysis(
     ctx: RunContext,
     *,
     scope: _ScopeStage,
     support_level_applied: AppliedSupportLevel,
     competitive_mode: CompetitiveMode,
+    repository_support_state: RepositorySupportState,
     sinks: PipelineSinks,
     total_steps: int,
     notes: list[str],
@@ -563,6 +608,7 @@ def _stage_analysis(
     merged_signals = merge_signal_bundles(scope.analysis_signals, filtered_semantic_signals, min_confidence="low")
     semantic_graph = build_graph(merged_signals)
     semantic_findings = FindingsReport(findings=[], generated_without_llm=True)
+    generic_advisory_findings = FindingsReport(findings=[], generated_without_llm=True)
     if ctx.analysis_engine != "deterministic":
         semantic_findings, semantic_notes = generate_semantic_findings(
             semantic_graph,
@@ -570,6 +616,13 @@ def _stage_analysis(
             generated_without_llm=provider_resolution.generated_without_llm,
         )
         notes.extend(semantic_notes)
+        if support_level_applied == "l0":
+            generic_advisory_findings, generic_notes = generate_generic_advisory_findings(
+                ctx.repo_path,
+                provider=provider_resolution.provider,
+                generated_without_llm=provider_resolution.generated_without_llm,
+            )
+            notes.extend(generic_notes)
     else:
         notes.append("analysis_engine=deterministic: semantic AI stage skipped.")
     sinks.progress.finish(5, total_steps, "Semantic AI risk stage", t)
@@ -577,11 +630,7 @@ def _stage_analysis(
     top_limit = RISK_POLICY_TOP_LIMIT[ctx.risk_policy]
     merged_findings = merge_findings(
         findings_raw,
-        (
-            semantic_findings
-            if ctx.analysis_engine in {"hybrid", "ai_first"}
-            else FindingsReport(findings=[], generated_without_llm=True)
-        ),
+        _combine_ai_findings(semantic_findings, generic_advisory_findings),
         min_confidence=ctx.min_confidence,
         top_limit=top_limit,
     )
@@ -589,6 +638,10 @@ def _stage_analysis(
     if suppressed_after_merge:
         suppressed_count += suppressed_after_merge
         notes.append(f"Suppressed merged findings: {suppressed_after_merge}.")
+
+    merged_findings, dropped_unverifiable_ai = _drop_unverifiable_ai_findings(merged_findings, ctx.repo_path)
+    if dropped_unverifiable_ai:
+        notes.append(f"Dropped unverifiable AI findings: {dropped_unverifiable_ai}.")
 
     policy_path = ctx.repo_path / ".airiskpolicy"
     policy, policy_notes = load_policy(policy_path if policy_path.is_file() else None)
@@ -615,6 +668,7 @@ def _stage_analysis(
     )
     verification_pass_rate, evidence_completeness, verified_fingerprints = _verification_stats(findings, ctx.repo_path)
     summary.support_level_applied = support_level_applied
+    summary.repository_support_state = repository_support_state
     summary.verification_pass_rate = verification_pass_rate
     summary.evidence_completeness = evidence_completeness
     summary.competitive_mode = competitive_mode
@@ -712,6 +766,7 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
         scope=scope_stage,
         support_level_applied=preflight_stage.support_level_applied,
         competitive_mode=preflight_stage.competitive_mode,
+        repository_support_state=preflight_stage.repository_support_state,
         sinks=active_sinks,
         total_steps=total_steps,
         notes=notes,

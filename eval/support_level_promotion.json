@@ -21,7 +21,13 @@
       "eligible_level": "l2",
       "required_cases": [
         "milestone10_express_authz_gap",
-        "milestone11_express_balanced"
+        "milestone11_express_balanced",
+        "milestone12_express_integrity_gap",
+        "milestone12_express_integrity_balanced",
+        "milestone13_express_html_gap",
+        "milestone13_express_html_balanced",
+        "milestone14_express_ui_gap",
+        "milestone14_express_ui_balanced"
       ],
       "required_consecutive_trust_passes": 2
     }

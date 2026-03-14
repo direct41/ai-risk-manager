@@ -160,22 +160,22 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Deployment docs define baseline secure configuration and known limits.
 
 ## Epic 11: Capability Depth for Existing Stacks (P0)
-- Status: Planned
+- Status: Completed
 - Outcome: materially reduce false-negative rate on high-impact backend and web-app risk classes without core rule forks
 
 ### Stories
-1. [ ] P0 capability pack: data-integrity and boundary contracts.
+1. [x] P0 capability pack: data-integrity and boundary contracts.
    - Add shared signals/rules for:
      - write contract integrity (input/output field mismatches, suspicious normalization patterns)
      - write scope boundary (critical update/delete missing entity filter)
      - stale write conflict guard (client timestamp/version overwrite without compare-and-set control)
      - session lifecycle consistency (login/logout key mismatch for active tokens)
-2. [ ] P1 capability pack: frontend security sinks.
+2. [x] P1 capability pack: frontend security sinks.
    - Add shared signal/rule for unsafe HTML sink usage (stored-XSS class) with evidence references.
-3. [ ] P2 capability pack (policy-default optional): low-impact UI ergonomics.
+3. [x] P2 capability pack (policy-default optional): low-impact UI ergonomics.
    - Add conservative heuristics for pagination/page-index drift and form-completeness gating issues.
-4. [ ] Add parity eval suites for pass/fail paths (`express_node` first), then extend to other supported stacks where feasible.
-5. [ ] Keep new rules policy-configurable and conservative by default to protect precision KPIs.
+4. [x] Add parity eval suites for pass/fail paths (`express_node` first), then extend to other supported stacks where feasible.
+5. [x] Keep new rules policy-configurable and conservative by default to protect precision KPIs.
 
 ### Definition of Done
 - New capabilities are represented in stack-agnostic signal model and deterministic rules.
@@ -195,3 +195,83 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 9. Epic 9
 10. Epic 10
 11. Epic 11
+
+## Epic 12: Capability-Pack Promotion Stabilization (P1)
+- Status: Completed
+- Outcome: new capability packs are promoted through explicit eval evidence instead of implicit stack-level readiness
+
+### Stories
+1. [x] Add capability-pack promotion policy separate from stack promotion.
+2. [x] Publish eval artifact for pack-level promotion readiness.
+3. [x] Gate pack readiness on parity cases plus consecutive trust-pass history.
+4. [x] Surface pack readiness in eval summary for review and rollout decisions.
+
+### Definition of Done
+- Eval produces a dedicated `capability_pack_promotion.json` artifact.
+- Each promoted pack has explicit required cases and trust-pass thresholds.
+- Summary output shows which capability packs are eligible or blocked and why.
+
+## Epic 13: Ingress Contract Generalization (P0)
+- Status: Completed
+- Outcome: the core analyzer stops being implicitly HTTP-centric and can reason about multiple sink families through one contract model
+
+### Stories
+1. [x] Define versioned ingress contracts for `http`, `webhook`, `job`, `event_consumer`, and `cli/task` surfaces.
+2. [x] Extend the common signal model so capability packs can attach to ingress families, not only current HTTP shapes.
+3. [x] Add parity eval cases for at least one non-HTTP sink family.
+4. [x] Keep existing runtime behavior backward-compatible for current stacks.
+
+### Definition of Done
+- New ingress contracts are versioned in-repo and mapped to current plugin boundaries.
+- Core rules remain stack-agnostic and do not add framework-specific branches.
+- Eval shows that non-HTTP sink support works without regressing trust metrics on existing HTTP scenarios.
+
+## Epic 14: Capability Parity Across Supported Stacks (P0)
+- Status: Completed
+- Outcome: Stage 11 capability packs now have either parity extraction or explicit unsupported markers across the current supported stack set
+
+### Stories
+1. [x] Add `write_contract_integrity` parity extraction for `fastapi_pytest`.
+2. [x] Add `write_contract_integrity` parity extraction for `django_drf`.
+3. [x] Add `session_lifecycle_consistency` parity where stack semantics allow it, and mark non-portable `html_render_safety` / `ui_ergonomics` packs explicit unsupported on Python backends.
+4. [x] Promote each capability pack independently through existing pack-promotion gates.
+
+### Definition of Done
+- Each Stage 11 capability pack is implemented for at least two supported stacks or declared explicit unsupported where the current contract is not portable.
+- Promotion status is visible per pack, not inferred from a stack-level label.
+- Trust/eval gates remain green after parity rollout.
+
+## Epic 15: Advisory AI Extraction For Partial Support (P1)
+- Status: In Progress
+- Outcome: the product can analyze partially supported repositories without pretending they have deterministic parity
+
+### Stories
+1. [x] Define evidence-bound AI extraction contract for generic repository analysis.
+2. [x] Introduce advisory-only support level behavior for AI-assisted partial coverage.
+3. [x] Add deterministic verification anchors and explicit drop rules for unverifiable AI claims.
+4. [ ] Add eval scenarios for "supported", "partial", and "unsupported but advisory" repository states.
+
+### Definition of Done
+- AI-assisted findings without evidence are dropped automatically.
+- Partially supported repositories receive explicit support-level labeling and conservative rollout behavior.
+- Eval artifacts show trust metrics separately for deterministic and AI-assisted paths.
+
+### Foundation Slice Done
+- `l0` runs can now use a generic advisory AI agent with evidence-bound payload validation.
+- Run summary/report now expose `repository_support_state` (`supported|partial|unsupported`).
+- AI findings with unverifiable `evidence_refs` are dropped before final output.
+
+## Epic 16: External Plugin Distribution Model (P2)
+- Status: Planned
+- Outcome: new stack analyzers can be developed and distributed without modifying core runtime boundaries
+
+### Stories
+1. [ ] Define the packaging and loading contract for external plugins.
+2. [ ] Publish a stable plugin SDK/template based on the existing contract model.
+3. [ ] Add trust and conformance gates for externally supplied plugins.
+4. [ ] Document repository and release guidance for plugin authors.
+
+### Definition of Done
+- External plugin loading is possible without weakening core trust gates.
+- Plugin authors have a stable scaffold and conformance workflow.
+- Core runtime does not become responsible for plugin-specific business logic.

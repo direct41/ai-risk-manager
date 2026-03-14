@@ -15,6 +15,7 @@ OUTPUT_ROOT = REPO_ROOT / "eval" / "results"
 HISTORY_ROOT = REPO_ROOT / "eval" / ".history"
 TRUST_THRESHOLDS_PATH = REPO_ROOT / "eval" / "trust_thresholds.json"
 SUPPORT_LEVEL_PROMOTION_PATH = REPO_ROOT / "eval" / "support_level_promotion.json"
+CAPABILITY_PACK_PROMOTION_PATH = REPO_ROOT / "eval" / "capability_pack_promotion.json"
 DEFAULT_HISTORY_PATH = HISTORY_ROOT / "trust_gate_history.jsonl"
 DEFAULT_TREND_WINDOW = 12
 DEFAULT_EXPANSION_GATE_CONSECUTIVE_RUNS = 4
@@ -57,7 +58,84 @@ DEFAULT_SUPPORT_LEVEL_PROMOTION_POLICY: dict[str, object] = {
         },
         "express_node": {
             "eligible_level": "l2",
-            "required_cases": ["milestone10_express_authz_gap", "milestone11_express_balanced"],
+            "required_cases": [
+                "milestone10_express_authz_gap",
+                "milestone11_express_balanced",
+                "milestone12_express_integrity_gap",
+                "milestone12_express_integrity_balanced",
+                "milestone13_express_html_gap",
+                "milestone13_express_html_balanced",
+                "milestone14_express_ui_gap",
+                "milestone14_express_ui_balanced",
+            ],
+            "required_consecutive_trust_passes": 2,
+        },
+    },
+}
+DEFAULT_CAPABILITY_PACK_PROMOTION_POLICY: dict[str, object] = {
+    "version": 1,
+    "packs": {
+        "express_stage11_p0_integrity": {
+            "stack_id": "express_node",
+            "eligible_level": "l2",
+            "required_cases": [
+                "milestone12_express_integrity_gap",
+                "milestone12_express_integrity_balanced",
+            ],
+            "required_consecutive_trust_passes": 2,
+        },
+        "express_stage11_p1_html_sink": {
+            "stack_id": "express_node",
+            "eligible_level": "l2",
+            "required_cases": [
+                "milestone13_express_html_gap",
+                "milestone13_express_html_balanced",
+            ],
+            "required_consecutive_trust_passes": 2,
+        },
+        "express_stage11_p2_ui_ergonomics": {
+            "stack_id": "express_node",
+            "eligible_level": "l2",
+            "required_cases": [
+                "milestone14_express_ui_gap",
+                "milestone14_express_ui_balanced",
+            ],
+            "required_consecutive_trust_passes": 2,
+        },
+        "fastapi_stage14_write_contract_integrity": {
+            "stack_id": "fastapi_pytest",
+            "eligible_level": "l2",
+            "required_cases": [
+                "milestone18_fastapi_integrity_gap",
+                "milestone18_fastapi_integrity_balanced",
+            ],
+            "required_consecutive_trust_passes": 2,
+        },
+        "fastapi_stage14_session_lifecycle": {
+            "stack_id": "fastapi_pytest",
+            "eligible_level": "l2",
+            "required_cases": [
+                "milestone20_fastapi_session_gap",
+                "milestone20_fastapi_session_balanced",
+            ],
+            "required_consecutive_trust_passes": 2,
+        },
+        "django_stage14_write_contract_integrity": {
+            "stack_id": "django_drf",
+            "eligible_level": "l2",
+            "required_cases": [
+                "milestone19_django_integrity_gap",
+                "milestone19_django_integrity_balanced",
+            ],
+            "required_consecutive_trust_passes": 2,
+        },
+        "django_stage14_session_lifecycle": {
+            "stack_id": "django_drf",
+            "eligible_level": "l2",
+            "required_cases": [
+                "milestone21_django_session_gap",
+                "milestone21_django_session_balanced",
+            ],
             "required_consecutive_trust_passes": 2,
         },
     },
@@ -67,7 +145,8 @@ if str(REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from ai_risk_manager.collectors.plugins.contract import PLUGIN_CONTRACT_VERSION  # noqa: E402
-from ai_risk_manager.collectors.plugins.registry import evaluate_registered_plugin_conformance  # noqa: E402
+from ai_risk_manager.collectors.plugins.registry import evaluate_registered_plugin_conformance, get_signal_plugin_for_stack  # noqa: E402
+from ai_risk_manager.stacks.discovery import detect_stack  # noqa: E402
 
 
 @dataclass
@@ -76,6 +155,8 @@ class EvalCase:
     repo_rel: str
     required_rules: set[str]
     forbidden_rules: set[str]
+    required_ingress_families: set[str] | None = None
+    required_coverage_families: set[str] | None = None
 
 
 CASES = [
@@ -132,6 +213,164 @@ CASES = [
         repo_rel="eval/repos/milestone11_express_balanced",
         required_rules=set(),
         forbidden_rules={"critical_path_no_tests", "critical_write_missing_authz"},
+    ),
+    EvalCase(
+        name="milestone12_express_integrity_gap",
+        repo_rel="eval/repos/milestone12_express_integrity_gap",
+        required_rules={
+            "input_normalization_char_split",
+            "response_field_contract_mismatch",
+            "db_insert_binding_mismatch",
+            "critical_write_scope_missing_entity_filter",
+            "stale_write_without_conflict_guard",
+            "session_token_key_mismatch",
+        },
+        forbidden_rules={"critical_path_no_tests", "critical_write_missing_authz"},
+    ),
+    EvalCase(
+        name="milestone12_express_integrity_balanced",
+        repo_rel="eval/repos/milestone12_express_integrity_balanced",
+        required_rules=set(),
+        forbidden_rules={
+            "input_normalization_char_split",
+            "response_field_contract_mismatch",
+            "db_insert_binding_mismatch",
+            "critical_write_scope_missing_entity_filter",
+            "stale_write_without_conflict_guard",
+            "session_token_key_mismatch",
+            "critical_path_no_tests",
+            "critical_write_missing_authz",
+        },
+    ),
+    EvalCase(
+        name="milestone13_express_html_gap",
+        repo_rel="eval/repos/milestone13_express_html_gap",
+        required_rules={"stored_xss_unsafe_innerhtml"},
+        forbidden_rules={"critical_path_no_tests", "critical_write_missing_authz"},
+    ),
+    EvalCase(
+        name="milestone13_express_html_balanced",
+        repo_rel="eval/repos/milestone13_express_html_balanced",
+        required_rules=set(),
+        forbidden_rules={
+            "stored_xss_unsafe_innerhtml",
+            "critical_path_no_tests",
+            "critical_write_missing_authz",
+        },
+    ),
+    EvalCase(
+        name="milestone14_express_ui_gap",
+        repo_rel="eval/repos/milestone14_express_ui_gap",
+        required_rules={
+            "pagination_page_not_normalized",
+            "save_button_partial_form_enabled",
+            "mobile_layout_min_width_overflow",
+        },
+        forbidden_rules={"critical_path_no_tests", "critical_write_missing_authz"},
+    ),
+    EvalCase(
+        name="milestone14_express_ui_balanced",
+        repo_rel="eval/repos/milestone14_express_ui_balanced",
+        required_rules=set(),
+        forbidden_rules={
+            "pagination_page_not_normalized",
+            "save_button_partial_form_enabled",
+            "mobile_layout_min_width_overflow",
+            "critical_path_no_tests",
+            "critical_write_missing_authz",
+        },
+    ),
+    EvalCase(
+        name="milestone15_fastapi_webhook_ingress",
+        repo_rel="eval/repos/milestone15_fastapi_webhook_ingress",
+        required_rules=set(),
+        forbidden_rules={"critical_path_no_tests"},
+        required_ingress_families={"webhook"},
+        required_coverage_families={"webhook"},
+    ),
+    EvalCase(
+        name="milestone16_express_job_cli_ingress",
+        repo_rel="eval/repos/milestone16_express_job_cli_ingress",
+        required_rules=set(),
+        forbidden_rules={"critical_path_no_tests"},
+        required_ingress_families={"job", "cli_task"},
+        required_coverage_families={"job", "cli_task"},
+    ),
+    EvalCase(
+        name="milestone17_express_event_consumer_ingress",
+        repo_rel="eval/repos/milestone17_express_event_consumer_ingress",
+        required_rules=set(),
+        forbidden_rules={"critical_path_no_tests"},
+        required_ingress_families={"event_consumer"},
+        required_coverage_families={"event_consumer"},
+    ),
+    EvalCase(
+        name="milestone18_fastapi_integrity_gap",
+        repo_rel="eval/repos/milestone18_fastapi_integrity_gap",
+        required_rules={
+            "critical_write_scope_missing_entity_filter",
+            "stale_write_without_conflict_guard",
+        },
+        forbidden_rules={"critical_path_no_tests"},
+    ),
+    EvalCase(
+        name="milestone18_fastapi_integrity_balanced",
+        repo_rel="eval/repos/milestone18_fastapi_integrity_balanced",
+        required_rules=set(),
+        forbidden_rules={
+            "critical_write_scope_missing_entity_filter",
+            "stale_write_without_conflict_guard",
+            "critical_path_no_tests",
+        },
+    ),
+    EvalCase(
+        name="milestone19_django_integrity_gap",
+        repo_rel="eval/repos/milestone19_django_integrity_gap",
+        required_rules={
+            "critical_write_scope_missing_entity_filter",
+            "stale_write_without_conflict_guard",
+        },
+        forbidden_rules={"critical_path_no_tests"},
+    ),
+    EvalCase(
+        name="milestone19_django_integrity_balanced",
+        repo_rel="eval/repos/milestone19_django_integrity_balanced",
+        required_rules=set(),
+        forbidden_rules={
+            "critical_write_scope_missing_entity_filter",
+            "stale_write_without_conflict_guard",
+            "critical_path_no_tests",
+        },
+    ),
+    EvalCase(
+        name="milestone20_fastapi_session_gap",
+        repo_rel="eval/repos/milestone20_fastapi_session_gap",
+        required_rules={"session_token_key_mismatch"},
+        forbidden_rules={"critical_path_no_tests"},
+    ),
+    EvalCase(
+        name="milestone20_fastapi_session_balanced",
+        repo_rel="eval/repos/milestone20_fastapi_session_balanced",
+        required_rules=set(),
+        forbidden_rules={
+            "session_token_key_mismatch",
+            "critical_path_no_tests",
+        },
+    ),
+    EvalCase(
+        name="milestone21_django_session_gap",
+        repo_rel="eval/repos/milestone21_django_session_gap",
+        required_rules={"session_token_key_mismatch"},
+        forbidden_rules={"critical_path_no_tests"},
+    ),
+    EvalCase(
+        name="milestone21_django_session_balanced",
+        repo_rel="eval/repos/milestone21_django_session_balanced",
+        required_rules=set(),
+        forbidden_rules={
+            "session_token_key_mismatch",
+            "critical_path_no_tests",
+        },
     ),
 ]
 
@@ -420,6 +659,52 @@ def load_support_level_promotion_policy(path: Path = SUPPORT_LEVEL_PROMOTION_PAT
     }
 
 
+def load_capability_pack_promotion_policy(path: Path = CAPABILITY_PACK_PROMOTION_PATH) -> dict[str, object]:
+    policy: dict[str, object] = dict(DEFAULT_CAPABILITY_PACK_PROMOTION_POLICY)
+    if not path.is_file():
+        return policy
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return policy
+    if not isinstance(payload, dict):
+        return policy
+
+    version = payload.get("version", 1)
+    packs = payload.get("packs", {})
+    if not isinstance(version, int) or not isinstance(packs, dict):
+        return policy
+
+    normalized_packs: dict[str, dict[str, object]] = {}
+    for pack_id, raw in packs.items():
+        if not isinstance(pack_id, str) or not isinstance(raw, dict):
+            continue
+        stack_id = raw.get("stack_id", "")
+        eligible_level = raw.get("eligible_level", "l2")
+        required_cases = raw.get("required_cases", [])
+        required_passes = raw.get("required_consecutive_trust_passes", 1)
+        if (
+            isinstance(stack_id, str)
+            and isinstance(eligible_level, str)
+            and isinstance(required_cases, list)
+            and isinstance(required_passes, int)
+            and required_passes >= 1
+        ):
+            normalized_packs[pack_id] = {
+                "stack_id": stack_id,
+                "eligible_level": eligible_level,
+                "required_cases": [str(item) for item in required_cases if isinstance(item, str)],
+                "required_consecutive_trust_passes": required_passes,
+            }
+
+    if not normalized_packs:
+        return policy
+    return {
+        "version": version,
+        "packs": normalized_packs,
+    }
+
+
 def run_case(case: EvalCase) -> dict:
     repo_path = REPO_ROOT / case.repo_rel
     out_dir = OUTPUT_ROOT / case.name
@@ -445,6 +730,10 @@ def run_case(case: EvalCase) -> dict:
         "flaky": False,
         "status": "failed",
         "errors": [],
+        "required_ingress_families": sorted(case.required_ingress_families or set()),
+        "required_coverage_families": sorted(case.required_coverage_families or set()),
+        "found_ingress_families": [],
+        "found_coverage_families": [],
     }
 
     try:
@@ -535,10 +824,43 @@ def run_case(case: EvalCase) -> dict:
     if result["flaky"]:
         result["errors"].append("flaky result: rule set differs across repeated runs")
 
+    if case.required_ingress_families or case.required_coverage_families:
+        _evaluate_ingress_expectations(case, repo_path, result)
+
     if not result["errors"]:
         result["status"] = "passed"
 
     return result
+
+
+def _evaluate_ingress_expectations(case: EvalCase, repo_path: Path, result: dict[str, object]) -> None:
+    detection = detect_stack(repo_path)
+    plugin = get_signal_plugin_for_stack(detection.stack_id)
+    if plugin is None:
+        result.setdefault("errors", []).append(f"no signal plugin registered for stack '{detection.stack_id}'")
+        return
+
+    artifacts = plugin.collect(repo_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+    found_ingress = {
+        str(signal.attributes.get("family", "")).strip()
+        for signal in signals.signals
+        if signal.kind == "ingress_surface"
+    }
+    found_coverage = {
+        str(signal.attributes.get("family", "")).strip()
+        for signal in signals.signals
+        if signal.kind == "test_to_ingress_coverage"
+    }
+    result["found_ingress_families"] = sorted(family for family in found_ingress if family)
+    result["found_coverage_families"] = sorted(family for family in found_coverage if family)
+
+    missing_ingress = sorted((case.required_ingress_families or set()) - found_ingress)
+    missing_coverage = sorted((case.required_coverage_families or set()) - found_coverage)
+    if missing_ingress:
+        result.setdefault("errors", []).append(f"missing required ingress families: {missing_ingress}")
+    if missing_coverage:
+        result.setdefault("errors", []).append(f"missing required ingress coverage families: {missing_coverage}")
 
 
 def compute_aggregates(results: list[dict]) -> dict[str, float]:
@@ -704,6 +1026,61 @@ def build_support_level_promotion_payload(
     }
 
 
+def build_capability_pack_promotion_payload(
+    *,
+    results: list[dict],
+    trend_history: list[dict],
+    trust_gate_payload: dict[str, object],
+    policy: dict[str, object],
+) -> dict[str, object]:
+    result_by_case = {str(row.get("case")): str(row.get("status")) for row in results}
+    trust_passed = str(trust_gate_payload.get("status")) == "passed"
+    consecutive_trust_passes = _count_consecutive_trust_passes(trend_history)
+    packs_policy = policy.get("packs", {})
+    pack_rows: list[dict[str, object]] = []
+    for pack_id, raw in packs_policy.items():
+        if not isinstance(pack_id, str) or not isinstance(raw, dict):
+            continue
+        stack_id = str(raw.get("stack_id", "unknown"))
+        eligible_level = str(raw.get("eligible_level", "l2"))
+        required_cases = [str(item) for item in raw.get("required_cases", []) if isinstance(item, str)]
+        required_passes = int(raw.get("required_consecutive_trust_passes", 1))
+        missing_cases = [case for case in required_cases if case not in result_by_case]
+        failing_cases = [case for case in required_cases if result_by_case.get(case) not in {None, "passed"}]
+        trust_ok = trust_passed and consecutive_trust_passes >= required_passes
+        reasons: list[str] = []
+        if not trust_ok:
+            reasons.append(
+                "trust gate requirement not satisfied "
+                f"(consecutive={consecutive_trust_passes}, required={required_passes}, status={trust_gate_payload.get('status')})"
+            )
+        if missing_cases:
+            reasons.append(f"missing required eval cases: {missing_cases}")
+        if failing_cases:
+            reasons.append(f"required eval cases not passed: {failing_cases}")
+
+        pack_rows.append(
+            {
+                "pack_id": pack_id,
+                "stack_id": stack_id,
+                "eligible_level": eligible_level,
+                "status": "eligible" if not reasons else "blocked",
+                "required_cases": required_cases,
+                "missing_cases": missing_cases,
+                "failing_cases": failing_cases,
+                "required_consecutive_trust_passes": required_passes,
+                "consecutive_trust_passes": consecutive_trust_passes,
+                "reasons": reasons,
+            }
+        )
+
+    return {
+        "version": policy.get("version", 1),
+        "status": "ready" if pack_rows and all(row["status"] == "eligible" for row in pack_rows) else "blocked",
+        "packs": pack_rows,
+    }
+
+
 def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_gates: bool) -> int:
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     (OUTPUT_ROOT / "summary.json").write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -740,6 +1117,17 @@ def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_
     )
     (OUTPUT_ROOT / "support_level_promotion.json").write_text(
         json.dumps(support_level_promotion_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    capability_pack_policy = load_capability_pack_promotion_policy()
+    capability_pack_promotion_payload = build_capability_pack_promotion_payload(
+        results=results,
+        trend_history=trend_history,
+        trust_gate_payload=gate_payload,
+        policy=capability_pack_policy,
+    )
+    (OUTPUT_ROOT / "capability_pack_promotion.json").write_text(
+        json.dumps(capability_pack_promotion_payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
@@ -815,6 +1203,21 @@ def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_
         )
         if stack_row["reasons"]:
             lines.append(f"  - reasons: {', '.join(str(item) for item in stack_row['reasons'])}")
+    lines.extend(
+        [
+            "",
+            "## Capability-Pack Promotion",
+            "",
+            f"- Gate status: `{str(capability_pack_promotion_payload['status']).upper()}`",
+        ]
+    )
+    for pack_row in capability_pack_promotion_payload["packs"]:
+        lines.append(
+            f"- {pack_row['pack_id']} ({pack_row['stack_id']}) -> {pack_row['eligible_level']}: "
+            f"`{str(pack_row['status']).upper()}`"
+        )
+        if pack_row["reasons"]:
+            lines.append(f"  - reasons: {', '.join(str(item) for item in pack_row['reasons'])}")
     lines.append("")
 
     lines.extend(

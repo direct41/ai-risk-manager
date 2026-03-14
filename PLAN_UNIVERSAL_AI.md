@@ -1,6 +1,6 @@
 # Universal AI-First Strategy Plan
 
-Status note (as of 2026-02-27): this document describes target direction. Current shipped product (`v0.1.x`) is focused on FastAPI + pytest and is not yet mixed-stack/polyglot.
+Status note (as of 2026-03-10): the shared core and plugin model are now live for `fastapi_pytest`, `django_drf`, and `express_node`. This document remains the target direction for broader universal analysis, but parts of the foundation are already implemented.
 
 ## 1. Product Hypothesis
 

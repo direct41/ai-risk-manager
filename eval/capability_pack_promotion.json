@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "packs": {
+    "express_stage11_p0_integrity": {
+      "stack_id": "express_node",
+      "eligible_level": "l2",
+      "required_cases": [
+        "milestone12_express_integrity_gap",
+        "milestone12_express_integrity_balanced"
+      ],
+      "required_consecutive_trust_passes": 2
+    },
+    "express_stage11_p1_html_sink": {
+      "stack_id": "express_node",
+      "eligible_level": "l2",
+      "required_cases": [
+        "milestone13_express_html_gap",
+        "milestone13_express_html_balanced"
+      ],
+      "required_consecutive_trust_passes": 2
+    },
+    "express_stage11_p2_ui_ergonomics": {
+      "stack_id": "express_node",
+      "eligible_level": "l2",
+      "required_cases": [
+        "milestone14_express_ui_gap",
+        "milestone14_express_ui_balanced"
+      ],
+      "required_consecutive_trust_passes": 2
+    },
+    "fastapi_stage14_write_contract_integrity": {
+      "stack_id": "fastapi_pytest",
+      "eligible_level": "l2",
+      "required_cases": [
+        "milestone18_fastapi_integrity_gap",
+        "milestone18_fastapi_integrity_balanced"
+      ],
+      "required_consecutive_trust_passes": 2
+    },
+    "fastapi_stage14_session_lifecycle": {
+      "stack_id": "fastapi_pytest",
+      "eligible_level": "l2",
+      "required_cases": [
+        "milestone20_fastapi_session_gap",
+        "milestone20_fastapi_session_balanced"
+      ],
+      "required_consecutive_trust_passes": 2
+    },
+    "django_stage14_write_contract_integrity": {
+      "stack_id": "django_drf",
+      "eligible_level": "l2",
+      "required_cases": [
+        "milestone19_django_integrity_gap",
+        "milestone19_django_integrity_balanced"
+      ],
+      "required_consecutive_trust_passes": 2
+    },
+    "django_stage14_session_lifecycle": {
+      "stack_id": "django_drf",
+      "eligible_level": "l2",
+      "required_cases": [
+        "milestone21_django_session_gap",
+        "milestone21_django_session_balanced"
+      ],
+      "required_consecutive_trust_passes": 2
+    }
+  }
+}

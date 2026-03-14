@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from ai_risk_manager.agents.generic_advisory_agent import generate_generic_advisory_findings
 from ai_risk_manager.agents.llm_runtime import LLMRuntimeError
 from ai_risk_manager.agents.qa_strategy_agent import generate_test_plan
 from ai_risk_manager.agents.semantic_risk_agent import generate_semantic_findings
@@ -167,3 +168,57 @@ def test_semantic_agent_degrades_on_unknown_severity() -> None:
     assert report.generated_without_llm is True
     assert not report.findings
     assert any("Unsupported semantic finding severity" in note for note in notes)
+
+
+def test_generic_advisory_agent_degrades_on_invalid_payload(tmp_path) -> None:
+    (tmp_path / "README.md").write_text("notes service\n", encoding="utf-8")
+    payload = {
+        "findings": [
+            {
+                "id": "g1",
+                "rule_id": "advisory_missing_evidence",
+                "title": "missing refs",
+                "description": "d",
+                "severity": "high",
+                "confidence": "medium",
+                "evidence": "e",
+                "source_ref": "README.md:1",
+                "recommendation": "r",
+            }
+        ]
+    }
+
+    with patch("ai_risk_manager.agents.generic_advisory_agent.call_llm_json", return_value=payload):
+        report, notes = generate_generic_advisory_findings(tmp_path, provider="api", generated_without_llm=False)
+
+    assert report.generated_without_llm is True
+    assert not report.findings
+    assert any("degraded" in note for note in notes)
+
+
+def test_generic_advisory_agent_uses_valid_payload(tmp_path) -> None:
+    (tmp_path / "service.py").write_text("def save_note():\n    return True\n", encoding="utf-8")
+    payload = {
+        "findings": [
+            {
+                "id": "g2",
+                "rule_id": "advisory_missing_conflict_guard",
+                "title": "Potential overwrite path",
+                "description": "d",
+                "severity": "medium",
+                "confidence": "high",
+                "evidence": "write path updates shared state",
+                "source_ref": "service.py:1",
+                "suppression_key": "advisory:g2",
+                "recommendation": "review conflict handling",
+                "evidence_refs": ["service.py:1"],
+            }
+        ]
+    }
+
+    with patch("ai_risk_manager.agents.generic_advisory_agent.call_llm_json", return_value=payload):
+        report, _ = generate_generic_advisory_findings(tmp_path, provider="api", generated_without_llm=False)
+
+    assert report.generated_without_llm is False
+    assert len(report.findings) == 1
+    assert report.findings[0].origin == "ai"

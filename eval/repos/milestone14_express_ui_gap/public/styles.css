@@ -1,0 +1,9 @@
+.app {
+  min-width: 980px;
+}
+
+@media (max-width: 860px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+}

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Protocol
 
-from ai_risk_manager.schemas.types import Confidence, PreflightResult
+from ai_risk_manager.schemas.types import Confidence, IngressFamily, IngressOperation, PreflightResult
 
 StackId = Literal["fastapi_pytest", "django_drf", "express_node", "unknown"]
 DetectionConfidence = Confidence  # backward-compatible alias
@@ -18,6 +18,32 @@ class StackProbeResult:
     probe_data: object | None = None
 
 
+@dataclass(frozen=True)
+class IngressSurfaceArtifact:
+    file_path: str
+    family: IngressFamily
+    operation: IngressOperation
+    owner_name: str
+    protocol: str
+    target: str
+    method: str
+    line: int | None
+    snippet: str
+
+
+@dataclass(frozen=True)
+class IngressCoverageArtifact:
+    file_path: str
+    family: IngressFamily
+    operation: IngressOperation
+    test_name: str
+    protocol: str
+    target: str
+    method: str
+    line: int | None
+    snippet: str
+
+
 @dataclass
 class ArtifactBundle:
     """Collector output consumed by graph/rule stages.
@@ -28,6 +54,7 @@ class ArtifactBundle:
 
     all_files: list[Path] = field(default_factory=list)
     python_files: list[Path] = field(default_factory=list)
+    ingress_surfaces: list[IngressSurfaceArtifact] = field(default_factory=list)
     write_endpoints: list[tuple[str, str, str, str, int | None, str]] = field(default_factory=list)
     # (file, endpoint_name, method, route_path, line, snippet)
     endpoint_models: list[tuple[str, str, str]] = field(default_factory=list)  # (file, endpoint_name, model_name)
@@ -38,6 +65,7 @@ class ArtifactBundle:
     # (file, machine, src, dst, line, snippet, invariant_guarded)
     test_files: list[Path] = field(default_factory=list)
     test_cases: list[tuple[str, str, int | None, str]] = field(default_factory=list)  # (file, test_name, line, snippet)
+    test_ingress_calls: list[IngressCoverageArtifact] = field(default_factory=list)
     test_http_calls: list[tuple[str, str, str, str, int | None, str]] = field(default_factory=list)
     # (file, test_name, method, route_path, line, snippet)
     dependency_specs: list[tuple[str, str, str, int | None, str | None, str]] = field(default_factory=list)

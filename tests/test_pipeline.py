@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import cast
 from unittest.mock import patch
 
+from ai_risk_manager.agents.provider import ProviderResolution
 from ai_risk_manager.cli import main
 from ai_risk_manager.pipeline.run import _resolve_effective_ci_mode, run_pipeline
 from ai_risk_manager.schemas.types import Finding, FindingsReport, RunContext, Severity
@@ -88,12 +89,14 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     assert "graph_mode_applied:" in report
     assert "semantic_signal_count:" in report
     assert "effective_ci_mode:" in report
+    assert "repository_support_state:" in report
     pr_summary = (out_dir / "pr_summary.md").read_text(encoding="utf-8")
     assert "confidence=`" in pr_summary
     assert "evidence_refs=`" in pr_summary
     assert "graph_mode_applied:" in pr_summary
     assert "semantic_signal_count:" in pr_summary
     assert "effective_ci_mode:" in pr_summary
+    assert "repository_support_state:" in pr_summary
 
 
 def test_pipeline_outputs_enriched_graph_when_semantic_signals_present(tmp_path: Path, write_file) -> None:
@@ -997,8 +1000,104 @@ def test_unknown_stack_auto_uses_l0_advisory_and_does_not_fail(tmp_path: Path, w
     assert code == 0
     assert result is not None
     assert result.summary.support_level_applied == "l0"
+    assert result.summary.repository_support_state == "unsupported"
     assert result.summary.effective_ci_mode == "advisory"
     assert any("ci_mode overridden to advisory" in note for note in notes)
+
+
+def test_unknown_stack_ai_first_uses_generic_advisory_findings_and_drops_unverifiable(tmp_path: Path, write_file) -> None:
+    write_file(tmp_path / "service.py", "def update_note(payload):\n    return payload\n")
+
+    advisory_report = FindingsReport(
+        findings=[
+            Finding(
+                id="advisory-keep",
+                rule_id="advisory_unverified_write_path",
+                title="Potential write risk",
+                description="d",
+                severity="medium",
+                confidence="high",
+                evidence="e",
+                source_ref="service.py:1",
+                suppression_key="advisory-keep",
+                recommendation="review write flow",
+                origin="ai",
+                evidence_refs=["service.py:1"],
+            ),
+            Finding(
+                id="advisory-drop",
+                rule_id="advisory_bad_ref",
+                title="Bad ref",
+                description="d",
+                severity="medium",
+                confidence="high",
+                evidence="e",
+                source_ref="missing.py:99",
+                suppression_key="advisory-drop",
+                recommendation="review",
+                origin="ai",
+                evidence_refs=["missing.py:99"],
+            ),
+        ],
+        generated_without_llm=False,
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=False,
+        support_level="auto",
+        analysis_engine="ai_first",
+    )
+
+    with patch(
+        "ai_risk_manager.pipeline.run.detect_stack",
+        return_value=StackDetectionResult(stack_id="unknown", confidence="low", reasons=["unknown stack"]),
+    ):
+        with patch(
+            "ai_risk_manager.pipeline.run._resolve_provider_for_analysis",
+            return_value=(ProviderResolution(provider="api", generated_without_llm=False, notes=[]), None),
+        ):
+            with patch("ai_risk_manager.pipeline.run.generate_generic_advisory_findings", return_value=(advisory_report, [])):
+                result, code, notes = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    assert result.summary.support_level_applied == "l0"
+    assert result.summary.repository_support_state == "unsupported"
+    assert result.summary.effective_ci_mode == "advisory"
+    assert [finding.rule_id for finding in result.findings.findings] == ["advisory_unverified_write_path"]
+    assert any("Dropped unverifiable AI findings: 1." in note for note in notes)
+
+
+def test_known_stack_forced_l0_is_marked_partial_advisory(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_other.py", "def test_smoke():\n    assert True\n")
+
+    result, code, _ = run_pipeline(
+        RunContext(
+            repo_path=tmp_path,
+            mode="full",
+            base=None,
+            output_dir=tmp_path / ".riskmap",
+            provider="auto",
+            no_llm=True,
+            support_level="l0",
+            ci_mode="block_new_critical",
+        )
+    )
+
+    assert code == 0
+    assert result is not None
+    assert result.summary.support_level_applied == "l0"
+    assert result.summary.repository_support_state == "partial"
+    assert result.summary.effective_ci_mode == "advisory"
 
 
 def test_django_stack_auto_support_level_defaults_to_l2(tmp_path: Path, write_file) -> None:

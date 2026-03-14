@@ -11,6 +11,7 @@ from ai_risk_manager.schemas.types import (
     CompetitiveMode,
     Confidence,
     GraphMode,
+    RepositorySupportState,
     RiskPolicy,
     Severity,
     SupportLevel,
@@ -51,6 +52,7 @@ class AnalyzeSummary(BaseModel):
     competitive_mode: CompetitiveMode
     graph_mode_applied: GraphMode
     semantic_signal_count: int
+    repository_support_state: RepositorySupportState
 
 
 class AnalyzeResponse(BaseModel):

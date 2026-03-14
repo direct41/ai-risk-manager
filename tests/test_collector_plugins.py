@@ -31,6 +31,9 @@ def test_registry_returns_signal_plugin_for_fastapi() -> None:
     plugin = get_signal_plugin_for_stack("fastapi_pytest")
     assert plugin is not None
     assert "http_write_surface" in plugin.supported_signal_kinds
+    assert "session_lifecycle_consistency" in plugin.supported_signal_kinds
+    assert "html_render_safety" in plugin.unsupported_signal_kinds
+    assert "ui_ergonomics" in plugin.unsupported_signal_kinds
 
 
 def test_fastapi_plugin_collect_signals_from_artifacts(tmp_path: Path, write_file) -> None:
@@ -57,6 +60,9 @@ def test_registry_returns_signal_plugin_for_django() -> None:
     assert plugin is not None
     assert "http_write_surface" in plugin.supported_signal_kinds
     assert "dependency_version_policy" in plugin.supported_signal_kinds
+    assert "session_lifecycle_consistency" in plugin.supported_signal_kinds
+    assert "html_render_safety" in plugin.unsupported_signal_kinds
+    assert "ui_ergonomics" in plugin.unsupported_signal_kinds
 
 
 def test_registry_returns_signal_plugin_for_express() -> None:
@@ -235,6 +241,201 @@ def test_express_plugin_extracts_integrity_session_and_html_safety_issues(tmp_pa
     assert "session_lifecycle_consistency" in kinds
     assert "html_render_safety" in kinds
     assert "ui_ergonomics" in kinds
+
+
+def test_express_plugin_extracts_job_and_cli_ingress_surfaces(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "server" / "workers.js",
+        "const express = require('express');\n"
+        "const app = express();\n"
+        "queue.process('sync-notes', syncNotesJob);\n"
+        "program.command('sync-notes');\n"
+        "app.post('/api/health', (_req, res) => res.json({ ok: true }));\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_ingress.js",
+        "test('runs ingress handlers', async () => {\n"
+        "  runJob('sync-notes');\n"
+        "  runCli('sync-notes');\n"
+        "  await client.post('/api/health');\n"
+        "});\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("express_node")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    ingress_families = {row.family for row in artifacts.ingress_surfaces}
+    coverage_families = {row.family for row in artifacts.test_ingress_calls}
+    signal_ingress_families = {
+        str(signal.attributes.get("family", ""))
+        for signal in signals.signals
+        if signal.kind == "ingress_surface"
+    }
+
+    assert "job" in ingress_families
+    assert "cli_task" in ingress_families
+    assert "job" in coverage_families
+    assert "cli_task" in coverage_families
+    assert "job" in signal_ingress_families
+    assert "cli_task" in signal_ingress_families
+
+
+def test_express_plugin_extracts_event_consumer_ingress_surfaces(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "server" / "events.js",
+        "const express = require('express');\n"
+        "const app = express();\n"
+        "bus.on('note.created', handleNoteCreated);\n"
+        "app.post('/api/health', (_req, res) => res.json({ ok: true }));\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_events.js",
+        "test('runs event consumer', async () => {\n"
+        "  emitEvent('note.created');\n"
+        "  await client.post('/api/health');\n"
+        "});\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("express_node")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    ingress_families = {row.family for row in artifacts.ingress_surfaces}
+    coverage_families = {row.family for row in artifacts.test_ingress_calls}
+    signal_ingress_families = {
+        str(signal.attributes.get("family", ""))
+        for signal in signals.signals
+        if signal.kind == "ingress_surface"
+    }
+
+    assert "event_consumer" in ingress_families
+    assert "event_consumer" in coverage_families
+    assert "event_consumer" in signal_ingress_families
+
+
+def test_fastapi_plugin_extracts_write_contract_integrity_issues(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "main.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.patch('/notes/{note_id}')\n"
+        "def update_note(note_id: str, payload):\n"
+        "    client_updated_at = payload.updated_at\n"
+        "    db.execute(\"UPDATE notes SET content = :content, updated_at = :updated_at WHERE user_id = :user_id\")\n"
+        "    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_notes.py", "def test_update_note(client):\n    client.patch('/notes/1')\n")
+
+    plugin = get_signal_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    issue_types = {row[1] for row in artifacts.write_contract_issues}
+    assert "write_scope_missing_entity_filter" in issue_types
+    assert "stale_write_without_conflict_guard" in issue_types
+    kinds = {signal.kind for signal in signals.signals}
+    assert "write_contract_integrity" in kinds
+
+
+def test_django_plugin_extracts_write_contract_integrity_issues(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "views.py",
+        "from rest_framework.viewsets import ViewSet\n"
+        "class NotesViewSet(ViewSet):\n"
+        "    def partial_update(self, request, pk=None):\n"
+        "        client_updated_at = request.data['updated_at']\n"
+        "        Note.objects.filter(user_id=request.user.id).update(content=request.data['content'], updated_at=client_updated_at)\n"
+        "        return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "app" / "urls.py",
+        "from rest_framework.routers import DefaultRouter\n"
+        "from .views import NotesViewSet\n"
+        "router = DefaultRouter()\n"
+        "router.register('notes', NotesViewSet, basename='notes')\n"
+        "urlpatterns = router.urls\n",
+    )
+    write_file(tmp_path / "tests" / "test_notes.py", "def test_update_note(client):\n    client.patch('/notes/1/')\n")
+
+    plugin = get_signal_plugin_for_stack("django_drf")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    issue_types = {row[1] for row in artifacts.write_contract_issues}
+    assert "write_scope_missing_entity_filter" in issue_types
+    assert "stale_write_without_conflict_guard" in issue_types
+    kinds = {signal.kind for signal in signals.signals}
+    assert "write_contract_integrity" in kinds
+
+
+def test_fastapi_plugin_extracts_session_lifecycle_issues(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "main.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/login')\n"
+        "def login(request):\n"
+        "    request.session['sessionToken'] = 'demo'\n"
+        "    return {'ok': True}\n"
+        "@router.post('/logout')\n"
+        "def logout(request):\n"
+        "    request.session.pop('session_token', None)\n"
+        "    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_auth.py",
+        "def test_auth(client):\n    client.post('/login')\n    client.post('/logout')\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    issue_types = {row[1] for row in artifacts.session_lifecycle_issues}
+    assert "storage_key_mismatch" in issue_types
+    kinds = {signal.kind for signal in signals.signals}
+    assert "session_lifecycle_consistency" in kinds
+
+
+def test_django_plugin_extracts_session_lifecycle_issues(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "views.py",
+        "from rest_framework.decorators import api_view\n"
+        "@api_view(['POST'])\n"
+        "def login(request):\n"
+        "    request.session['sessionToken'] = 'demo'\n"
+        "    return {'ok': True}\n"
+        "@api_view(['POST'])\n"
+        "def logout(request):\n"
+        "    request.session.pop('session_token', None)\n"
+        "    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "app" / "urls.py",
+        "from django.urls import path\n"
+        "from .views import login, logout\n"
+        "urlpatterns = [path('login/', login), path('logout/', logout)]\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_auth.py",
+        "def test_auth(client):\n    client.post('/login/')\n    client.post('/logout/')\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("django_drf")
+    assert plugin is not None
+    artifacts = plugin.collect(tmp_path)
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+
+    issue_types = {row[1] for row in artifacts.session_lifecycle_issues}
+    assert "storage_key_mismatch" in issue_types
+    kinds = {signal.kind for signal in signals.signals}
+    assert "session_lifecycle_consistency" in kinds
 
 
 def test_fastapi_plugin_collects_write_endpoint_and_warns_without_pytest(tmp_path: Path, write_file) -> None:
