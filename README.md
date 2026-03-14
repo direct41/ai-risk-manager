@@ -1,47 +1,97 @@
 # AI Risk Manager
 
-AI Risk Manager is a QA risk-mapping tool for backend-heavy codebases (FastAPI, Django/DRF, Express/Node).
+Find risky backend flows and missing tests before merge.
 
-It does not run your product business logic and it is not a web app by itself. It analyzes a backend repository before merge or release and highlights where the current implementation looks risky.
+AI Risk Manager scans a backend repository and answers two practical questions:
 
-It answers two practical questions before merge/release:
-- Which backend flows are risky now?
+- Which backend flows look risky right now?
 - Which tests should we add first?
 
-## Quick Start
+It works best on backend-heavy codebases and currently supports FastAPI, Django/DRF, and Express/Node repositories.
 
-Install:
+## Why AI Risk Manager?
+
+- Focuses on release risk instead of generic code quality noise.
+- Prioritizes test actions, not just findings.
+- Starts with deterministic analysis; AI is optional.
+- Supports PR mode to highlight new vs unchanged risk.
+- Reports partial support honestly instead of pretending full coverage.
+
+## Install
 
 ```bash
 pip install -e '.[dev]'
 ```
 
-Run on bundled sample:
+## Quick Start
 
-```bash
-riskmap analyze --sample --no-llm --output-dir ./.riskmap
-cat ./.riskmap/report.md
-```
-
-Optional sample override:
-
-```bash
-AIRISK_SAMPLE_REPO=/path/to/local/sample riskmap analyze --sample --no-llm
-```
-
-## PR Workflow (Recommended)
-
-1. Build deterministic baseline on `main`:
+Run the trust-first deterministic path on your repository:
 
 ```bash
 riskmap analyze \
   --mode full \
-  --no-llm \
   --analysis-engine deterministic \
+  --no-llm \
+  --output-dir ./.riskmap
+```
+
+Open the main report:
+
+```bash
+cat ./.riskmap/report.md
+```
+
+If you want to try the bundled sample first:
+
+```bash
+riskmap analyze --sample --no-llm --output-dir ./.riskmap
+```
+
+## Example Output
+
+```md
+# Risk Analysis Report
+
+## Summary
+
+| Severity | Count |
+|---|---:|
+| critical | 0 |
+| high | 1 |
+| medium | 1 |
+| low | 0 |
+
+## Top Actions for Next Sprint
+
+- Add API/service tests for endpoint 'create_order', including success and error paths.
+- Implement handler logic for transition 'pending -> cancelled' or remove stale declaration.
+```
+
+## What You Get
+
+- `report.md`: human-readable summary and top actions
+- `findings.json`: machine-readable findings
+- `test_plan.json`: prioritized test recommendations
+
+For all flags and modes:
+
+```bash
+riskmap analyze --help
+```
+
+## PR Workflow
+
+Create a deterministic baseline on `main`:
+
+```bash
+riskmap analyze \
+  --mode full \
+  --analysis-engine deterministic \
+  --no-llm \
   --output-dir ./.riskmap/baseline
 ```
 
-2. Run PR-scoped analysis on feature branch:
+Run PR-scoped analysis on your feature branch:
 
 ```bash
 riskmap analyze \
@@ -52,236 +102,54 @@ riskmap analyze \
   --output-dir ./.riskmap
 ```
 
-Important for PR delta (`new/resolved/unchanged`):
-- baseline folder must contain both `graph.json` and `findings.json`.
+For PR delta to work, the baseline directory must contain both `graph.json` and `findings.json`.
 
-## Key Outputs
+## Works Best For
 
-- `report.md`: human-readable summary and top actions.
-- `pr_summary.md`: compact PR view (PR mode).
-- `findings.json`: machine-readable findings.
-- `test_plan.json`: prioritized test recommendations.
-- `graph.json` and `graph.analysis.json`: analysis graph used for findings (may include semantic enrichment).
-- `graph.deterministic.json`: deterministic graph before semantic enrichment.
-- `run_metrics.json`: quality and run metrics.
-- run/report summary now also exposes `repository_support_state` (`supported`, `partial`, `unsupported`) so advisory generic runs are explicit.
+- backend teams doing pre-merge or pre-release reviews
+- repositories with explicit HTTP/write flows and tests
+- teams that want advisory signals before enabling CI gates
 
-## Current Scope (v0.1.x)
+## Current Scope
 
-- Stack plugins:
-  - `fastapi_pytest`
-  - `django_drf`
-  - `express_node`
-- Normalized ingress families currently covered:
-  - `http`
-  - `webhook`
-  - `job`
-  - `cli_task`
-  - `event_consumer`
-- Local/CI assistant for risk mapping.
-- Not a generic multi-language SAST replacement.
-- API supports optional token auth, request guardrails, and correlation/audit controls for service usage.
+- Stack plugins: `fastapi_pytest`, `django_drf`, `express_node`
+- Ingress families: `http`, `webhook`, `job`, `cli_task`, `event_consumer`
+- Issue types: missing tests on critical endpoints, missing transition handlers, dependency/version policy risks, contract mismatches, write/session integrity issues, and selected UI regressions
 
-Deterministic rules:
-- `critical_path_no_tests`
-- `missing_transition_handler`
-- `broken_invariant_on_transition`
-- `dependency_risk_policy_violation`
-- `missing_required_side_effect` (contract-level; plugin extraction in progress)
-- `critical_write_missing_authz` (contract-level; plugin extraction in progress)
-- `input_normalization_char_split`
-- `response_field_contract_mismatch`
-- `db_insert_binding_mismatch`
-- `critical_write_scope_missing_entity_filter`
-- `stale_write_without_conflict_guard`
-- `session_token_key_mismatch`
-- `stored_xss_unsafe_innerhtml`
-- `reading_time_round_down_to_zero`
-- `priority_formula_precedence_risk`
-- `overdue_date_string_comparison`
-- `pagination_page_not_normalized`
-- `save_button_partial_form_enabled`
-- `mobile_layout_min_width_overflow`
+## Limits
 
-## CI Rollout Controls
+- Not a business-logic verifier
+- Not a generic multi-language SAST replacement
+- Unknown stacks fall back to advisory mode and may produce partial results
 
-`ci_mode`:
-- `advisory` (default): never fails build.
-- `soft`: fails on new `high|critical`.
-- `block-new-critical`: fails only on `new + critical + high confidence + verified evidence`.
+## API
 
-`support_level`:
-- `auto` (default): `unknown -> l0`, known stacks -> `l2`.
-- preflight warnings in `auto` downgrade one step (`l2 -> l1`, `l1 -> l0`).
-- `l0`: blocking modes downgraded to advisory.
-- `l1`: `block-new-critical` downgraded to `soft`.
-- `l2`: full behavior.
-
-## Useful CLI Flags
-
-```bash
-riskmap analyze [PATH]
-riskmap analyze --sample
-riskmap analyze --mode pr --base main --baseline-graph ./.riskmap/baseline/graph.json
-riskmap analyze --analysis-engine deterministic|hybrid|ai-first
-riskmap analyze --provider auto|api|cli
-riskmap analyze --no-llm
-riskmap analyze --only-new
-riskmap analyze --min-confidence high|medium|low
-riskmap analyze --ci-mode advisory|soft|block-new-critical
-riskmap analyze --support-level auto|l0|l1|l2
-riskmap analyze --risk-policy conservative|balanced|aggressive
-riskmap analyze --fail-on-severity critical|high|medium|low
-riskmap analyze --suppress-file .airiskignore
-```
-
-Dependency policy profiles:
-- `conservative`: `direct_reference`, `wildcard_version`
-- `balanced` (default): conservative + `range_not_pinned`
-- `aggressive`: balanced + `unpinned_version`
-
-## Suppressions and Policy
-
-Suppressions (`.airiskignore`):
-
-```yaml
-- key: "critical_path_no_tests:api:app:api.py:create_order"
-- rule: "missing_transition_handler"
-  file: "app/orders.py"
-```
-
-Policy overrides (`.airiskpolicy`):
-
-```json
-{
-  "version": 1,
-  "rules": {
-    "critical_path_no_tests": {
-      "enabled": true,
-      "severity": "medium",
-      "gate": "never_block"
-    }
-  }
-}
-```
-
-## API Quick Start
-
-Install API extras:
+If you need a local API service:
 
 ```bash
 pip install -e '.[api]'
-```
-
-Run server:
-
-```bash
 riskmap-api
 ```
 
-Optional hardening:
-
-```bash
-AIRISK_API_TOKEN=change-me riskmap-api
-```
-
-When `AIRISK_API_TOKEN` is set, `POST /v1/analyze` requires either:
-- `X-API-Key: <token>`
-- `Authorization: Bearer <token>`
-
-Additional request guardrails:
-
-- `AIRISK_API_RATE_LIMIT_PER_MINUTE` (default `0`, disabled)
-- `AIRISK_API_MAX_BODY_BYTES` (default `0`, disabled)
-- `AIRISK_API_AUDIT_LOG` (optional path for append-only JSONL audit events)
-
-Operational controls:
-
-- Pass `X-Correlation-ID` (or `X-Request-ID`) to keep a stable run identifier through API logs and output.
-- API response includes `correlation_id` and `diagnostics`.
-- `api_audit.json` is written to `output_dir` for each API run.
-
-Health:
-
-```bash
-curl -s http://127.0.0.1:8000/healthz
-```
-
-Analyze:
-
-```bash
-curl -s -X POST http://127.0.0.1:8000/v1/analyze \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "path": ".",
-    "mode": "full",
-    "provider": "auto",
-    "no_llm": true,
-    "output_dir": ".riskmap",
-    "format": "both"
-  }'
-```
-
-## Exit Codes
-
-| Code | Meaning |
-|---|---|
-| 0 | Success |
-| 1 | Explicit provider unavailable (`--provider api|cli`) |
-| 2 | Unsupported repository for strict extractor modes |
-| 3 | `--fail-on-severity` or `--ci-mode` threshold reached |
-
-## Eval Artifacts
-
-Weekly eval workflow publishes:
-- `eval/results/trust_gate.json`
-- `eval/results/trust_history.jsonl`
-- `eval/results/trust_trend.json`
-- `eval/results/trust_trend.md`
-- `eval/results/expansion_gate.json`
-- `eval/results/plugin_conformance.json`
-- `eval/results/support_level_promotion.json`
-
-Use `make eval` locally.
-Use `AIRISK_EVAL_ENFORCE_THRESHOLDS=0 make eval` for non-blocking local runs.
-
-## Troubleshooting
-
-- `exit 1`: choose another provider or use `--no-llm`.
-- `exit 2`: repository does not match supported plugin patterns in strict levels.
-- Empty PR findings: verify baseline files and changed-files detection.
-- Unknown stack with `--support-level auto`: run continues in L0 advisory mode.
-- Slow/hanging local LLM stage: tune `AIRISK_SEMANTIC_LLM_TIMEOUT_SECONDS`, `AIRISK_SEMANTIC_LLM_MAX_RETRIES`,
-  `AIRISK_QA_LLM_TIMEOUT_SECONDS`, `AIRISK_QA_LLM_MAX_RETRIES`.
+Optional hardening is available through environment variables such as `AIRISK_API_TOKEN`, `AIRISK_API_RATE_LIMIT_PER_MINUTE`, and `AIRISK_API_MAX_BODY_BYTES`.
 
 ## Development
 
 ```bash
 make install
-make install-api
 make test
-make analyze-demo
-make serve-api
-make eval
-python scripts/init_stack_plugin.py --stack-id flask_pytest
 ```
 
-## Docs Map
+## Docs
 
-- `docs/ru.md`: Russian quick guide
-- `docs/compatibility.md`: CLI/API/JSON compatibility policy
-- `docs/deployment-hardening.md`: API deployment baseline and security checklist
-- `docs/capability-signals.md`: stack-agnostic signal model
-- `docs/plugin-contract.md`: plugin contract v1 and conformance rules
-- `docs/stack-expansion-candidates.md`: ranked shortlist for next stack expansion
-- `ROADMAP.md`: product roadmap
-- `BACKLOG_TRUST_FIRST.md`: trust-first backlog and KPI gates
-- `SUPPORT.md`: support channels
+- `docs/ru.md`
+- `docs/compatibility.md`
+- `docs/deployment-hardening.md`
+- `docs/plugin-contract.md`
 
 ## Open Source
 
 - License: `LICENSE` (MIT)
 - Contributing: `CONTRIBUTING.md`
-- Code of Conduct: `CODE_OF_CONDUCT.md`
 - Security Policy: `SECURITY.md`
 - Changelog: `CHANGELOG.md`
