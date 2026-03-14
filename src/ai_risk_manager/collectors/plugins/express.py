@@ -54,6 +54,7 @@ class ExpressCollectorPlugin(CapabilitySignalPluginMixin):
         "session_lifecycle_consistency",
         "html_render_safety",
         "ui_ergonomics",
+        "generated_test_quality",
     }
     unsupported_signal_kinds = {
         "request_contract_binding",

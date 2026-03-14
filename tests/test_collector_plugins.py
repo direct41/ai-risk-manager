@@ -282,6 +282,66 @@ def test_express_plugin_extracts_job_and_cli_ingress_surfaces(tmp_path: Path, wr
     assert "cli_task" in signal_ingress_families
 
 
+def test_fastapi_plugin_collects_generated_test_quality_issues(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/orders')\n"
+        "def create_order():\n"
+        "    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_api.py",
+        "import time\n\n"
+        "def test_create_order(client):\n"
+        "    time.sleep(0.1)\n"
+        "    response = client.post('/orders')\n"
+        "    assert response.status_code == 201\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+
+    artifacts = plugin.collect(tmp_path)
+    issue_types = {row[1] for row in artifacts.generated_test_issues}
+    assert "missing_negative_path" in issue_types
+    assert "nondeterministic_dependency" in issue_types
+
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+    kinds = {signal.kind for signal in signals.signals}
+    assert "generated_test_quality" in kinds
+
+
+def test_express_plugin_collects_generated_test_quality_issues(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "server" / "app.js",
+        "const express = require('express');\n"
+        "const app = express();\n"
+        "app.post('/api/orders', (_req, res) => res.status(201).json({ ok: true }));\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_orders.js",
+        "test('creates order', async () => {\n"
+        "  setTimeout(() => {}, 10);\n"
+        "  const response = await client.post('/api/orders');\n"
+        "  expect(response.status).toBe(201);\n"
+        "});\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("express_node")
+    assert plugin is not None
+
+    artifacts = plugin.collect(tmp_path)
+    issue_types = {row[1] for row in artifacts.generated_test_issues}
+    assert "missing_negative_path" in issue_types
+    assert "nondeterministic_dependency" in issue_types
+
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+    kinds = {signal.kind for signal in signals.signals}
+    assert "generated_test_quality" in kinds
+
+
 def test_express_plugin_extracts_event_consumer_ingress_surfaces(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "server" / "events.js",

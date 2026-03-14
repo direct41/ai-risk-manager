@@ -8,6 +8,10 @@ import re
 
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle
 from ai_risk_manager.collectors.plugins.dependency_artifacts import extract_dependency_specs
+from ai_risk_manager.collectors.plugins.generated_test_artifacts import (
+    collect_generated_test_issues,
+    observe_python_test_quality,
+)
 from ai_risk_manager.collectors.plugins.python_write_contract_artifacts import (
     extract_python_session_lifecycle_issues,
     extract_python_write_contract_issues,
@@ -752,6 +756,16 @@ def collect_django_artifacts(repo_path: Path) -> ArtifactBundle:
                 bundle.test_cases.append((relative, case, line, snippet))
             for test_name, method, route_path, line, snippet in _extract_test_http_calls(tree, source_lines, route_name_map):
                 bundle.test_http_calls.append((relative, test_name, method, route_path, line, snippet))
+            bundle.generated_test_issues.extend(
+                collect_generated_test_issues(
+                    relative_path=relative,
+                    observations=observe_python_test_quality(
+                        tree,
+                        source_lines,
+                        route_resolver=lambda expr, aliases: _resolve_test_route_expr(expr, aliases, route_name_map),
+                    ),
+                )
+            )
 
         owner_names = {endpoint_name for file_ref, endpoint_name, *_ in bundle.write_endpoints if file_ref == relative}
         bundle.write_contract_issues.extend(
