@@ -164,6 +164,7 @@ def _run_signal_only_rules(signals: SignalBundle) -> list[Finding]:
     findings.extend(_run_session_lifecycle_consistency_rule(signals))
     findings.extend(_run_html_render_safety_rule(signals))
     findings.extend(_run_ui_ergonomics_rule(signals))
+    findings.extend(_run_generated_test_quality_rule(signals))
     return findings
 
 
@@ -696,6 +697,79 @@ def _run_ui_ergonomics_rule(signals: SignalBundle) -> list[Finding]:
                     suppression_key=finding_id,
                     recommendation=(
                         "Remove large fixed min-width for main container or override it in mobile breakpoints."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+
+    return findings
+
+
+def _run_generated_test_quality_rule(signals: SignalBundle) -> list[Finding]:
+    findings: list[Finding] = []
+    for signal in signals.signals:
+        if signal.kind != "generated_test_quality":
+            continue
+
+        issue_type = str(signal.attributes.get("issue_type", "")).strip()
+        test_name = str(signal.attributes.get("test_name", "")).strip() or str(signal.attributes.get("owner_name", "")).strip() or "unknown"
+        confidence = cast(Confidence, signal.confidence)
+
+        if issue_type == "missing_negative_path":
+            method = str(signal.attributes.get("method", "")).strip().upper() or "WRITE"
+            path = str(signal.attributes.get("path", "")).strip()
+            target = f"{method} {path}".strip() if path else method
+            finding_id = f"agent_generated_test_missing_negative_path:{test_name}:{method}:{path}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="agent_generated_test_missing_negative_path",
+                    title=f"Write-path test '{test_name}' lacks negative-path assertions",
+                    description=(
+                        "Test covers a write path but only exercises the success path, "
+                        "which is common in weak AI-generated tests and misses validation/auth/conflict failures."
+                    ),
+                    severity="high" if method in {"POST", "PUT", "PATCH", "DELETE"} else "medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Test '{test_name}' calls '{target}' without any detected negative-path assertions."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        f"Add negative-path coverage for '{target}' in '{test_name}' "
+                        "(for example validation, unauthorized, forbidden, not-found, or conflict cases)."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "nondeterministic_dependency":
+            dependency_kinds = str(signal.attributes.get("dependency_kinds", "")).strip() or "time"
+            finding_id = f"agent_generated_test_nondeterministic_dependency:{test_name}:{dependency_kinds}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="agent_generated_test_nondeterministic_dependency",
+                    title=f"Test '{test_name}' depends on nondeterministic runtime behavior",
+                    description=(
+                        "Test appears to depend on sleep, current time, randomness, or live network behavior, "
+                        "which increases flakiness and is common in low-quality generated tests."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Test '{test_name}' uses nondeterministic dependency kinds: {dependency_kinds}."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Replace nondeterministic dependencies with mocks, fake clocks, fixtures, or deterministic stubs."
                     ),
                     origin="deterministic",
                     evidence_refs=[signal.source_ref],

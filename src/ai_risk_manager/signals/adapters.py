@@ -259,6 +259,24 @@ def artifact_bundle_to_signal_bundle(artifacts: ArtifactBundle) -> SignalBundle:
             )
         )
 
+    for file_path, issue_type, owner_name, line, snippet, details in artifacts.generated_test_issues:
+        supported_kinds.add("generated_test_quality")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:test-quality:{file_path}:{owner_name}:{issue_type}:{line or 0}",
+                kind="generated_test_quality",
+                source_ref=_line_ref(file_path, line),
+                confidence="medium",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "issue_type": issue_type,
+                    "owner_name": owner_name,
+                    "snippet": snippet,
+                    **details,
+                },
+            )
+        )
+
     for file_path, endpoint_name, effect_kind, effect_target, line, snippet in artifacts.side_effect_requirements:
         supported_kinds.add("side_effect_emit_contract")
         signals.append(

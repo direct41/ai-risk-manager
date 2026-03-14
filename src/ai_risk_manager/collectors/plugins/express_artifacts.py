@@ -7,6 +7,10 @@ import re
 
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle, IngressCoverageArtifact, IngressSurfaceArtifact
 from ai_risk_manager.collectors.plugins.dependency_artifacts import extract_dependency_specs
+from ai_risk_manager.collectors.plugins.generated_test_artifacts import (
+    collect_generated_test_issues,
+    observe_js_test_quality,
+)
 
 WRITE_METHODS = ("post", "put", "patch", "delete")
 JS_SUFFIXES = {".js", ".cjs", ".mjs", ".ts", ".tsx"}
@@ -1014,6 +1018,7 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
     session_lifecycle_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
     html_render_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
     ui_ergonomics_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
+    generated_test_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
     backend_row_fields: dict[str, tuple[str, int, str]] = {}
     frontend_note_fields: list[tuple[str, str, int, str]] = []
     for path in js_files:
@@ -1025,6 +1030,12 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
             test_cases.extend(_extract_test_cases(path, repo_path, source_lines))
             test_ingress_calls.extend(_extract_test_ingress_calls(path, repo_path, text, source_lines))
             test_http_calls.extend(_extract_test_http_calls(path, repo_path, text, source_lines))
+            generated_test_issues.extend(
+                collect_generated_test_issues(
+                    relative_path=str(path.relative_to(repo_path)),
+                    observations=observe_js_test_quality(text, source_lines),
+                )
+            )
             continue
         file_endpoints = _extract_write_endpoints(path, repo_path, text, source_lines)
         write_endpoints.extend(file_endpoints)
@@ -1070,6 +1081,7 @@ def collect_express_artifacts(repo_path: Path) -> ArtifactBundle:
         session_lifecycle_issues=session_lifecycle_issues,
         html_render_issues=html_render_issues,
         ui_ergonomics_issues=ui_ergonomics_issues,
+        generated_test_issues=generated_test_issues,
     )
 
 

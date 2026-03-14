@@ -49,6 +49,7 @@ class DjangoCollectorPlugin(CapabilitySignalPluginMixin):
         "dependency_version_policy",
         "write_contract_integrity",
         "session_lifecycle_consistency",
+        "generated_test_quality",
     }
     unsupported_signal_kinds = {
         "request_contract_binding",

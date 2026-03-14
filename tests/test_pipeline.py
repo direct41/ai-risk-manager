@@ -173,6 +173,41 @@ def test_full_mode_sets_full_analysis_scope(tmp_path: Path, write_file) -> None:
     assert result.analysis_scope == "full"
 
 
+def test_pipeline_reports_generated_test_quality_findings(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/orders')\n"
+        "def create_order():\n"
+        "    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_api.py",
+        "import time\n\n"
+        "def test_create_order(client):\n"
+        "    time.sleep(0.1)\n"
+        "    response = client.post('/orders')\n"
+        "    assert response.status_code == 201\n",
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+
+    result, code, _ = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    rule_ids = {finding.rule_id for finding in result.findings.findings}
+    assert "agent_generated_test_missing_negative_path" in rule_ids
+    assert "agent_generated_test_nondeterministic_dependency" in rule_ids
+
+
 def test_pr_mode_without_baseline_uses_full_fallback(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",
