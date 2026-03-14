@@ -86,6 +86,8 @@ class ArtifactBundle:
     # (file, issue_type, owner_name, line, snippet, details)
     generated_test_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = field(default_factory=list)
     # (file, issue_type, owner_name, line, snippet, details)
+    workflow_automation_issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = field(default_factory=list)
+    # (file, issue_type, owner_name, line, snippet, details)
 
 
 class CollectorPlugin(Protocol):

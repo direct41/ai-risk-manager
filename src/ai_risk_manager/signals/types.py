@@ -22,6 +22,7 @@ SignalKind = Literal[
     "html_render_safety",
     "ui_ergonomics",
     "generated_test_quality",
+    "workflow_automation_risk",
 ]
 
 

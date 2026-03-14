@@ -342,6 +342,38 @@ def test_express_plugin_collects_generated_test_quality_issues(tmp_path: Path, w
     assert "generated_test_quality" in kinds
 
 
+def test_fastapi_plugin_collects_workflow_automation_issues(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / ".github" / "workflows" / "unsafe.yml",
+        "name: Unsafe\n"
+        "on:\n  issues:\n    types: [opened]\n"
+        "jobs:\n"
+        "  check:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - name: Checkout\n"
+        "        uses: actions/checkout@v4\n"
+        "      - name: Run shell from issue body\n"
+        "        run: echo \"${{ github.event.issue.body }}\"\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+
+    artifacts = plugin.collect(tmp_path)
+    issue_types = {row[1] for row in artifacts.workflow_automation_issues}
+    assert "external_action_not_pinned" in issue_types
+    assert "untrusted_context_to_shell" in issue_types
+
+    signals = plugin.collect_signals_from_artifacts(artifacts)
+    kinds = {signal.kind for signal in signals.signals}
+    assert "workflow_automation_risk" in kinds
+
+
 def test_express_plugin_extracts_event_consumer_ingress_surfaces(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "server" / "events.js",

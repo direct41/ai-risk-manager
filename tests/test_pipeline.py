@@ -208,6 +208,43 @@ def test_pipeline_reports_generated_test_quality_findings(tmp_path: Path, write_
     assert "agent_generated_test_nondeterministic_dependency" in rule_ids
 
 
+def test_pipeline_reports_workflow_automation_findings(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / ".github" / "workflows" / "unsafe.yml",
+        "name: Unsafe\n"
+        "on:\n  pull_request:\n"
+        "jobs:\n"
+        "  check:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - name: Checkout\n"
+        "        uses: actions/checkout@v4\n"
+        "      - name: Replay issue text\n"
+        "        run: |\n"
+        "          echo \"${{ github.event.pull_request.title }}\"\n",
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+
+    result, code, _ = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    rule_ids = {finding.rule_id for finding in result.findings.findings}
+    assert "workflow_external_action_not_pinned" in rule_ids
+    assert "workflow_untrusted_context_to_shell" in rule_ids
+
+
 def test_pr_mode_without_baseline_uses_full_fallback(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",

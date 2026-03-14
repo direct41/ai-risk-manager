@@ -51,6 +51,7 @@ class FastAPICollectorPlugin(CapabilitySignalPluginMixin):
         "write_contract_integrity",
         "session_lifecycle_consistency",
         "generated_test_quality",
+        "workflow_automation_risk",
     }
     unsupported_signal_kinds = {
         "side_effect_emit_contract",
