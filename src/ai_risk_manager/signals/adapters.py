@@ -277,6 +277,24 @@ def artifact_bundle_to_signal_bundle(artifacts: ArtifactBundle) -> SignalBundle:
             )
         )
 
+    for file_path, issue_type, owner_name, line, snippet, details in artifacts.workflow_automation_issues:
+        supported_kinds.add("workflow_automation_risk")
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:workflow-risk:{file_path}:{owner_name}:{issue_type}:{line or 0}",
+                kind="workflow_automation_risk",
+                source_ref=_line_ref(file_path, line),
+                confidence="high" if issue_type == "untrusted_context_to_shell" else "medium",
+                evidence_refs=[_line_ref(file_path, line)],
+                attributes={
+                    "issue_type": issue_type,
+                    "owner_name": owner_name,
+                    "snippet": snippet,
+                    **details,
+                },
+            )
+        )
+
     for file_path, endpoint_name, effect_kind, effect_target, line, snippet in artifacts.side_effect_requirements:
         supported_kinds.add("side_effect_emit_contract")
         signals.append(
