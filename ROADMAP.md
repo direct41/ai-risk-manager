@@ -25,17 +25,20 @@
 - Explainability and risk precision improvements:
   - confidence/evidence-based ranking in reports
   - dependency policy profiles with scope-aware severity
+- Merge-risk triage:
+  - `merge_triage.md` and `merge_triage.json` decision package
+  - `ready|review_required|block_recommended` merge decision
+  - 10-minute test-first order from findings plus test plan
 
 ## Next (Post Stage 12, Architecture Reset)
 
 - Universal core, contract-driven expansion, service hardening, capability-depth expansion, and pack-level promotion gates are complete through Stage 12.
-- The next roadmap is now organized around architectural scaling constraints, not around isolated feature batches.
+- The near-term roadmap is now organized around pre-merge decision quality first, then architectural scaling constraints.
 - Architecture decision record: [docs/architecture-next.md](docs/architecture-next.md)
 - Next delivery focus:
-  - Stage 13: generalize the analyzer around ingress-family contracts, not only HTTP write paths.
-  - Stage 14: bring Stage 11 capability packs to parity across existing supported stacks.
-  - Stage 15: add advisory-only AI extraction for partially supported repositories behind evidence and trust gates.
-  - Stage 16: package an external plugin distribution model only after contracts and promotion logic are stable.
+  - Stage 15: validate merge-risk triage usefulness on real repositories before expanding scope.
+  - Stage 16: add advisory-only AI extraction for partially supported repositories behind evidence and trust gates.
+  - Stage 17: package an external plugin distribution model only after contracts, promotion logic, and triage value are stable.
 
 ## Delivery Model (Stage-Gate)
 
@@ -60,5 +63,6 @@
 10. [x] Stage 12: capability-pack promotion and trust-gate stabilization.
 11. [x] Stage 13: ingress contract generalization beyond HTTP.
 12. [x] Stage 14: capability-pack parity across supported stacks.
-13. [ ] Stage 15: advisory AI extraction for partially supported repositories.
-14. [ ] Stage 16: external plugin distribution model.
+13. [ ] Stage 15: merge-risk triage validation on real repositories.
+14. [ ] Stage 16: advisory AI extraction for partially supported repositories.
+15. [ ] Stage 17: external plugin distribution model.

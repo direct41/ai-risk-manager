@@ -241,7 +241,22 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Promotion status is visible per pack, not inferred from a stack-level label.
 - Trust/eval gates remain green after parity rollout.
 
-## Epic 15: Advisory AI Extraction For Partial Support (P1)
+## Epic 15: Merge-Risk Triage Validation (P0)
+- Status: In Progress
+- Outcome: findings and test plans are packaged into a short pre-merge decision workflow that teams can actually use
+
+### Stories
+1. [x] Add `merge_triage.md` and `merge_triage.json` artifacts.
+2. [x] Add `ready|review_required|block_recommended` merge decision semantics.
+3. [x] Rank top test/fix actions inside a 10-minute triage budget.
+4. [ ] Validate on real repositories and record actioned-finding outcomes.
+
+### Definition of Done
+- A reviewer can understand what to test first without reading the full report.
+- Triage output clearly explains weak confidence from fallback scope, partial support, or low verification.
+- At least 3 real repository runs show whether findings produced a useful test, fix, or accepted-risk decision.
+
+## Epic 16: Advisory AI Extraction For Partial Support (P1)
 - Status: In Progress
 - Outcome: the product can analyze partially supported repositories without pretending they have deterministic parity
 
@@ -261,7 +276,7 @@ Build and scale AI Risk Manager through high-trust signal quality first, then st
 - Run summary/report now expose `repository_support_state` (`supported|partial|unsupported`).
 - AI findings with unverifiable `evidence_refs` are dropped before final output.
 
-## Epic 16: External Plugin Distribution Model (P2)
+## Epic 17: External Plugin Distribution Model (P2)
 - Status: Planned
 - Outcome: new stack analyzers can be developed and distributed without modifying core runtime boundaries
 

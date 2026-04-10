@@ -103,6 +103,8 @@ Current stable deep modules:
   - AI enrichment and semantic analysis
 - `pipeline`
   - orchestration and rollout behavior
+- `triage`
+  - merge decision packaging from findings plus test recommendations
 
 Recommended next deep modules or responsibilities:
 
@@ -114,6 +116,8 @@ Recommended next deep modules or responsibilities:
   - own explicit ingress contract types
 - `eval`
   - promote by capability parity across stacks and sink families
+- `triage`
+  - own release-risk scoring, 10-minute test-first ordering, and merge-decision artifacts
 
 No new top-level package is required yet. The current repository structure can absorb the next phase without structural churn.
 
@@ -161,7 +165,9 @@ Recommended sequencing:
 2. Core normalizes them into common signal contracts.
 3. Deterministic rules run on normalized signals.
 4. AI may enrich or recover partial relations, but never bypasses verification.
-5. Eval gates decide promotion at stack and capability-pack level.
+5. QA strategy maps findings to prioritized test recommendations.
+6. Merge triage packages findings plus tests into a review decision.
+7. Eval gates decide promotion at stack and capability-pack level.
 
 ## Repository Plan
 

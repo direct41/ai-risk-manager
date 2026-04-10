@@ -29,6 +29,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added run summary metadata for graph transparency:
   - `graph_mode_applied`
   - `semantic_signal_count`
+- Added merge-risk triage artifacts:
+  - `merge_triage.md`
+  - `merge_triage.json`
+- Added `ready|review_required|block_recommended` merge decision packaging with a 10-minute test-first order.
 
 ### Changed
 - `block-new-critical` guardrails now trigger only for `new + critical + high confidence + verified evidence` findings.
@@ -41,6 +45,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Stack expansion gate criteria are now completion-based (consecutive trust-pass runs) instead of calendar-tied wording.
 - README was streamlined for faster onboarding and updated baseline guidance.
 - CI risk-analysis baseline now uses deterministic/no-llm mode and caches both `graph.json` and `findings.json` for correct PR delta status.
+- Reports and PR summaries now surface merge triage decision, release-risk score, and top test-first actions.
 
 ### Fixed
 - Pipeline/report consistency: `effective_ci_mode` and CI/fail notes are now computed before markdown artifact generation.

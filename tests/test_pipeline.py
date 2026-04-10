@@ -78,6 +78,8 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     assert (out_dir / "findings.raw.json").exists()
     assert (out_dir / "findings.json").exists()
     assert (out_dir / "test_plan.json").exists()
+    assert (out_dir / "merge_triage.json").exists()
+    assert (out_dir / "merge_triage.md").exists()
     assert (out_dir / "run_metrics.json").exists()
     assert (out_dir / "report.md").exists()
     assert (out_dir / "pr_summary.md").exists()
@@ -90,6 +92,8 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     assert "semantic_signal_count:" in report
     assert "effective_ci_mode:" in report
     assert "repository_support_state:" in report
+    assert "## Merge Triage" in report
+    assert "## 10-Minute Test-First Order" in report
     pr_summary = (out_dir / "pr_summary.md").read_text(encoding="utf-8")
     assert "confidence=`" in pr_summary
     assert "evidence_refs=`" in pr_summary
@@ -97,6 +101,10 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     assert "semantic_signal_count:" in pr_summary
     assert "effective_ci_mode:" in pr_summary
     assert "repository_support_state:" in pr_summary
+    assert "merge_decision:" in pr_summary
+    merge_triage = json.loads((out_dir / "merge_triage.json").read_text(encoding="utf-8"))
+    assert merge_triage["decision"] in {"ready", "review_required", "block_recommended"}
+    assert "actions" in merge_triage
 
 
 def test_pipeline_outputs_enriched_graph_when_semantic_signals_present(tmp_path: Path, write_file) -> None:

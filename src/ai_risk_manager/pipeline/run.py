@@ -23,6 +23,7 @@ from ai_risk_manager.rules.suppressions import apply_suppressions, load_suppress
 from ai_risk_manager.signals.adapters import artifact_bundle_to_signal_bundle
 from ai_risk_manager.signals.merge import merge_signal_bundles
 from ai_risk_manager.signals.types import SignalBundle
+from ai_risk_manager.triage.merge import build_merge_triage
 from ai_risk_manager.schemas.types import (
     AnalysisScope,
     AppliedSupportLevel,
@@ -32,6 +33,7 @@ from ai_risk_manager.schemas.types import (
     FindingsReport,
     GraphMode,
     Graph,
+    MergeTriage,
     PipelineResult,
     PreflightResult,
     RepositorySupportState,
@@ -382,6 +384,7 @@ class _AnalysisStage:
     findings: FindingsReport
     summary: RunSummary
     test_plan: TestPlan
+    merge_triage: MergeTriage
     suppressed_count: int
     verified_fingerprints: set[str]
     policy: PolicyConfig
@@ -687,6 +690,12 @@ def _stage_analysis(
         provider=provider_resolution.provider,
         generated_without_llm=provider_resolution.generated_without_llm or ctx.analysis_engine == "deterministic",
     )
+    merge_triage = build_merge_triage(
+        findings,
+        test_plan,
+        summary=summary,
+        analysis_scope=scope.analysis_scope,
+    )
     sinks.progress.finish(6, total_steps, "QA strategy agent", t)
 
     return (
@@ -697,6 +706,7 @@ def _stage_analysis(
             findings=findings,
             summary=summary,
             test_plan=test_plan,
+            merge_triage=merge_triage,
             suppressed_count=suppressed_count,
             verified_fingerprints=verified_fingerprints,
             policy=policy,
@@ -796,6 +806,7 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
         findings_raw=analysis_stage.findings_raw,
         findings=analysis_stage.findings,
         test_plan=analysis_stage.test_plan,
+        merge_triage=analysis_stage.merge_triage,
         summary=analysis_stage.summary,
         run_metrics=run_metrics,
     )
