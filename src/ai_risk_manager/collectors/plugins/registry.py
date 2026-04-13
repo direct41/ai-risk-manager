@@ -40,9 +40,5 @@ def list_plugins() -> tuple[CollectorPlugin, ...]:
     return tuple(_PLUGINS.values())
 
 
-def list_signal_plugins() -> tuple[CapabilitySignalPlugin, ...]:
-    return tuple(plugin for plugin in _PLUGINS.values() if isinstance(plugin, CapabilitySignalPlugin))
-
-
 def evaluate_registered_plugin_conformance() -> tuple[PluginConformanceReport, ...]:
     return tuple(evaluate_plugin_conformance(plugin) for plugin in _PLUGINS.values())

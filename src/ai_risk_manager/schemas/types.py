@@ -57,30 +57,6 @@ class Graph:
     handled_transitions: list["TransitionSpec"] = field(default_factory=list)
 
 
-@dataclass(frozen=True)
-class IngressSurfaceContract:
-    family: IngressFamily
-    operation: IngressOperation
-    owner_name: str
-    source_ref: str
-    protocol: str = "unknown"
-    target: str = ""
-    method: str = ""
-    evidence_refs: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class IngressCoverageContract:
-    family: IngressFamily
-    operation: IngressOperation
-    test_name: str
-    source_ref: str
-    protocol: str = "unknown"
-    target: str = ""
-    method: str = ""
-    evidence_refs: tuple[str, ...] = ()
-
-
 @dataclass
 class TransitionSpec:
     machine: str

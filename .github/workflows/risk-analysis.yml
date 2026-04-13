@@ -15,7 +15,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - uses: ./.github/actions/setup-python-env
 
@@ -46,14 +46,14 @@ jobs:
 
       - name: Save baseline cache
         if: hashFiles('./.riskmap/baseline/graph.json') != '' && hashFiles('./.riskmap/baseline/findings.json') != ''
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
         with:
           path: ./.riskmap/baseline
           key: baseline-${{ github.repository }}-${{ github.sha }}
 
       - name: Upload artifacts
         if: hashFiles('./.riskmap/report.md') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: risk-analysis-main-${{ github.sha }}
           path: ./.riskmap/
@@ -64,14 +64,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # fetch-depth: 0 is required for PR diff mode against the base branch.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
 
       - uses: ./.github/actions/setup-python-env
 
       - name: Restore baseline cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
         with:
           path: ./.riskmap/baseline
           key: baseline-${{ github.repository }}-${{ github.event.pull_request.base.sha }}
@@ -112,14 +112,14 @@ jobs:
           }
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: risk-analysis-pr-${{ github.event.pull_request.number }}-${{ github.sha }}
           path: ./.riskmap/
           if-no-files-found: warn
 
       - name: Upsert PR comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const fs = require('fs');
