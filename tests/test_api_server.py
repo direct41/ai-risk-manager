@@ -6,14 +6,12 @@ from unittest.mock import patch
 
 import pytest
 
-pytest.importorskip("fastapi")
-pytest.importorskip("httpx")
-
-from fastapi.testclient import TestClient
-
 from ai_risk_manager.api.server import app
 from ai_risk_manager.pipeline.run import run_pipeline
 from ai_risk_manager.schemas.types import RunContext
+
+pytest.importorskip("httpx")
+TestClient = pytest.importorskip("fastapi.testclient").TestClient
 
 
 def test_healthz_returns_ok_and_version() -> None:
