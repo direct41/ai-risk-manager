@@ -81,6 +81,17 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
         lines.append(f"- Provider note: {note}")
 
     lines.append("")
+    lines.append("## Merge Triage")
+    lines.append("")
+    lines.append(f"- Decision: `{result.merge_triage.decision}`")
+    lines.append(f"- Headline: {result.merge_triage.headline}")
+    lines.append(f"- Risk score: `{result.merge_triage.risk_score}/100`")
+    lines.append(f"- 10-minute triage budget used: `{result.merge_triage.estimated_triage_minutes} min`")
+    if result.merge_triage.reasons:
+        for reason in result.merge_triage.reasons[:3]:
+            lines.append(f"- Reason: {reason}")
+
+    lines.append("")
     lines.append("## Why This Matters for Release Risk")
     lines.append("")
     if not result.findings.findings:
@@ -144,6 +155,18 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
         for item in result.test_plan.items:
             lines.append(f"- [{item.priority}] {item.recommendation} (source: `{item.source_ref}`)")
 
+    lines.append("")
+    lines.append("## 10-Minute Test-First Order")
+    lines.append("")
+    if not result.merge_triage.actions:
+        lines.append("No immediate test-first action required.")
+    else:
+        for action in result.merge_triage.actions:
+            lines.append(
+                f"- [{action.priority}] `{action.rule_id}` at `{action.source_ref}` "
+                f"({action.estimated_minutes} min): {action.action}"
+            )
+
     return "\n".join(lines).strip() + "\n"
 
 
@@ -162,6 +185,8 @@ def render_pr_summary_md(result: PipelineResult, notes: list[str], *, only_new: 
     lines.append(f"- competitive_mode: `{result.summary.competitive_mode}`")
     lines.append(f"- graph_mode_applied: `{result.summary.graph_mode_applied}`")
     lines.append(f"- semantic_signal_count: `{result.summary.semantic_signal_count}`")
+    lines.append(f"- merge_decision: `{result.merge_triage.decision}`")
+    lines.append(f"- release_risk_score: `{result.merge_triage.risk_score}/100`")
     lines.append(f"- findings: `{len(result.findings.findings)}`")
     lines.append(
         f"- new/resolved/unchanged: `{result.summary.new_count}/{result.summary.resolved_count}/{result.summary.unchanged_count}`"
@@ -194,5 +219,16 @@ def render_pr_summary_md(result: PipelineResult, notes: list[str], *, only_new: 
                 f"Action: {finding.recommendation}"
             )
     lines.append("")
-    lines.append("Full details: see workflow artifacts (`report.md`, `findings.json`, `test_plan.json`).")
+    lines.append("### Test First")
+    lines.append("")
+    if not result.merge_triage.actions:
+        lines.append("No immediate test-first action required.")
+    else:
+        for action in result.merge_triage.actions[:3]:
+            lines.append(
+                f"- [{action.priority}] `{action.rule_id}` at `{action.source_ref}` "
+                f"({action.estimated_minutes} min): {action.action}"
+            )
+    lines.append("")
+    lines.append("Full details: see workflow artifacts (`merge_triage.md`, `report.md`, `findings.json`, `test_plan.json`).")
     return "\n".join(lines).strip() + "\n"

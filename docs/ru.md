@@ -1,9 +1,10 @@
 # AI Risk Manager: быстрый вход для FastAPI и Django/DRF команд
 
-AI Risk Manager помогает перед merge/release ответить на два вопроса:
+AI Risk Manager помогает перед merge/release ответить на три вопроса:
 
 - где сейчас рискованные backend-потоки;
 - какие тесты стоит добавить в первую очередь.
+- можно ли мержить сейчас или нужен короткий release-risk triage.
 
 Текущий `v0.1.x` сфокусирован на FastAPI + pytest и Django/DRF.
 
@@ -20,6 +21,7 @@ pip install -e '.[dev]'
 ```bash
 riskmap analyze --sample --no-llm --output-dir ./.riskmap
 cat ./.riskmap/report.md
+cat ./.riskmap/merge_triage.md
 ```
 
 Если нужно, можно переопределить sample:
@@ -31,11 +33,13 @@ AIRISK_SAMPLE_REPO=/path/to/local/sample riskmap analyze --sample --no-llm
 3. Что смотреть в первую очередь:
 
 - `.riskmap/report.md` — понятный summary + top actions.
+- `.riskmap/merge_triage.md` — короткое решение по merge: `ready`, `review_required` или `block_recommended`.
 - `.riskmap/pr_summary.md` — короткая PR-выжимка (только PR-режим).
 - `.riskmap/graph.json` и `.riskmap/graph.analysis.json` — граф, по которому считались findings.
 - `.riskmap/graph.deterministic.json` — детерминированный граф до semantic-обогащения.
 - `.riskmap/findings.json` — машинный формат findings.
 - `.riskmap/test_plan.json` — приоритизированные тестовые действия.
+- `.riskmap/merge_triage.json` — машинный формат решения по merge и 10-минутного test-first порядка.
 - В summary/report также смотрите `repository_support_state`: `supported`, `partial` или `unsupported`.
 
 ## Запуск на реальном репозитории
@@ -109,6 +113,17 @@ Extractor собирает:
 - FastAPI-команды, где нужен быстрый release-risk скан.
 - Команды, где важна PR-видимость только новых high-signal рисков.
 - Команды, которым нужны конкретные test actions.
+- Команды, где AI быстро генерирует код, а review должен быстро понять, что тестировать первым.
+
+## Merge risk triage
+
+Новый triage-слой не ищет новые findings. Он берет уже проверенные findings и test plan, затем собирает короткий decision package:
+
+- `ready` — активных release-risk действий в текущем scope нет.
+- `review_required` — перед merge стоит пройти короткий список test-first действий.
+- `block_recommended` — PR лучше не мержить до обработки верхнего риска.
+
+Цель — не заменить QA или release approval, а сократить путь от "нашли риск" до "поняли, какой тест добавить первым".
 
 ## Ограничения текущей версии
 
@@ -162,5 +177,6 @@ curl -s http://127.0.0.1:8000/healthz
 ## Где смотреть дальше
 
 - Полная англ. документация: `README.md`
+- Архитектура triage-слоя: `docs/merge-risk-triage-architecture.md`
 - Совместимость контрактов: `docs/compatibility.md`
 - План развития: `ROADMAP.md`, `BACKLOG_TRUST_FIRST.md`

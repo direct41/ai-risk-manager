@@ -59,6 +59,8 @@ _ARTIFACT_FILES = (
     "findings.raw.json",
     "findings.json",
     "test_plan.json",
+    "merge_triage.json",
+    "merge_triage.md",
     "run_metrics.json",
     "report.md",
     "pr_summary.md",

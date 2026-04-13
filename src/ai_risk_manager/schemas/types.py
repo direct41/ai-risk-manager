@@ -23,6 +23,7 @@ PreflightStatus = Literal["PASS", "WARN", "FAIL"]
 AnalysisScope = Literal["impacted", "full", "full_fallback"]
 IngressFamily = Literal["http", "webhook", "job", "event_consumer", "cli_task"]
 IngressOperation = Literal["write", "read", "execute", "consume"]
+MergeDecision = Literal["ready", "review_required", "block_recommended"]
 
 
 @dataclass
@@ -138,6 +139,39 @@ class TestPlan:
 
 
 @dataclass
+class MergeTriageAction:
+    id: str
+    finding_id: str
+    rule_id: str
+    title: str
+    priority: Severity
+    confidence: Confidence
+    status: FindingStatus
+    source_ref: str
+    action: str
+    rationale: str
+    estimated_minutes: int
+    test_type: TestType = "api"
+    test_target: str = ""
+    assertions: list[str] = field(default_factory=list)
+
+
+@dataclass
+class MergeTriage:
+    decision: MergeDecision
+    headline: str
+    risk_score: int
+    estimated_triage_minutes: int
+    top_risk_count: int
+    new_high_or_critical_count: int
+    verification_pass_rate: float
+    evidence_completeness: float
+    reasons: list[str] = field(default_factory=list)
+    actions: list[MergeTriageAction] = field(default_factory=list)
+    generated_without_llm: bool = True
+
+
+@dataclass
 class PreflightResult:
     status: PreflightStatus
     reasons: list[str] = field(default_factory=list)
@@ -205,6 +239,7 @@ class PipelineResult:
     findings_raw: FindingsReport
     findings: FindingsReport
     test_plan: TestPlan
+    merge_triage: MergeTriage
     summary: RunSummary
     run_metrics: RunMetrics
 

@@ -107,7 +107,8 @@ def collect_workflow_automation_issues(
                 j += 1
 
             body = "\n".join(block_lines)
-            if not _UNTRUSTED_CONTEXT_RE.search(body):
+            context_match = _UNTRUSTED_CONTEXT_RE.search(body)
+            if context_match is None:
                 continue
             step_name = _step_name_before(lines, idx) or "workflow step"
             issues.append(
@@ -118,7 +119,7 @@ def collect_workflow_automation_issues(
                     line_no,
                     _line_snippet(lines, line_no),
                     {
-                        "context_ref": _UNTRUSTED_CONTEXT_RE.search(body).group(0),
+                        "context_ref": context_match.group(0),
                     },
                 )
             )

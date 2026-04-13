@@ -10,6 +10,7 @@ from typing import Protocol
 from ai_risk_manager import __version__
 from ai_risk_manager.reports.generator import render_pr_summary_md, render_report_md, write_report
 from ai_risk_manager.schemas.types import PipelineResult, RunContext, to_dict, write_json
+from ai_risk_manager.triage.merge import render_merge_triage_md
 
 
 class ProgressSink(Protocol):
@@ -114,11 +115,13 @@ class LocalArtifactSink:
             write_json(ctx.output_dir / "findings.raw.json", _with_metadata(to_dict(result.findings_raw), generated_at))
             write_json(ctx.output_dir / "findings.json", _with_metadata(to_dict(result.findings), generated_at))
             write_json(ctx.output_dir / "test_plan.json", _with_metadata(to_dict(result.test_plan), generated_at))
+            write_json(ctx.output_dir / "merge_triage.json", _with_metadata(to_dict(result.merge_triage), generated_at))
             write_json(ctx.output_dir / "run_metrics.json", _with_metadata(to_dict(result.run_metrics), generated_at))
 
         if ctx.output_format in {"md", "both"}:
             report = render_report_md(result, notes + output_notes)
             write_report(ctx.output_dir / "report.md", report)
+            write_report(ctx.output_dir / "merge_triage.md", render_merge_triage_md(result.merge_triage))
             if ctx.mode == "pr":
                 pr_summary = render_pr_summary_md(result, notes + output_notes, only_new=ctx.only_new)
                 write_report(ctx.output_dir / "pr_summary.md", pr_summary)
