@@ -77,6 +77,8 @@ riskmap analyze --sample --no-llm --output-dir ./.riskmap
 - `findings.json`: machine-readable findings
 - `merge_triage.json`: machine-readable merge triage package
 - `test_plan.json`: prioritized test recommendations
+- `run_metrics.json`: machine-readable run quality and execution metrics
+- PR mode also writes `pr_summary.md`; JSON output also includes graph artifacts (`graph.json`, `graph.analysis.json`, `graph.deterministic.json`)
 
 For all flags and modes:
 
@@ -120,7 +122,7 @@ For PR delta to work, the baseline directory must contain both `graph.json` and 
 
 - Stack plugins: `fastapi_pytest`, `django_drf`, `express_node`
 - Ingress families: `http`, `webhook`, `job`, `cli_task`, `event_consumer`
-- Issue types: missing tests on critical endpoints, missing transition handlers, dependency/version policy risks, contract mismatches, write/session integrity issues, and selected UI regressions
+- Issue types: missing tests on critical endpoints, missing transition handlers, dependency/version policy risks, generated test quality gaps, workflow automation risks, contract mismatches, write/session integrity issues, and selected UI regressions
 - Merge triage: `ready`, `review_required`, or `block_recommended` decision with a 10-minute test-first order
 
 ## Limits
@@ -140,6 +142,7 @@ riskmap-api
 ```
 
 Optional hardening is available through environment variables such as `AIRISK_API_TOKEN`, `AIRISK_API_RATE_LIMIT_PER_MINUTE`, and `AIRISK_API_MAX_BODY_BYTES`.
+If you need persistent API audit logging outside the output directory, set `AIRISK_API_AUDIT_LOG`.
 
 ## Development
 
