@@ -12,12 +12,12 @@ jobs:
   eval:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - uses: ./.github/actions/setup-python-env
 
       - name: Restore eval trend cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
         with:
           path: ./eval/.history
           key: eval-trend-${{ github.repository }}-${{ github.run_id }}
@@ -32,7 +32,7 @@ jobs:
 
       - name: Upload eval results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: eval-suite-${{ github.run_id }}
           path: eval/results/
@@ -40,7 +40,7 @@ jobs:
 
       - name: Save eval trend cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
         with:
           path: ./eval/.history
           key: eval-trend-${{ github.repository }}-${{ github.run_id }}
