@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
+from ai_risk_manager.integrations.github_pr_comments import GitHubCommentError, load_pr_comment_body, upsert_pr_comment
 from ai_risk_manager.pipeline.context_builder import build_run_context, normalize_cli_choice
 from ai_risk_manager.pipeline.run import run_pipeline
 from ai_risk_manager.sample_repo import resolve_sample_repo_path
@@ -65,6 +67,26 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Analyze bundled sample repo (eval/repos/milestone2_fastapi)",
     )
 
+    publish = subparsers.add_parser("publish-pr-comment", help="Publish PR summary markdown to a GitHub PR comment.")
+    publish.add_argument("--repo", required=True, help="Repository in owner/name form")
+    publish.add_argument("--pr-number", required=True, type=int, help="Pull request number")
+    publish.add_argument(
+        "--summary-file",
+        default=".riskmap/pr_summary.md",
+        help="Path to generated PR summary markdown",
+    )
+    publish.add_argument(
+        "--token-env",
+        default="GITHUB_TOKEN",
+        help="Environment variable that contains the GitHub token",
+    )
+    publish.add_argument(
+        "--api-base",
+        default="https://api.github.com",
+        help="GitHub API base URL (for GitHub Enterprise use cases)",
+    )
+    publish.add_argument("--dry-run", action="store_true", help="Print the comment body instead of publishing it")
+
     return parser
 
 
@@ -126,12 +148,49 @@ def _run_analyze(args: argparse.Namespace) -> int:
     return exit_code
 
 
+def _run_publish_pr_comment(args: argparse.Namespace) -> int:
+    summary_file = Path(args.summary_file).resolve()
+    try:
+        body = load_pr_comment_body(summary_file)
+    except GitHubCommentError as exc:
+        print(f"PR comment publish error: {exc}")
+        return 2
+
+    if args.dry_run:
+        print(body)
+        return 0
+
+    token = os.getenv(args.token_env, "").strip()
+    if not token:
+        print(f"PR comment publish error: environment variable '{args.token_env}' is empty or unset.")
+        return 2
+
+    try:
+        action, comment_id = upsert_pr_comment(
+            repo_full_name=args.repo,
+            pr_number=args.pr_number,
+            body=body,
+            token=token,
+            api_base=args.api_base,
+        )
+    except GitHubCommentError as exc:
+        print(f"PR comment publish error: {exc}")
+        return 2
+
+    print(
+        f"PR comment {action}. repo={args.repo} pr={args.pr_number} comment_id={comment_id} source={summary_file}"
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
     if args.command == "analyze":
         return _run_analyze(args)
+    if args.command == "publish-pr-comment":
+        return _run_publish_pr_comment(args)
 
     parser.print_help()
     return 2

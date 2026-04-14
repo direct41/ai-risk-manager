@@ -35,6 +35,7 @@ Artifacts include metadata fields:
 - `tool_version`
 
 Additional artifacts (for example `run_metrics.json`, `expansion_gate.json`) may be added in minor releases.
+PR-mode helper artifacts such as `pr_summary.json`, `pr_summary.md`, and `github_check.json` are additive and may evolve with new additive fields.
 
 Breaking changes include:
 

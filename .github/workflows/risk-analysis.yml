@@ -104,10 +104,13 @@ jobs:
             echo "Preflight unsupported for this repository in PR mode; writing fallback summary."
             printf '%s\n' \
               '<!-- ai-risk-manager -->' \
-              '## AI Risk Manager Summary' \
+              '## AI Risk Manager' \
               '' \
-              '- status: `skipped`' \
-              '- reason: `unsupported_repository_preflight`' \
+              '- Decision: `review_required`' \
+              '- Headline: Repository preflight is unsupported in strict PR mode; run a manual release-risk review.' \
+              '- Risk score: `0/100`' \
+              '- Scope: `full_fallback`' \
+              '- Fallback: `unsupported_repository_preflight`' \
               > ./.riskmap/pr_summary.md
           }
 
@@ -119,35 +122,10 @@ jobs:
           if-no-files-found: warn
 
       - name: Upsert PR comment
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
-        with:
-          script: |
-            const fs = require('fs');
-            const marker = '<!-- ai-risk-manager -->';
-            const body = fs.readFileSync('./.riskmap/pr_summary.md', 'utf8');
-            const { owner, repo } = context.repo;
-            const issue_number = context.payload.pull_request.number;
-
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner,
-              repo,
-              issue_number,
-              per_page: 100,
-            });
-
-            const existing = comments.find(c => c.body && c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number,
-                body,
-              });
-            }
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          riskmap publish-pr-comment \
+            --repo "${{ github.repository }}" \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --summary-file ./.riskmap/pr_summary.md

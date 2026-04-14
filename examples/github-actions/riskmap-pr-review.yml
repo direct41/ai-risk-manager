@@ -1,0 +1,90 @@
+name: AI Risk Manager PR Review
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  baseline-main:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install AI Risk Manager
+        run: pip install ai-risk-manager
+
+      - name: Analyze main
+        run: |
+          riskmap analyze \
+            --mode full \
+            --analysis-engine deterministic \
+            --no-llm \
+            --ci-mode advisory \
+            --output-dir ./.riskmap
+
+      - name: Prepare baseline
+        run: |
+          mkdir -p ./.riskmap/baseline
+          cp ./.riskmap/graph.json ./.riskmap/baseline/graph.json
+          cp ./.riskmap/findings.json ./.riskmap/baseline/findings.json
+
+      - name: Save baseline cache
+        uses: actions/cache/save@v4
+        with:
+          path: ./.riskmap/baseline
+          key: baseline-${{ github.repository }}-${{ github.sha }}
+
+  analyze-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install AI Risk Manager
+        run: pip install ai-risk-manager
+
+      - name: Restore baseline cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ./.riskmap/baseline
+          key: baseline-${{ github.repository }}-${{ github.event.pull_request.base.sha }}
+          restore-keys: |
+            baseline-${{ github.repository }}-
+
+      - name: Analyze PR
+        run: |
+          riskmap analyze \
+            --mode pr \
+            --base "${{ github.base_ref }}" \
+            --analysis-engine deterministic \
+            --no-llm \
+            --only-new \
+            --ci-mode advisory \
+            --baseline-graph ./.riskmap/baseline/graph.json \
+            --output-dir ./.riskmap
+
+      - name: Publish PR comment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          riskmap publish-pr-comment \
+            --repo "${{ github.repository }}" \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --summary-file ./.riskmap/pr_summary.md

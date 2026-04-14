@@ -166,6 +166,7 @@ def _run_signal_only_rules(signals: SignalBundle) -> list[Finding]:
     findings.extend(_run_ui_ergonomics_rule(signals))
     findings.extend(_run_generated_test_quality_rule(signals))
     findings.extend(_run_workflow_automation_risk_rule(signals))
+    findings.extend(_run_pr_change_risk_rule(signals))
     return findings
 
 
@@ -845,6 +846,249 @@ def _run_workflow_automation_risk_rule(signals: SignalBundle) -> list[Finding]:
                     ),
                     origin="deterministic",
                     evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+
+    return findings
+
+
+def _run_pr_change_risk_rule(signals: SignalBundle) -> list[Finding]:
+    findings: list[Finding] = []
+    for signal in signals.signals:
+        if signal.kind != "pr_change_risk":
+            continue
+
+        issue_type = str(signal.attributes.get("issue_type", "")).strip()
+        confidence = cast(Confidence, signal.confidence)
+        example_files = str(signal.attributes.get("example_files", "")).strip() or signal.source_ref
+
+        if issue_type == "code_change_without_test_delta":
+            changed_source_count = str(signal.attributes.get("changed_source_count", "")).strip() or "1"
+            finding_id = f"pr_code_change_without_test_delta:{signal.source_ref}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="pr_code_change_without_test_delta",
+                    title="PR changes code without any test delta",
+                    description=(
+                        "Changed source files were detected in the PR, but no changed test files were found. "
+                        "That usually means the review lacks explicit regression coverage for the new delta."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Detected {changed_source_count} changed source file(s) and zero changed test files. "
+                        f"Example files: {example_files}."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Add or update at least one test that exercises the changed behavior before merge."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=list(signal.evidence_refs),
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "dependency_change_without_test_delta":
+            changed_dependency_count = str(signal.attributes.get("changed_dependency_count", "")).strip() or "1"
+            finding_id = f"pr_dependency_change_without_test_delta:{signal.source_ref}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="pr_dependency_change_without_test_delta",
+                    title="PR changes dependency boundaries without any test delta",
+                    description=(
+                        "Dependency manifests or lockfiles changed, but no changed test files were found. "
+                        "That increases the chance of merge surprises from version or integration drift."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Detected {changed_dependency_count} changed dependency file(s) and zero changed test files. "
+                        f"Example files: {example_files}."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Run or add focused regression coverage for the dependency change and capture the expected behavior in tests."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=list(signal.evidence_refs),
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "contract_change_without_test_delta":
+            changed_contract_count = str(signal.attributes.get("changed_contract_count", "")).strip() or "1"
+            finding_id = f"pr_contract_change_without_test_delta:{signal.source_ref}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="pr_contract_change_without_test_delta",
+                    title="PR changes API or schema contracts without any test delta",
+                    description=(
+                        "Contract files such as OpenAPI, GraphQL, AsyncAPI, or protobuf schemas changed, "
+                        "but no changed test files were found. That increases compatibility risk for clients and handlers."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Detected {changed_contract_count} changed contract file(s) and zero changed test files. "
+                        f"Example files: {example_files}."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Add or update contract, integration, or consumer tests that exercise the changed schema before merge."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=list(signal.evidence_refs),
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "migration_change_without_test_delta":
+            changed_migration_count = str(signal.attributes.get("changed_migration_count", "")).strip() or "1"
+            finding_id = f"pr_migration_change_without_test_delta:{signal.source_ref}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="pr_migration_change_without_test_delta",
+                    title="PR changes database or migration boundaries without any test delta",
+                    description=(
+                        "Migration or schema files changed, but no changed test files were found. "
+                        "That increases rollback, compatibility, and data-integrity risk in the PR."
+                    ),
+                    severity="high",
+                    confidence=confidence,
+                    evidence=(
+                        f"Detected {changed_migration_count} changed migration/schema file(s) and zero changed test files. "
+                        f"Example files: {example_files}."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Add focused migration, integration, or rollback coverage before merge and review backward compatibility."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=list(signal.evidence_refs),
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "runtime_config_change_requires_review":
+            changed_runtime_config_count = str(signal.attributes.get("changed_runtime_config_count", "")).strip() or "1"
+            finding_id = f"pr_runtime_config_change_requires_review:{signal.source_ref}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="pr_runtime_config_change_requires_review",
+                    title="PR changes runtime or deployment configuration and should receive explicit review",
+                    description=(
+                        "Runtime configuration files changed in the PR. These changes can affect deployment behavior, "
+                        "permissions, networking, or environment assumptions even when application code is unchanged."
+                    ),
+                    severity="low",
+                    confidence=confidence,
+                    evidence=(
+                        f"Detected {changed_runtime_config_count} changed runtime config file(s). Example files: {example_files}."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Review rollout assumptions, environment variables, networking, and deployment behavior before merge."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=list(signal.evidence_refs),
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type in {
+            "auth_sensitive_path_change_requires_review",
+            "payment_sensitive_path_change_requires_review",
+            "admin_sensitive_path_change_requires_review",
+        }:
+            changed_sensitive_count = str(signal.attributes.get("changed_sensitive_count", "")).strip() or "1"
+            changed_test_count = int(str(signal.attributes.get("changed_test_count", "")).strip() or "0")
+            area = issue_type.split("_", 1)[0]
+            if area == "auth":
+                rule_id = "pr_auth_boundary_change_requires_review"
+                title = "PR touches authentication or authorization boundaries"
+                recommendation = (
+                    "Review authn/authz assumptions, negative-path coverage, and boundary enforcement before merge."
+                )
+            elif area == "payment":
+                rule_id = "pr_payment_boundary_change_requires_review"
+                title = "PR touches payment or billing boundaries"
+                recommendation = (
+                    "Review money movement, idempotency, failure handling, and rollback assumptions before merge."
+                )
+            else:
+                rule_id = "pr_admin_surface_change_requires_review"
+                title = "PR touches admin or privileged operator surfaces"
+                recommendation = (
+                    "Review privileged actions, authorization scope, and audit expectations before merge."
+                )
+
+            severity = "medium" if changed_test_count == 0 else "low"
+            finding_id = f"{rule_id}:{signal.source_ref}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id=rule_id,
+                    title=title,
+                    description=(
+                        "Changed files appear to touch a sensitive path. These areas deserve explicit review even when the code diff looks small."
+                    ),
+                    severity=cast(Severity, severity),
+                    confidence=confidence,
+                    evidence=(
+                        f"Detected {changed_sensitive_count} changed {area} file(s). "
+                        f"Changed test files in PR: {changed_test_count}. Example files: {example_files}."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=recommendation,
+                    origin="deterministic",
+                    evidence_refs=list(signal.evidence_refs),
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "workflow_change_requires_review":
+            changed_workflow_count = str(signal.attributes.get("changed_workflow_count", "")).strip() or "1"
+            finding_id = f"pr_workflow_change_requires_review:{signal.source_ref}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="pr_workflow_change_requires_review",
+                    title="PR changes repository automation and should receive explicit review",
+                    description=(
+                        "Workflow files changed in the PR. Even when the change is intentional, repository automation "
+                        "changes deserve an explicit review pass because they can affect delivery and trust boundaries."
+                    ),
+                    severity="low",
+                    confidence=confidence,
+                    evidence=(
+                        f"Detected {changed_workflow_count} changed workflow file(s). Example files: {example_files}."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Review workflow permission scope, external actions, shell steps, and expected CI behavior before merge."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=list(signal.evidence_refs),
                     generated_without_llm=True,
                 )
             )

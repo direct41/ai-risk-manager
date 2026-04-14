@@ -3,11 +3,37 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from ai_risk_manager.schemas.types import FindingsReport, PipelineResult
+from ai_risk_manager.schemas.types import (
+    GitHubCheckPayload,
+    PRSummary,
+    PRSummaryAction,
+    PRSummaryFinding,
+    FindingsReport,
+    PipelineResult,
+)
 
 SEVERITY_ORDER = "critical high medium low".split()
 CONFIDENCE_ORDER = {"high": 0, "medium": 1, "low": 2}
 SEVERITY_INDEX = {severity: idx for idx, severity in enumerate(SEVERITY_ORDER)}
+_REVIEW_FOCUS_BY_RULE = {
+    "critical_path_no_tests": "Add or update targeted regression tests for the changed critical path before merge.",
+    "missing_transition_handler": "Review state transitions and confirm handler coverage for changed lifecycle paths.",
+    "broken_invariant_on_transition": "Review state guards and invariant enforcement around changed transition logic.",
+    "dependency_risk_policy_violation": "Review dependency pinning and runtime drift before merge.",
+    "pr_code_change_without_test_delta": "Expand regression coverage for the changed application code before merge.",
+    "pr_dependency_change_without_test_delta": "Review dependency drift and validate changed runtime behavior with focused tests.",
+    "pr_contract_change_without_test_delta": "Check schema compatibility and update consumer or integration coverage around contract changes.",
+    "pr_migration_change_without_test_delta": "Review migration compatibility, rollback path, and data safety before merge.",
+    "pr_runtime_config_change_requires_review": "Review deployment and runtime configuration assumptions before merge.",
+    "pr_auth_boundary_change_requires_review": "Review authn/authz boundaries and negative-path coverage around the changed area.",
+    "pr_payment_boundary_change_requires_review": "Review payment safety, idempotency, and failure handling in the changed area.",
+    "pr_admin_surface_change_requires_review": "Review privileged actions and authorization scope in the changed admin surface.",
+    "pr_workflow_change_requires_review": "Review CI automation trust boundaries, permissions, and rollout behavior.",
+    "workflow_untrusted_context_to_shell": "Check automation trust boundaries and shell interpolation handling.",
+    "workflow_external_action_not_pinned": "Review automation supply-chain controls and immutable action pinning.",
+    "agent_generated_test_missing_negative_path": "Add negative-path coverage for changed write or validation flows.",
+    "agent_generated_test_nondeterministic_dependency": "Stabilize flaky tests before relying on them in merge decisions.",
+}
 
 
 def _summary_counts(findings: FindingsReport) -> dict[str, int]:
@@ -30,6 +56,34 @@ def _rank_findings(findings):
             f.rule_id,
         ),
     )
+
+
+def _review_focus(findings) -> list[str]:
+    focus: list[str] = []
+    seen: set[str] = set()
+    for finding in _rank_findings(findings):
+        message = _REVIEW_FOCUS_BY_RULE.get(finding.rule_id)
+        if not message or message in seen:
+            continue
+        focus.append(message)
+        seen.add(message)
+        if len(focus) >= 3:
+            break
+    return focus
+
+
+def _suppression_hints(findings) -> list[str]:
+    hints: list[str] = []
+    seen: set[str] = set()
+    for finding in _rank_findings(findings):
+        key = finding.suppression_key.strip()
+        if not key or key in seen:
+            continue
+        hints.append(key)
+        seen.add(key)
+        if len(hints) >= 4:
+            break
+    return hints
 
 
 def render_report_md(result: PipelineResult, notes: list[str]) -> str:
@@ -175,28 +229,7 @@ def write_report(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def render_pr_summary_md(result: PipelineResult, notes: list[str], *, only_new: bool = False) -> str:
-    marker = "<!-- ai-risk-manager -->"
-    lines = [marker, "## AI Risk Manager Summary", ""]
-    lines.append(f"- analysis_scope: `{result.analysis_scope}`")
-    lines.append(f"- support_level_applied: `{result.summary.support_level_applied}`")
-    lines.append(f"- repository_support_state: `{result.summary.repository_support_state}`")
-    lines.append(f"- effective_ci_mode: `{result.summary.effective_ci_mode}`")
-    lines.append(f"- competitive_mode: `{result.summary.competitive_mode}`")
-    lines.append(f"- graph_mode_applied: `{result.summary.graph_mode_applied}`")
-    lines.append(f"- semantic_signal_count: `{result.summary.semantic_signal_count}`")
-    lines.append(f"- merge_decision: `{result.merge_triage.decision}`")
-    lines.append(f"- release_risk_score: `{result.merge_triage.risk_score}/100`")
-    lines.append(f"- findings: `{len(result.findings.findings)}`")
-    lines.append(
-        f"- new/resolved/unchanged: `{result.summary.new_count}/{result.summary.resolved_count}/{result.summary.unchanged_count}`"
-    )
-    if result.summary.fallback_reason:
-        lines.append(f"- fallback_reason: `{result.summary.fallback_reason}`")
-    if notes:
-        lines.append(f"- notes: `{'; '.join(notes)}`")
-    lines.append("")
-
+def build_pr_summary(result: PipelineResult, notes: list[str], *, only_new: bool = False) -> PRSummary:
     top_candidates = result.findings.findings
     if only_new:
         min_rank = SEVERITY_INDEX["high"]
@@ -206,29 +239,146 @@ def render_pr_summary_md(result: PipelineResult, notes: list[str], *, only_new: 
             if finding.status == "new" and SEVERITY_INDEX.get(finding.severity, len(SEVERITY_ORDER)) <= min_rank
         ]
 
-    top = _rank_findings(top_candidates)[:5]
-    if not top:
+    top_findings = [
+        PRSummaryFinding(
+            rule_id=finding.rule_id,
+            title=finding.title,
+            severity=finding.severity,
+            confidence=finding.confidence,
+            status=finding.status,
+            source_ref=finding.source_ref,
+            recommendation=finding.recommendation,
+            evidence_ref_count=len(finding.evidence_refs),
+            suppression_key=finding.suppression_key,
+        )
+        for finding in _rank_findings(top_candidates)[:5]
+    ]
+    top_actions = [
+        PRSummaryAction(
+            rule_id=action.rule_id,
+            priority=action.priority,
+            source_ref=action.source_ref,
+            action=action.action,
+            estimated_minutes=action.estimated_minutes,
+        )
+        for action in result.merge_triage.actions[:3]
+    ]
+    return PRSummary(
+        marker="ai-risk-manager",
+        decision=result.merge_triage.decision,
+        headline=result.merge_triage.headline,
+        risk_score=result.merge_triage.risk_score,
+        analysis_scope=result.analysis_scope,
+        support_level_applied=result.summary.support_level_applied,
+        repository_support_state=result.summary.repository_support_state,
+        effective_ci_mode=result.summary.effective_ci_mode,
+        findings_count=len(result.findings.findings),
+        new_count=result.summary.new_count,
+        resolved_count=result.summary.resolved_count,
+        unchanged_count=result.summary.unchanged_count,
+        fallback_reason=result.summary.fallback_reason,
+        reasons=list(result.merge_triage.reasons[:3]),
+        review_focus=_review_focus(top_candidates),
+        suppression_hints=_suppression_hints(top_candidates),
+        notes=list(notes),
+        top_findings=top_findings,
+        top_actions=top_actions,
+    )
+
+
+def render_pr_summary_md(summary: PRSummary) -> str:
+    marker = f"<!-- {summary.marker} -->"
+    lines = [marker, "## AI Risk Manager", ""]
+    lines.append(f"- Decision: `{summary.decision}`")
+    lines.append(f"- Headline: {summary.headline}")
+    lines.append(f"- Risk score: `{summary.risk_score}/100`")
+    lines.append(f"- Scope: `{summary.analysis_scope}`")
+    lines.append(
+        f"- PR delta: new=`{summary.new_count}`, resolved=`{summary.resolved_count}`, unchanged=`{summary.unchanged_count}`"
+    )
+    lines.append(
+        f"- Support: `{summary.support_level_applied}` / `{summary.repository_support_state}` / ci=`{summary.effective_ci_mode}`"
+    )
+    if summary.fallback_reason:
+        lines.append(f"- Fallback: `{summary.fallback_reason}`")
+    lines.append("")
+
+    if summary.reasons:
+        lines.append("### Why Review")
+        lines.append("")
+        for reason in summary.reasons:
+            lines.append(f"- {reason}")
+        lines.append("")
+
+    if summary.review_focus:
+        lines.append("### Review Focus")
+        lines.append("")
+        for item in summary.review_focus:
+            lines.append(f"- {item}")
+        lines.append("")
+
+    lines.append("### Top Risks")
+    lines.append("")
+    if not summary.top_findings:
         lines.append("No findings in current PR scope.")
     else:
-        lines.append("### Top Findings")
-        lines.append("")
-        for finding in top:
+        for finding in summary.top_findings:
             lines.append(
                 f"- [{finding.severity}] [{finding.status}] `{finding.rule_id}` at `{finding.source_ref}`: "
-                f"{finding.title}. confidence=`{finding.confidence}`, evidence_refs=`{len(finding.evidence_refs)}`. "
-                f"Action: {finding.recommendation}"
+                f"{finding.title}. Action: {finding.recommendation}"
             )
     lines.append("")
+    if summary.suppression_hints:
+        lines.append("### Suppression Hints")
+        lines.append("")
+        lines.append("If a finding is intentional, add one of these entries to `.airiskignore`:")
+        lines.append("")
+        lines.append("```yaml")
+        for key in summary.suppression_hints:
+            lines.append(f'- key: "{key}"')
+        lines.append("```")
+        lines.append("")
     lines.append("### Test First")
     lines.append("")
-    if not result.merge_triage.actions:
+    if not summary.top_actions:
         lines.append("No immediate test-first action required.")
     else:
-        for action in result.merge_triage.actions[:3]:
+        for action in summary.top_actions:
             lines.append(
                 f"- [{action.priority}] `{action.rule_id}` at `{action.source_ref}` "
                 f"({action.estimated_minutes} min): {action.action}"
             )
     lines.append("")
-    lines.append("Full details: see workflow artifacts (`merge_triage.md`, `report.md`, `findings.json`, `test_plan.json`).")
+    lines.append("Full details: see `pr_summary.json`, `merge_triage.md`, `report.md`, `findings.json`, and `test_plan.json`.")
     return "\n".join(lines).strip() + "\n"
+
+
+def build_github_check_payload(summary: PRSummary) -> GitHubCheckPayload:
+    if summary.decision == "block_recommended":
+        conclusion = "action_required"
+    elif summary.decision == "review_required":
+        conclusion = "neutral"
+    else:
+        conclusion = "success"
+
+    short_lines = [
+        f"Decision: {summary.decision}",
+        f"Risk score: {summary.risk_score}/100",
+        f"Scope: {summary.analysis_scope}",
+        f"PR delta: new={summary.new_count}, resolved={summary.resolved_count}, unchanged={summary.unchanged_count}",
+    ]
+    if summary.review_focus:
+        short_lines.append(f"Review focus: {summary.review_focus[0]}")
+    if summary.top_findings:
+        short_lines.append(
+            "Top risk: "
+            f"{summary.top_findings[0].rule_id} at {summary.top_findings[0].source_ref}"
+        )
+    text = render_pr_summary_md(summary)
+    return GitHubCheckPayload(
+        name="AI Risk Manager",
+        conclusion=conclusion,
+        title=summary.headline,
+        summary="\n".join(short_lines),
+        text=text,
+    )
