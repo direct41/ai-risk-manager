@@ -24,6 +24,7 @@ AnalysisScope = Literal["impacted", "full", "full_fallback"]
 IngressFamily = Literal["http", "webhook", "job", "event_consumer", "cli_task"]
 IngressOperation = Literal["write", "read", "execute", "consume"]
 MergeDecision = Literal["ready", "review_required", "block_recommended"]
+GitHubCheckConclusion = Literal["success", "neutral", "action_required"]
 
 
 @dataclass
@@ -145,6 +146,60 @@ class MergeTriage:
     reasons: list[str] = field(default_factory=list)
     actions: list[MergeTriageAction] = field(default_factory=list)
     generated_without_llm: bool = True
+
+
+@dataclass
+class PRSummaryFinding:
+    rule_id: str
+    title: str
+    severity: Severity
+    confidence: Confidence
+    status: FindingStatus
+    source_ref: str
+    recommendation: str
+    evidence_ref_count: int
+    suppression_key: str
+
+
+@dataclass
+class PRSummaryAction:
+    rule_id: str
+    priority: Severity
+    source_ref: str
+    action: str
+    estimated_minutes: int
+
+
+@dataclass
+class PRSummary:
+    marker: str
+    decision: MergeDecision
+    headline: str
+    risk_score: int
+    analysis_scope: AnalysisScope
+    support_level_applied: AppliedSupportLevel
+    repository_support_state: RepositorySupportState
+    effective_ci_mode: CIMode
+    findings_count: int
+    new_count: int
+    resolved_count: int
+    unchanged_count: int
+    fallback_reason: str | None = None
+    reasons: list[str] = field(default_factory=list)
+    review_focus: list[str] = field(default_factory=list)
+    suppression_hints: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    top_findings: list[PRSummaryFinding] = field(default_factory=list)
+    top_actions: list[PRSummaryAction] = field(default_factory=list)
+
+
+@dataclass
+class GitHubCheckPayload:
+    name: str
+    conclusion: GitHubCheckConclusion
+    title: str
+    summary: str
+    text: str
 
 
 @dataclass

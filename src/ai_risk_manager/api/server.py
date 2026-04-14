@@ -63,6 +63,8 @@ _ARTIFACT_FILES = (
     "merge_triage.md",
     "run_metrics.json",
     "report.md",
+    "github_check.json",
+    "pr_summary.json",
     "pr_summary.md",
 )
 

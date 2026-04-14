@@ -14,8 +14,10 @@ from ai_risk_manager.agents.semantic_risk_agent import generate_semantic_finding
 from ai_risk_manager.agents.semantic_signal_agent import generate_semantic_signals
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle, CollectorPlugin
 from ai_risk_manager.collectors.plugins.registry import get_plugin_for_stack
+from ai_risk_manager.collectors.plugins.universal_artifacts import collect_universal_artifacts
 from ai_risk_manager.graph.builder import build_graph, low_confidence_ratio
 from ai_risk_manager.pipeline.merge_findings import ensure_fingerprint, merge_findings
+from ai_risk_manager.pipeline.pr_change_signals import build_pr_change_signal_bundle
 from ai_risk_manager.pipeline.sinks import PipelineSinks
 from ai_risk_manager.rules.engine import run_rules
 from ai_risk_manager.rules.policy import PolicyConfig, apply_policy, is_blocking_enabled_for_finding, load_policy
@@ -109,10 +111,10 @@ def _resolve_repository_support_state(
     plugin: CollectorPlugin | None,
     support_level_applied: AppliedSupportLevel,
 ) -> RepositorySupportState:
-    if plugin is None:
-        return "unsupported"
     if support_level_applied == "l0":
         return "partial"
+    if plugin is None:
+        return "unsupported"
     return "supported"
 
 
@@ -374,6 +376,7 @@ class _ScopeStage:
     analysis_graph: Graph
     analysis_signals: SignalBundle
     fallback_reason: str | None
+    changed_files: set[str] | None
 
 
 @dataclass
@@ -416,7 +419,7 @@ def _stage_preflight(
     if plugin is None:
         preflight = PreflightResult(
             status="WARN",
-            reasons=[*detection.reasons, "Unknown stack: fallback to L0 generic advisory mode."],
+            reasons=[*detection.reasons, "Unknown stack: fallback to L0 universal risk mode."],
         )
     else:
         preflight = plugin.preflight(ctx.repo_path, probe_data=detection.probe_data)
@@ -461,7 +464,7 @@ def _stage_collect_artifacts(
     total_steps: int,
 ) -> _CollectStage:
     t = sinks.progress.start(2, total_steps, "Collecting artifacts")
-    artifacts = ArtifactBundle() if plugin is None else plugin.collect(ctx.repo_path)
+    artifacts = collect_universal_artifacts(ctx.repo_path) if plugin is None else plugin.collect(ctx.repo_path)
     collect_signals_from_artifacts = getattr(plugin, "collect_signals_from_artifacts", None) if plugin is not None else None
     if callable(collect_signals_from_artifacts):
         signals = collect_signals_from_artifacts(artifacts)
@@ -495,9 +498,15 @@ def _stage_resolve_scope(
     analysis_graph = graph
     analysis_signals = signals
     fallback_reason: str | None = None
+    changed_files: set[str] | None = None
     if ctx.mode == "pr":
+        changed_files = _resolve_changed_files(ctx.repo_path, ctx.base, sinks=sinks)
+        if changed_files is None:
+            notes.append("Could not resolve changed files for PR heuristics.")
+        else:
+            notes.append(f"Resolved {len(changed_files)} changed file(s) for PR heuristics.")
+
         if _baseline_graph_is_valid(ctx.baseline_graph):
-            changed_files = _resolve_changed_files(ctx.repo_path, ctx.base, sinks=sinks)
             if changed_files is None:
                 analysis_scope = "full_fallback"
                 fallback_reason = "changed_files_unresolved"
@@ -527,6 +536,7 @@ def _stage_resolve_scope(
         analysis_graph=analysis_graph,
         analysis_signals=analysis_signals,
         fallback_reason=fallback_reason,
+        changed_files=changed_files,
     )
 
 
@@ -580,8 +590,15 @@ def _stage_analysis(
     total_steps: int,
     notes: list[str],
 ) -> tuple[_AnalysisStage | None, int | None]:
+    deterministic_signals = scope.analysis_signals
+    if ctx.mode == "pr":
+        pr_change_signals = build_pr_change_signal_bundle(scope.changed_files)
+        if pr_change_signals.signals:
+            notes.append(f"Universal PR heuristics produced {len(pr_change_signals.signals)} signal(s).")
+            deterministic_signals = merge_signal_bundles(deterministic_signals, pr_change_signals, min_confidence="low")
+
     t = sinks.progress.start(4, total_steps, "Running deterministic rules")
-    findings_raw = run_rules(scope.analysis_signals, risk_policy=ctx.risk_policy)
+    findings_raw = run_rules(deterministic_signals, risk_policy=ctx.risk_policy)
     sinks.progress.finish(4, total_steps, "Running deterministic rules", t)
     deterministic_graph = scope.analysis_graph
 
@@ -608,7 +625,7 @@ def _stage_analysis(
     notes.extend(semantic_signal_notes)
     filtered_semantic_signals = merge_signal_bundles(semantic_signals, min_confidence=ctx.min_confidence)
     semantic_signal_count = len(filtered_semantic_signals.signals)
-    merged_signals = merge_signal_bundles(scope.analysis_signals, filtered_semantic_signals, min_confidence="low")
+    merged_signals = merge_signal_bundles(deterministic_signals, filtered_semantic_signals, min_confidence="low")
     semantic_graph = build_graph(merged_signals)
     semantic_findings = FindingsReport(findings=[], generated_without_llm=True)
     generic_advisory_findings = FindingsReport(findings=[], generated_without_llm=True)

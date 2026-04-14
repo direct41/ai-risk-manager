@@ -9,6 +9,7 @@ import pytest
 from ai_risk_manager.api.server import app
 from ai_risk_manager.pipeline.run import run_pipeline
 from ai_risk_manager.schemas.types import RunContext
+from ai_risk_manager.stacks.discovery import StackDetectionResult
 
 pytest.importorskip("httpx")
 TestClient = pytest.importorskip("fastapi.testclient").TestClient
@@ -70,6 +71,37 @@ def test_api_analyze_matches_pipeline_for_same_input(tmp_path: Path, write_file)
     assert isinstance(api_data["diagnostics"]["duration_ms"], int)
     assert api_data["artifacts"]["api_audit.json"].endswith("api_audit.json")
     assert (output_dir / "api_audit.json").exists()
+
+
+def test_api_pr_mode_exposes_pr_summary_artifacts(tmp_path: Path, write_file) -> None:
+    write_file(tmp_path / "src" / "service.py", "def mutate(payload):\n    return payload\n")
+
+    output_dir = tmp_path / ".riskmap_pr_api"
+    payload = {
+        "path": str(tmp_path),
+        "mode": "pr",
+        "base": "main",
+        "no_llm": True,
+        "output_dir": str(output_dir),
+        "format": "json",
+        "support_level": "auto",
+    }
+
+    client = TestClient(app)
+    with patch(
+        "ai_risk_manager.pipeline.run.detect_stack",
+        return_value=StackDetectionResult(stack_id="unknown", confidence="low", reasons=["unknown stack"]),
+    ):
+        with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"src/service.py"}):
+            response = client.post("/v1/analyze", json=payload)
+
+    assert response.status_code == 200
+    api_data = response.json()
+    assert api_data["artifacts"]["github_check.json"].endswith("github_check.json")
+    assert api_data["artifacts"]["pr_summary.json"].endswith("pr_summary.json")
+    pr_summary = json.loads((output_dir / "pr_summary.json").read_text(encoding="utf-8"))
+    assert pr_summary["marker"] == "ai-risk-manager"
+    assert "top_findings" in pr_summary
 
 
 def test_api_returns_400_for_missing_repo_path(tmp_path: Path) -> None:

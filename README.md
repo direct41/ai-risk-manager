@@ -18,6 +18,7 @@ It works best on backend-heavy codebases and currently supports FastAPI, Django/
 - Starts with deterministic analysis; AI is optional.
 - Supports PR mode to highlight new vs unchanged risk.
 - Reports partial support honestly instead of pretending full coverage.
+- Still provides universal PR and automation heuristics on unknown stacks.
 
 ## Install
 
@@ -78,7 +79,7 @@ riskmap analyze --sample --no-llm --output-dir ./.riskmap
 - `merge_triage.json`: machine-readable merge triage package
 - `test_plan.json`: prioritized test recommendations
 - `run_metrics.json`: machine-readable run quality and execution metrics
-- PR mode also writes `pr_summary.md`; JSON output also includes graph artifacts (`graph.json`, `graph.analysis.json`, `graph.deterministic.json`)
+- PR mode also writes `pr_summary.md`, `pr_summary.json`, and `github_check.json`; JSON output also includes graph artifacts (`graph.json`, `graph.analysis.json`, `graph.deterministic.json`)
 
 For all flags and modes:
 
@@ -111,6 +112,19 @@ riskmap analyze \
 
 For PR delta to work, the baseline directory must contain both `graph.json` and `findings.json`.
 
+Publish the generated PR summary back to GitHub:
+
+```bash
+export GITHUB_TOKEN=...
+riskmap publish-pr-comment \
+  --repo owner/repo \
+  --pr-number 123 \
+  --summary-file ./.riskmap/pr_summary.md
+```
+
+A copy-paste GitHub Actions example is available at `examples/github-actions/riskmap-pr-review.yml`.
+The PR summary includes grouped `.airiskignore` suppression hints for intentional risk acceptance.
+
 ## Works Best For
 
 - backend teams doing pre-merge or pre-release reviews
@@ -122,14 +136,14 @@ For PR delta to work, the baseline directory must contain both `graph.json` and 
 
 - Stack plugins: `fastapi_pytest`, `django_drf`, `express_node`
 - Ingress families: `http`, `webhook`, `job`, `cli_task`, `event_consumer`
-- Issue types: missing tests on critical endpoints, missing transition handlers, dependency/version policy risks, generated test quality gaps, workflow automation risks, contract mismatches, write/session integrity issues, and selected UI regressions
+- Issue types: missing tests on critical endpoints, missing transition handlers, dependency/version policy risks, generated test quality gaps, workflow automation risks, PR code/dependency/contract/migration deltas without test changes, runtime config review signals, auth/payment/admin-sensitive path review signals, contract mismatches, write/session integrity issues, and selected UI regressions
 - Merge triage: `ready`, `review_required`, or `block_recommended` decision with a 10-minute test-first order
 
 ## Limits
 
 - Not a business-logic verifier
 - Not a generic multi-language SAST replacement
-- Unknown stacks fall back to advisory mode and may produce partial results
+- Unknown stacks fall back to partial support with universal heuristics and advisory merge triage
 - Merge triage is an evidence-backed review aid, not an automatic release approval
 
 ## API

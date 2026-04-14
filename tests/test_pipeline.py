@@ -82,6 +82,8 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     assert (out_dir / "merge_triage.md").exists()
     assert (out_dir / "run_metrics.json").exists()
     assert (out_dir / "report.md").exists()
+    assert (out_dir / "github_check.json").exists()
+    assert (out_dir / "pr_summary.json").exists()
     assert (out_dir / "pr_summary.md").exists()
     graph = json.loads((out_dir / "graph.json").read_text(encoding="utf-8"))
     assert all(not node["source_ref"].startswith("/") for node in graph["nodes"])
@@ -94,14 +96,28 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     assert "repository_support_state:" in report
     assert "## Merge Triage" in report
     assert "## 10-Minute Test-First Order" in report
+    pr_summary_json = json.loads((out_dir / "pr_summary.json").read_text(encoding="utf-8"))
+    assert pr_summary_json["schema_version"] == "1.1"
+    assert pr_summary_json["marker"] == "ai-risk-manager"
+    assert "top_findings" in pr_summary_json
+    assert "top_actions" in pr_summary_json
+    assert "review_focus" in pr_summary_json
+    assert "suppression_hints" in pr_summary_json
+    if pr_summary_json["top_findings"]:
+        assert "suppression_key" in pr_summary_json["top_findings"][0]
+    github_check_json = json.loads((out_dir / "github_check.json").read_text(encoding="utf-8"))
+    assert github_check_json["schema_version"] == "1.1"
+    assert github_check_json["name"] == "AI Risk Manager"
+    assert github_check_json["conclusion"] in {"success", "neutral", "action_required"}
+    assert "Decision:" in github_check_json["text"]
     pr_summary = (out_dir / "pr_summary.md").read_text(encoding="utf-8")
-    assert "confidence=`" in pr_summary
-    assert "evidence_refs=`" in pr_summary
-    assert "graph_mode_applied:" in pr_summary
-    assert "semantic_signal_count:" in pr_summary
-    assert "effective_ci_mode:" in pr_summary
-    assert "repository_support_state:" in pr_summary
-    assert "merge_decision:" in pr_summary
+    assert "## AI Risk Manager" in pr_summary
+    assert "Decision:" in pr_summary
+    assert "Review Focus" in pr_summary
+    assert "Top Risks" in pr_summary
+    assert "Suppression Hints" in pr_summary
+    assert "Test First" in pr_summary
+    assert "If a finding is intentional" in pr_summary
     merge_triage = json.loads((out_dir / "merge_triage.json").read_text(encoding="utf-8"))
     assert merge_triage["decision"] in {"ready", "review_required", "block_recommended"}
     assert "actions" in merge_triage
@@ -1080,7 +1096,7 @@ def test_unknown_stack_auto_uses_l0_advisory_and_does_not_fail(tmp_path: Path, w
     assert code == 0
     assert result is not None
     assert result.summary.support_level_applied == "l0"
-    assert result.summary.repository_support_state == "unsupported"
+    assert result.summary.repository_support_state == "partial"
     assert result.summary.effective_ci_mode == "advisory"
     assert any("ci_mode overridden to advisory" in note for note in notes)
 
@@ -1147,10 +1163,143 @@ def test_unknown_stack_ai_first_uses_generic_advisory_findings_and_drops_unverif
     assert code == 0
     assert result is not None
     assert result.summary.support_level_applied == "l0"
-    assert result.summary.repository_support_state == "unsupported"
+    assert result.summary.repository_support_state == "partial"
     assert result.summary.effective_ci_mode == "advisory"
     assert [finding.rule_id for finding in result.findings.findings] == ["advisory_unverified_write_path"]
     assert any("Dropped unverifiable AI findings: 1." in note for note in notes)
+
+
+def test_unknown_stack_collects_universal_workflow_findings(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / ".github" / "workflows" / "ci.yml",
+        "jobs:\n"
+        "  review:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - name: Checkout\n"
+        "        uses: actions/checkout@v4\n",
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+        support_level="auto",
+    )
+
+    with patch(
+        "ai_risk_manager.pipeline.run.detect_stack",
+        return_value=StackDetectionResult(stack_id="unknown", confidence="low", reasons=["unknown stack"]),
+    ):
+        result, code, _ = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    assert result.summary.repository_support_state == "partial"
+    rule_ids = {finding.rule_id for finding in result.findings.findings}
+    assert "workflow_external_action_not_pinned" in rule_ids
+
+
+def test_unknown_stack_pr_mode_adds_universal_pr_change_findings_without_baseline(tmp_path: Path, write_file) -> None:
+    write_file(tmp_path / "src" / "service.py", "def mutate(payload):\n    return payload\n")
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+        support_level="auto",
+    )
+
+    with patch(
+        "ai_risk_manager.pipeline.run.detect_stack",
+        return_value=StackDetectionResult(stack_id="unknown", confidence="low", reasons=["unknown stack"]),
+    ):
+        with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"src/service.py"}):
+            result, code, notes = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    assert result.summary.repository_support_state == "partial"
+    assert any(finding.rule_id == "pr_code_change_without_test_delta" for finding in result.findings.findings)
+    assert any("Universal PR heuristics produced 1 signal(s)." in note for note in notes)
+
+
+def test_unknown_stack_pr_mode_flags_contract_migration_and_runtime_config_changes(tmp_path: Path, write_file) -> None:
+    write_file(tmp_path / "openapi.yaml", "openapi: 3.1.0\ninfo:\n  title: Notes API\n")
+    write_file(tmp_path / "alembic" / "versions" / "20260414_add_orders.py", "revision = 'x'\n")
+    write_file(tmp_path / "Dockerfile", "FROM python:3.12-slim\n")
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+        support_level="auto",
+    )
+
+    with patch(
+        "ai_risk_manager.pipeline.run.detect_stack",
+        return_value=StackDetectionResult(stack_id="unknown", confidence="low", reasons=["unknown stack"]),
+    ):
+        with patch(
+            "ai_risk_manager.pipeline.run._resolve_changed_files",
+            return_value={"openapi.yaml", "alembic/versions/20260414_add_orders.py", "Dockerfile"},
+        ):
+            result, code, _ = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    rule_ids = {finding.rule_id for finding in result.findings.findings}
+    assert "pr_contract_change_without_test_delta" in rule_ids
+    assert "pr_migration_change_without_test_delta" in rule_ids
+    assert "pr_runtime_config_change_requires_review" in rule_ids
+
+
+def test_unknown_stack_pr_mode_flags_sensitive_paths_and_review_focus(tmp_path: Path, write_file) -> None:
+    write_file(tmp_path / "src" / "auth" / "session_service.py", "def rotate_session(payload):\n    return payload\n")
+    write_file(tmp_path / "src" / "billing" / "charge_refund.py", "def refund(payload):\n    return payload\n")
+    write_file(tmp_path / "src" / "admin" / "moderation.py", "def ban_user(payload):\n    return payload\n")
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+        support_level="auto",
+    )
+
+    with patch(
+        "ai_risk_manager.pipeline.run.detect_stack",
+        return_value=StackDetectionResult(stack_id="unknown", confidence="low", reasons=["unknown stack"]),
+    ):
+        with patch(
+            "ai_risk_manager.pipeline.run._resolve_changed_files",
+            return_value={
+                "src/auth/session_service.py",
+                "src/billing/charge_refund.py",
+                "src/admin/moderation.py",
+            },
+        ):
+            result, code, _ = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    rule_ids = {finding.rule_id for finding in result.findings.findings}
+    assert "pr_auth_boundary_change_requires_review" in rule_ids
+    assert "pr_payment_boundary_change_requires_review" in rule_ids
+    assert "pr_admin_surface_change_requires_review" in rule_ids
+    pr_summary = (ctx.output_dir / "pr_summary.md").read_text(encoding="utf-8")
+    assert "Review authn/authz boundaries" in pr_summary
 
 
 def test_known_stack_forced_l0_is_marked_partial_advisory(tmp_path: Path, write_file) -> None:
