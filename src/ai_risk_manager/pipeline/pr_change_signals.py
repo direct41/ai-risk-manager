@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ai_risk_manager.signals.types import CapabilitySignal, SignalBundle
+from ai_risk_manager.signals.types import CapabilitySignal, SignalBundle, SignalKind
 
 _SOURCE_SUFFIXES = {
     ".py",
@@ -232,8 +232,9 @@ def _sensitive_area_matches(paths: list[str], area: str) -> list[str]:
 
 
 def build_pr_change_signal_bundle(changed_files: set[str] | None) -> SignalBundle:
+    empty_supported_kinds: set[SignalKind] = set()
     if not changed_files:
-        return SignalBundle(signals=[], supported_kinds=set())
+        return SignalBundle(signals=[], supported_kinds=empty_supported_kinds)
 
     normalized = sorted({_normalize_path(path) for path in changed_files if _normalize_path(path)})
     changed_tests = [path for path in normalized if _is_test_file(path)]
@@ -257,7 +258,7 @@ def build_pr_change_signal_bundle(changed_files: set[str] | None) -> SignalBundl
     }
 
     signals: list[CapabilitySignal] = []
-    supported_kinds = {"pr_change_risk"}
+    supported_kinds: set[SignalKind] = {"pr_change_risk"}
 
     if changed_sources and not changed_tests and not set(changed_sources).issubset(sensitive_source_paths):
         evidence_refs = _example_refs(changed_sources)
@@ -393,7 +394,10 @@ def build_pr_change_signal_bundle(changed_files: set[str] | None) -> SignalBundl
             )
         )
 
-    return SignalBundle(signals=signals, supported_kinds=supported_kinds if signals else set())
+    return SignalBundle(
+        signals=signals,
+        supported_kinds=supported_kinds if signals else empty_supported_kinds,
+    )
 
 
 __all__ = ["build_pr_change_signal_bundle"]

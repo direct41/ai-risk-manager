@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ai_risk_manager.schemas.types import (
     GitHubCheckPayload,
+    GitHubCheckConclusion,
     PRSummary,
     PRSummaryAction,
     PRSummaryFinding,
@@ -354,6 +355,7 @@ def render_pr_summary_md(summary: PRSummary) -> str:
 
 
 def build_github_check_payload(summary: PRSummary) -> GitHubCheckPayload:
+    conclusion: GitHubCheckConclusion
     if summary.decision == "block_recommended":
         conclusion = "action_required"
     elif summary.decision == "review_required":

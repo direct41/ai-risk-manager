@@ -28,6 +28,17 @@ def _api_url(api_base: str, path: str) -> str:
     return f"{api_base.rstrip('/')}{path}"
 
 
+def _comment_id(value: object) -> int:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise GitHubCommentError(f"GitHub API returned a non-numeric comment id: {value!r}") from exc
+    raise GitHubCommentError("GitHub API returned a comment payload without a valid id.")
+
+
 def _github_json_request(
     *,
     api_base: str,
@@ -99,7 +110,7 @@ def upsert_pr_comment(
     )
 
     if existing is not None:
-        comment_id = int(existing.get("id"))
+        comment_id = _comment_id(existing.get("id"))
         _github_json_request(
             api_base=api_base,
             path=f"/repos/{safe_repo}/issues/comments/{comment_id}",
@@ -118,7 +129,7 @@ def upsert_pr_comment(
     )
     if not isinstance(created, dict) or "id" not in created:
         raise GitHubCommentError("GitHub API returned an unexpected create-comment payload.")
-    return "created", int(created["id"])
+    return "created", _comment_id(created["id"])
 
 
 __all__ = ["GitHubCommentError", "PR_SUMMARY_MARKER", "load_pr_comment_body", "upsert_pr_comment"]
