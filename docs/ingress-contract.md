@@ -1,5 +1,9 @@
 # Ingress Contract v1
 
+Deprecated as a standalone architecture direction.
+This document describes the current ingress normalization used by the shipped `code_risk` profile.
+Use `docs/architecture.md` for the canonical product architecture.
+
 This document defines the normalized ingress contract introduced in Stage 13.
 
 ## Purpose

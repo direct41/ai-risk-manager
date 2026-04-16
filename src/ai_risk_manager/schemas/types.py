@@ -18,6 +18,8 @@ RiskPolicy = Literal["conservative", "balanced", "aggressive"]
 CompetitiveMode = Literal["deterministic", "hybrid"]
 GraphMode = Literal["deterministic", "enriched"]
 RepositorySupportState = Literal["supported", "partial", "unsupported"]
+RiskProfileId = Literal["code_risk", "ui_flow_risk", "business_invariant_risk"]
+RiskProfileApplicability = Literal["supported", "partial", "not_applicable"]
 TestType = Literal["api", "integration", "unit", "e2e"]
 PreflightStatus = Literal["PASS", "WARN", "FAIL"]
 AnalysisScope = Literal["impacted", "full", "full_fallback"]
@@ -25,6 +27,8 @@ IngressFamily = Literal["http", "webhook", "job", "event_consumer", "cli_task"]
 IngressOperation = Literal["write", "read", "execute", "consume"]
 MergeDecision = Literal["ready", "review_required", "block_recommended"]
 GitHubCheckConclusion = Literal["success", "neutral", "action_required"]
+TrustBand = Literal["strong", "moderate", "weak"]
+TrustHistorySignal = Literal["neutral", "accepted_bias", "suppressed_bias", "actioned_bias"]
 
 
 @dataclass
@@ -86,6 +90,7 @@ class Finding:
     status: FindingStatus = "unchanged"
     evidence_refs: list[str] = field(default_factory=list)
     generated_without_llm: bool = False
+    trust: "FindingTrust" | None = None
 
 
 @dataclass
@@ -149,6 +154,12 @@ class MergeTriage:
 
 
 @dataclass
+class ProfileSummary:
+    profile_id: RiskProfileId
+    applicability: RiskProfileApplicability
+
+
+@dataclass
 class PRSummaryFinding:
     rule_id: str
     title: str
@@ -159,6 +170,8 @@ class PRSummaryFinding:
     recommendation: str
     evidence_ref_count: int
     suppression_key: str
+    trust_band: TrustBand | None = None
+    trust_score: float | None = None
 
 
 @dataclass
@@ -184,6 +197,7 @@ class PRSummary:
     new_count: int
     resolved_count: int
     unchanged_count: int
+    profiles: list[ProfileSummary] = field(default_factory=list)
     fallback_reason: str | None = None
     reasons: list[str] = field(default_factory=list)
     review_focus: list[str] = field(default_factory=list)
@@ -191,6 +205,7 @@ class PRSummary:
     notes: list[str] = field(default_factory=list)
     top_findings: list[PRSummaryFinding] = field(default_factory=list)
     top_actions: list[PRSummaryAction] = field(default_factory=list)
+    changed_files: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -200,6 +215,15 @@ class GitHubCheckPayload:
     title: str
     summary: str
     text: str
+
+
+@dataclass
+class FindingTrust:
+    score: float
+    band: TrustBand
+    estimated_precision: float
+    evidence_strength: Confidence
+    history_signal: TrustHistorySignal = "neutral"
 
 
 @dataclass
@@ -242,6 +266,8 @@ class RunSummary:
     graph_mode_applied: GraphMode = "deterministic"
     semantic_signal_count: int = 0
     repository_support_state: RepositorySupportState = "supported"
+    profiles: list[ProfileSummary] = field(default_factory=list)
+    profile_review_focus: list[str] = field(default_factory=list)
 
 
 @dataclass

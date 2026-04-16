@@ -110,6 +110,28 @@ def test_express_plugin_collects_write_endpoints_and_package_dependencies(tmp_pa
     assert ("vitest", "range_not_pinned", "development") in violations
 
 
+def test_express_plugin_names_wrapped_routes_by_method_path(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "server" / "app.js",
+        "const express = require('express');\n"
+        "const app = express();\n"
+        "function asyncRoute(handler) { return (req, res, next) => handler(req, res, next).catch(next); }\n"
+        "function createNote(_req, res) { return res.json({ ok: true }); }\n"
+        "app.post('/api/login', asyncRoute(async (_req, res) => res.json({ ok: true })));\n"
+        "app.post('/api/notes', createNote);\n",
+    )
+
+    plugin = get_plugin_for_stack("express_node")
+    assert plugin is not None
+    bundle = plugin.collect(tmp_path)
+
+    by_path = {endpoint[3]: endpoint for endpoint in bundle.write_endpoints}
+
+    assert by_path["/api/login"][1].startswith("post_api_login_")
+    assert by_path["/api/notes"][1] == "createNote"
+    assert "asyncRoute" not in {endpoint[1] for endpoint in bundle.write_endpoints}
+
+
 def test_express_plugin_extracts_auth_middleware_boundaries(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "server" / "app.js",

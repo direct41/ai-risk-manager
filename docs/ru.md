@@ -1,12 +1,13 @@
-# AI Risk Manager: быстрый вход для FastAPI и Django/DRF команд
+# AI Risk Manager: быстрый вход
 
 AI Risk Manager помогает перед merge/release ответить на три вопроса:
 
-- где сейчас рискованные backend-потоки;
+- где сейчас самые рискованные изменения;
 - какие тесты стоит добавить в первую очередь.
 - можно ли мержить сейчас или нужен короткий release-risk triage.
 
-Текущий `v0.1.x` сфокусирован на FastAPI + pytest и Django/DRF.
+Текущий shipped-профиль — `code_risk`.
+Лучше всего он работает на backend-heavy репозиториях. Самая сильная поддержка сейчас у `FastAPI`, `Django/DRF` и `Express/Node`, но на неизвестных стеках тоже есть полезный advisory path через universal heuristics.
 
 ## Быстрый старт (5 минут)
 
@@ -69,20 +70,23 @@ riskmap analyze \
   --output-dir ./.riskmap
 ```
 
-## Что именно анализируется
+## Что именно анализируется сейчас
 
-Текущие stack plugins:
+Сильнейшие stack plugins:
 
 - `fastapi_pytest`
 - `django_drf`
 - `express_node`
 
-Extractor собирает:
+`code_risk` сейчас покрывает:
 
 - write-endpoints (`POST|PUT|PATCH|DELETE`)
 - endpoint <-> Pydantic model связи
 - declared vs handled state transitions
 - pytest тесты и HTTP-вызовы тестов
+- generated test quality
+- workflow automation risks
+- PR delta heuristics по code/dependencies/contracts/migrations/runtime config/auth/payment/admin paths
 
 Детерминированные правила:
 
@@ -108,6 +112,33 @@ Extractor собирает:
 
 Опционально добавляется semantic AI stage (если включен LLM backend).
 
+## Архитектура
+
+Новый канонический подход:
+
+- один общий pipeline
+- optional risk profiles
+- применимость профиля: `supported`, `partial`, `not_applicable`
+- один общий PR/report output contract
+
+Текущий shipped профиль:
+
+- `code_risk`
+
+Текущий profile для UI review:
+
+- `ui_flow_risk`
+
+Текущий profile для business invariants:
+
+- `business_invariant_risk`
+
+Подробно:
+
+- `docs/architecture.md`
+- `docs/roadmap.md`
+- `docs/workspaces.md`
+
 ## Для кого это полезно сейчас
 
 - FastAPI-команды, где нужен быстрый release-risk скан.
@@ -127,10 +158,13 @@ Extractor собирает:
 
 ## Ограничения текущей версии
 
-- В `v0.1.x` поддерживаются extractor plugins `fastapi_pytest`, `django_drf`, `express_node`.
+- Полноценным coverage-first профилем остаётся `code_risk`.
+- `ui_flow_risk` сейчас shipped как discovery + declared smoke слой: он умеет определить UI surface, подсветить changed journeys и опционально запустить repo-owned smoke-команду из `./.riskmap-ui.toml`.
+- Для workspace/monorepo сейчас нужно запускать анализ из package root, который владеет измененным приложением. Например: `shop-frontend`, а не внешний workspace-контейнер. Подробно: `docs/workspaces.md`.
+- `business_invariant_risk` сейчас shipped как узкий deterministic слой: без явного `.riskmap.yml` он `not_applicable`, при наличии `.riskmap.yml` / `.riskmap.yaml` он `partial`; сейчас он умеет только PR-сигнал `business_critical_flow_changed_without_check_delta` для declared `critical_flows`, полная проверка бизнес-логики пока не реализована.
 - Инструмент не является generic multi-language SAST.
 - API имеет базовые сервисные защиты (token auth, rate/payload guardrails, audit/correlation controls).
-- Universal/mixed-stack стратегия пока в roadmap, это не текущий shipped scope.
+- Без явных инвариантов репозитория инструмент не является проверкой бизнес-логики.
 
 ## Ключевые CLI флаги
 
@@ -177,6 +211,11 @@ curl -s http://127.0.0.1:8000/healthz
 ## Где смотреть дальше
 
 - Полная англ. документация: `README.md`
-- Архитектура triage-слоя: `docs/merge-risk-triage-architecture.md`
+- Архитектурное решение: `docs/architecture.md`
+- Roadmap: `docs/roadmap.md`
+- Workspace/monorepo usage: `docs/workspaces.md`
+- UI flow pilot log: `docs/ui-flow-pilots.md`
+- Business invariants: `docs/business-invariants.md`
+- Legacy review: `docs/legacy-review.md`
 - Совместимость контрактов: `docs/compatibility.md`
-- План развития: `ROADMAP.md`, `BACKLOG_TRUST_FIRST.md`
+- Совместимые legacy surfaces: `docs/capability-signals.md`, `docs/ingress-contract.md`, `docs/plugin-contract.md`

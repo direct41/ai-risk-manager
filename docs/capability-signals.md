@@ -1,7 +1,12 @@
-# Capability Signal Map
+# Code Risk Signal Map
 
-This document defines the core stack-agnostic capability signals for AI Risk Manager.
-The goal is to avoid `framework x scenario` explosion by mapping each backend plugin to a shared signal model.
+Deprecated as a system-wide architecture document.
+Use `docs/architecture.md` for the canonical product architecture.
+
+This document now describes the current `code_risk` profile signal surface and stack-plugin compatibility layer.
+
+The goal is still to avoid `framework x scenario` explosion, but these signals no longer define the whole product.
+Profiles such as `ui_flow_risk` and `business_invariant_risk` now attach their own narrow signal surfaces through the shared pipeline.
 
 ## Status Legend
 
@@ -9,7 +14,7 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 - `partial`: extracted for some stacks or not yet enforced by deterministic rules.
 - `missing`: not extracted as a first-class capability yet.
 
-## Core 14 Signals
+## Current `code_risk` Signals
 
 | Signal | Meaning | Current extraction source | Graph expression | Rule coverage | Status |
 |---|---|---|---|---|---|
@@ -68,6 +73,8 @@ The goal is to avoid `framework x scenario` explosion by mapping each backend pl
 4. Promote support-level only after trust-gate stability (precision/evidence/verification KPIs).
 
 ## Plugin Contract for New Backends
+
+This guidance applies only to the current `code_risk` stack-plugin compatibility layer.
 
 To keep scaling linear, each new plugin should map backend syntax to these same capability signals, not add custom rule families first.
 

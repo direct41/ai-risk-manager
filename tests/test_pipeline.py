@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
 from typing import cast
 from unittest.mock import patch
 
@@ -87,6 +88,10 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     assert (out_dir / "pr_summary.md").exists()
     graph = json.loads((out_dir / "graph.json").read_text(encoding="utf-8"))
     assert all(not node["source_ref"].startswith("/") for node in graph["nodes"])
+    findings_payload = json.loads((out_dir / "findings.json").read_text(encoding="utf-8"))
+    if findings_payload["findings"]:
+        assert "trust" in findings_payload["findings"][0]
+        assert findings_payload["findings"][0]["trust"]["band"] in {"strong", "moderate", "weak"}
     report = (out_dir / "report.md").read_text(encoding="utf-8")
     assert "Graph Statistics (analysis):" in report
     assert "Graph Statistics (deterministic):" in report
@@ -94,17 +99,26 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     assert "semantic_signal_count:" in report
     assert "effective_ci_mode:" in report
     assert "repository_support_state:" in report
+    assert "active_profiles:" in report
     assert "## Merge Triage" in report
     assert "## 10-Minute Test-First Order" in report
     pr_summary_json = json.loads((out_dir / "pr_summary.json").read_text(encoding="utf-8"))
     assert pr_summary_json["schema_version"] == "1.1"
     assert pr_summary_json["marker"] == "ai-risk-manager"
+    assert "profiles" in pr_summary_json
     assert "top_findings" in pr_summary_json
     assert "top_actions" in pr_summary_json
     assert "review_focus" in pr_summary_json
     assert "suppression_hints" in pr_summary_json
+    assert pr_summary_json["profiles"]
+    profile_ids = {row["profile_id"] for row in pr_summary_json["profiles"]}
+    assert "code_risk" in profile_ids
+    assert "ui_flow_risk" in profile_ids
+    assert "business_invariant_risk" in profile_ids
     if pr_summary_json["top_findings"]:
         assert "suppression_key" in pr_summary_json["top_findings"][0]
+        assert "trust_band" in pr_summary_json["top_findings"][0]
+        assert "trust_score" in pr_summary_json["top_findings"][0]
     github_check_json = json.loads((out_dir / "github_check.json").read_text(encoding="utf-8"))
     assert github_check_json["schema_version"] == "1.1"
     assert github_check_json["name"] == "AI Risk Manager"
@@ -118,6 +132,7 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     assert "Suppression Hints" in pr_summary
     assert "Test First" in pr_summary
     assert "If a finding is intentional" in pr_summary
+    assert "Profiles:" in pr_summary
     merge_triage = json.loads((out_dir / "merge_triage.json").read_text(encoding="utf-8"))
     assert merge_triage["decision"] in {"ready", "review_required", "block_recommended"}
     assert "actions" in merge_triage
@@ -267,6 +282,221 @@ def test_pipeline_reports_workflow_automation_findings(tmp_path: Path, write_fil
     rule_ids = {finding.rule_id for finding in result.findings.findings}
     assert "workflow_external_action_not_pinned" in rule_ids
     assert "workflow_untrusted_context_to_shell" in rule_ids
+
+
+def test_pr_mode_ui_flow_profile_surfaces_changed_journey_focus(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "package.json",
+        '{"dependencies":{"react":"18.0.0","react-dom":"18.0.0"},"devDependencies":{"vite":"5.0.0"}}',
+    )
+    write_file(
+        tmp_path / "src" / "pages" / "checkout.tsx",
+        "export default function CheckoutPage() {\n"
+        "  return <div>checkout</div>;\n"
+        "}\n",
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+
+    with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"src/pages/checkout.tsx"}):
+        result, code, _ = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    assert any("changed UI journeys" in item for item in result.summary.profile_review_focus)
+
+    pr_summary = (tmp_path / ".riskmap" / "pr_summary.md").read_text(encoding="utf-8")
+    assert "Review changed UI journeys" in pr_summary
+
+    pr_summary_json = json.loads((tmp_path / ".riskmap" / "pr_summary.json").read_text(encoding="utf-8"))
+    ui_profile = next(row for row in pr_summary_json["profiles"] if row["profile_id"] == "ui_flow_risk")
+    assert ui_profile["applicability"] == "partial"
+
+
+def test_pr_mode_ui_flow_profile_supports_vanilla_public_ui(tmp_path: Path, write_file) -> None:
+    write_file(tmp_path / "package.json", '{"dependencies":{"express":"4.19.2"}}')
+    write_file(tmp_path / "public" / "index.html", "<!doctype html><div id=\"app\"></div>\n")
+    write_file(tmp_path / "public" / "app.js", "document.getElementById('app').textContent = 'ok';\n")
+    write_file(tmp_path / "public" / "styles.css", "body { font-family: sans-serif; }\n")
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+
+    changed = {"public/index.html", "public/app.js", "public/styles.css"}
+    with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value=changed):
+        result, code, _ = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    assert "app_shell" in " ".join(result.summary.profile_review_focus)
+
+    pr_summary_json = json.loads((tmp_path / ".riskmap" / "pr_summary.json").read_text(encoding="utf-8"))
+    ui_profile = next(row for row in pr_summary_json["profiles"] if row["profile_id"] == "ui_flow_risk")
+    assert ui_profile["applicability"] == "partial"
+    assert any("app_shell" in item for item in pr_summary_json["review_focus"])
+
+
+def test_pr_mode_ui_flow_smoke_failure_produces_finding(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "package.json",
+        '{"dependencies":{"react":"18.0.0","react-dom":"18.0.0"},"devDependencies":{"vite":"5.0.0"}}',
+    )
+    write_file(
+        tmp_path / "src" / "pages" / "checkout.tsx",
+        "export default function CheckoutPage() {\n"
+        "  return <div>checkout</div>;\n"
+        "}\n",
+    )
+    write_file(
+        tmp_path / ".riskmap-ui.toml",
+        '[[journeys]]\n'
+        'id = "checkout"\n'
+        'match = ["checkout"]\n'
+        f'command = ["{sys.executable}", "-c", "import sys; sys.exit(2)"]\n',
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+
+    with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"src/pages/checkout.tsx"}):
+        result, code, notes = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    assert any(f.rule_id == "ui_journey_smoke_failed" for f in result.findings.findings)
+    assert any("smoke failed for journey 'checkout'" in note for note in notes)
+
+    pr_summary = (tmp_path / ".riskmap" / "pr_summary.md").read_text(encoding="utf-8")
+    assert "ui_journey_smoke_failed" in pr_summary
+
+
+def test_pr_mode_ui_flow_smoke_pass_adds_note_without_finding(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "package.json",
+        '{"dependencies":{"react":"18.0.0","react-dom":"18.0.0"},"devDependencies":{"vite":"5.0.0"}}',
+    )
+    write_file(
+        tmp_path / "src" / "pages" / "checkout.tsx",
+        "export default function CheckoutPage() {\n"
+        "  return <div>checkout</div>;\n"
+        "}\n",
+    )
+    write_file(
+        tmp_path / ".riskmap-ui.toml",
+        '[[journeys]]\n'
+        'id = "checkout"\n'
+        'match = ["checkout"]\n'
+        f'command = ["{sys.executable}", "-c", "print(\'ok\')"]\n',
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+
+    with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"src/pages/checkout.tsx"}):
+        result, code, notes = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    assert not any(f.rule_id == "ui_journey_smoke_failed" for f in result.findings.findings)
+    assert any("smoke passed for journey 'checkout'" in note for note in notes)
+
+
+def test_pr_mode_business_invariant_flow_without_check_delta_produces_finding(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/checkout')\ndef checkout():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "app" / "checkout_service.py", "def finalize_checkout(cart):\n    return cart\n")
+    write_file(
+        tmp_path / ".riskmap.yml",
+        "critical_flows:\n"
+        "  - id: checkout\n"
+        "    match: [checkout]\n"
+        "    checks: [checkout]\n",
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+
+    with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"app/checkout_service.py"}):
+        result, code, notes = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    assert any(
+        finding.rule_id == "business_critical_flow_changed_without_check_delta"
+        for finding in result.findings.findings
+    )
+    assert any("business_invariant_risk produced 1 PR-scoped signal" in note for note in notes)
+
+
+def test_pr_mode_business_invariant_flow_with_check_delta_skips_finding(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/checkout')\ndef checkout():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "app" / "checkout_service.py", "def finalize_checkout(cart):\n    return cart\n")
+    write_file(tmp_path / "tests" / "e2e" / "checkout.spec.ts", "test('checkout', () => {});\n")
+    write_file(
+        tmp_path / ".riskmap.yml",
+        "critical_flows:\n"
+        "  - id: checkout\n"
+        "    match: [checkout]\n"
+        "    checks: [checkout]\n",
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+
+    with patch(
+        "ai_risk_manager.pipeline.run._resolve_changed_files",
+        return_value={"app/checkout_service.py", "tests/e2e/checkout.spec.ts"},
+    ):
+        result, code, _ = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    assert not any(
+        finding.rule_id == "business_critical_flow_changed_without_check_delta"
+        for finding in result.findings.findings
+    )
 
 
 def test_pr_mode_without_baseline_uses_full_fallback(tmp_path: Path, write_file) -> None:

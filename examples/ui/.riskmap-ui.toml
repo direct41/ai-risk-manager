@@ -1,0 +1,9 @@
+[[journeys]]
+id = "app_shell"
+match = ["app_shell", "public", "static"]
+command = ["npm", "run", "test:e2e", "--", "app-shell"]
+
+[[journeys]]
+id = "login"
+match = ["login", "auth", "session"]
+command = ["npm", "run", "test:e2e", "--", "login"]

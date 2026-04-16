@@ -1,5 +1,9 @@
 # Plugin Contract v1
 
+Deprecated as the primary architecture model.
+This document describes the current stack-plugin compatibility surface for the shipped `code_risk` profile.
+Use `docs/architecture.md` for the canonical product architecture.
+
 This document defines the collector plugin contract used by AI Risk Manager for stack-specific analyzers.
 
 ## Purpose
@@ -77,7 +81,7 @@ A plugin fails conformance if:
 
 ## Extension Guidance
 
-When adding a new stack plugin:
+When adding a new stack plugin to the current `code_risk` profile:
 
 1. Implement `CollectorPlugin` + capability-signal mixin.
 2. Declare `supported_signal_kinds` and `unsupported_signal_kinds`.

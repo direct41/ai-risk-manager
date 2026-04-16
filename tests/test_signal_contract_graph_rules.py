@@ -57,6 +57,20 @@ def test_rule_engine_accepts_signal_bundle_with_equivalent_output() -> None:
     assert to_dict(findings_from_graph) == to_dict(findings_from_signals)
 
 
+def test_critical_path_rule_uses_route_label_in_human_text() -> None:
+    artifacts = ArtifactBundle(
+        write_endpoints=[
+            ("app/api.py", "post_api_login_12", "POST", "/api/login", 12, "app.post('/api/login', asyncRoute(...))"),
+        ],
+    )
+
+    findings = run_rules(build_graph(artifacts), risk_policy="balanced")
+    finding = next(row for row in findings.findings if row.rule_id == "critical_path_no_tests")
+
+    assert finding.title == "Write endpoint 'POST /api/login' has no matching tests"
+    assert "endpoint 'POST /api/login'" in finding.recommendation
+
+
 def test_graph_builder_parses_windows_source_ref_without_truncation() -> None:
     signals = SignalBundle(
         signals=[
