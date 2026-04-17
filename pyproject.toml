@@ -45,7 +45,7 @@ api = [
 dev = [
   "pytest==9.0.2",
   "pytest-cov==7.1.0",
-  "ruff==0.15.10",
+  "ruff==0.15.11",
   "mypy==1.11.0",
   "fastapi==0.136.0",
   "httpx==0.28.1",
