@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Dependabot configuration for Python dependencies and GitHub Actions.
 - Alpha testing guide (`ALPHA.md`) with local usage steps, feedback prompts, and LinkedIn-ready positioning text.
 - Profile-based architecture and roadmap documentation for `code_risk`, `ui_flow_risk`, and `business_invariant_risk`.
 - Trust-first eval gates with in-repo thresholds (`eval/trust_thresholds.json`) and CI enforcement in weekly eval workflow.
@@ -38,6 +39,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Declared UI smoke examples and explicit business critical-flow documentation for alpha validation.
 
 ### Changed
+- GitHub metadata links, security reporting entrypoint, and CI matrix were hardened for public alpha readiness.
 - Local Makefile onboarding now uses the project `.venv` and runs the bundled demo in deterministic/no-LLM mode.
 - Development/API dependency pins were updated to Python 3.13-compatible versions.
 - `block-new-critical` guardrails now trigger only for `new + critical + high confidence + verified evidence` findings.

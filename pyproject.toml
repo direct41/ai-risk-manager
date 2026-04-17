@@ -27,10 +27,10 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/andry/ai-risk-manager"
-Repository = "https://github.com/andry/ai-risk-manager"
-Issues = "https://github.com/andry/ai-risk-manager/issues"
-Changelog = "https://github.com/andry/ai-risk-manager/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/direct41/ai-risk-manager"
+Repository = "https://github.com/direct41/ai-risk-manager"
+Issues = "https://github.com/direct41/ai-risk-manager/issues"
+Changelog = "https://github.com/direct41/ai-risk-manager/blob/main/CHANGELOG.md"
 
 [project.scripts]
 riskmap = "ai_risk_manager.cli:app"

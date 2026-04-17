@@ -5,9 +5,9 @@ Thanks for contributing to AI Risk Manager.
 ## Development setup
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-pip install -e '.[dev]'
+python -m pip install -e '.[dev]'
 ```
 
 `.[dev]` already includes API dependencies (`fastapi`, `uvicorn`, `httpx`) for local API testing.
@@ -17,6 +17,7 @@ pip install -e '.[dev]'
 ```bash
 make test
 make eval
+make analyze-demo
 ```
 
 You can also run quality gates directly:
