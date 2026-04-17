@@ -11,6 +11,8 @@ from ai_risk_manager.schemas.types import (
     CompetitiveMode,
     Confidence,
     GraphMode,
+    RiskProfileApplicability,
+    RiskProfileId,
     RepositorySupportState,
     RiskPolicy,
     Severity,
@@ -53,6 +55,13 @@ class AnalyzeSummary(BaseModel):
     graph_mode_applied: GraphMode
     semantic_signal_count: int
     repository_support_state: RepositorySupportState
+    profiles: list["AnalyzeProfileSummary"] = Field(default_factory=list)
+    profile_review_focus: list[str] = Field(default_factory=list)
+
+
+class AnalyzeProfileSummary(BaseModel):
+    profile_id: RiskProfileId
+    applicability: RiskProfileApplicability
 
 
 class AnalyzeResponse(BaseModel):

@@ -4,7 +4,7 @@ from typing import cast
 
 from ai_risk_manager.graph.builder import build_graph
 from ai_risk_manager.signals.types import SignalBundle
-from ai_risk_manager.schemas.types import Confidence, Finding, FindingsReport, Graph, RiskPolicy, Severity
+from ai_risk_manager.schemas.types import Confidence, Finding, FindingsReport, Graph, Node, RiskPolicy, Severity
 
 DEPENDENCY_VIOLATIONS_BY_POLICY: dict[RiskPolicy, set[str]] = {
     "conservative": {"direct_reference", "wildcard_version"},
@@ -27,6 +27,14 @@ DEPENDENCY_SEVERITY_BY_SCOPE: dict[str, dict[str, str]] = {
 }
 
 
+def _api_display_label(api: Node) -> str:
+    method = str(api.details.get("method", "")).strip().upper()
+    path = str(api.details.get("path", "")).strip()
+    if method and path:
+        return f"{method} {path}"
+    return api.name
+
+
 def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -> FindingsReport:
     findings: list[Finding] = []
     api_nodes = [n for n in graph.nodes if n.type == "API"]
@@ -35,19 +43,20 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
 
     for api in api_nodes:
         if api.id not in covered_api_ids:
+            api_label = _api_display_label(api)
             finding_id = f"critical_path_no_tests:{api.id}"
             findings.append(
                 Finding(
                     id=finding_id,
                     rule_id="critical_path_no_tests",
-                    title=f"Write endpoint '{api.name}' has no matching tests",
+                    title=f"Write endpoint '{api_label}' has no matching tests",
                     description="Critical path endpoint appears uncovered by tests in current graph.",
                     severity="high",
                     confidence="medium",
                     evidence=f"No covered_by edge found for {api.id}",
                     source_ref=api.source_ref,
                     suppression_key=f"{finding_id}",
-                    recommendation=f"Add API/service tests for endpoint '{api.name}', including success and error paths.",
+                    recommendation=f"Add API/service tests for endpoint '{api_label}', including success and error paths.",
                     origin="deterministic",
                     evidence_refs=[api.source_ref],
                     generated_without_llm=True,
@@ -164,6 +173,8 @@ def _run_signal_only_rules(signals: SignalBundle) -> list[Finding]:
     findings.extend(_run_session_lifecycle_consistency_rule(signals))
     findings.extend(_run_html_render_safety_rule(signals))
     findings.extend(_run_ui_ergonomics_rule(signals))
+    findings.extend(_run_ui_journey_smoke_rule(signals))
+    findings.extend(_run_business_invariant_risk_rule(signals))
     findings.extend(_run_generated_test_quality_rule(signals))
     findings.extend(_run_workflow_automation_risk_rule(signals))
     findings.extend(_run_pr_change_risk_rule(signals))
@@ -705,6 +716,104 @@ def _run_ui_ergonomics_rule(signals: SignalBundle) -> list[Finding]:
                     generated_without_llm=True,
                 )
             )
+
+    return findings
+
+
+def _run_ui_journey_smoke_rule(signals: SignalBundle) -> list[Finding]:
+    findings: list[Finding] = []
+    for signal in signals.signals:
+        if signal.kind != "ui_journey_smoke":
+            continue
+
+        issue_type = str(signal.attributes.get("issue_type", "")).strip()
+        if issue_type != "journey_smoke_failed":
+            continue
+
+        journey_id = str(signal.attributes.get("journey_id", "")).strip() or "unknown"
+        changed_journey = str(signal.attributes.get("changed_journey", "")).strip() or journey_id
+        command = str(signal.attributes.get("command", "")).strip() or "configured command"
+        exit_code = signal.attributes.get("exit_code")
+        output_excerpt = str(signal.attributes.get("output_excerpt", "")).strip()
+        lowered = f"{journey_id} {changed_journey}".lower()
+        severity: Severity = "high" if any(token in lowered for token in ("auth", "payment", "billing", "checkout", "admin")) else "medium"
+        finding_id = f"ui_journey_smoke_failed:{journey_id}:{signal.id}"
+
+        detail = f"Changed UI journey '{changed_journey}' failed declared browser smoke command `{command}`."
+        if exit_code is not None:
+            detail += f" Exit code: {exit_code}."
+        if output_excerpt:
+            detail += f" Output: {output_excerpt}"
+
+        findings.append(
+            Finding(
+                id=finding_id,
+                rule_id="ui_journey_smoke_failed",
+                title=f"Changed UI journey '{journey_id}' failed browser smoke",
+                description=(
+                    "A declared UI smoke check for a changed journey failed, which raises merge risk for the affected user flow."
+                ),
+                severity=severity,
+                confidence=cast(Confidence, signal.confidence),
+                evidence=detail,
+                source_ref=signal.source_ref,
+                suppression_key=finding_id,
+                recommendation=(
+                    f"Fix or stabilize the declared browser smoke for journey '{journey_id}' "
+                    "before merge, or update the journey mapping if this smoke is no longer relevant."
+                ),
+                origin="deterministic",
+                evidence_refs=list(signal.evidence_refs),
+                generated_without_llm=True,
+            )
+        )
+
+    return findings
+
+
+def _run_business_invariant_risk_rule(signals: SignalBundle) -> list[Finding]:
+    findings: list[Finding] = []
+    for signal in signals.signals:
+        if signal.kind != "business_invariant_risk":
+            continue
+
+        issue_type = str(signal.attributes.get("issue_type", "")).strip()
+        if issue_type != "critical_flow_changed_without_check_delta":
+            continue
+
+        flow_id = str(signal.attributes.get("flow_id", "")).strip() or "unknown"
+        changed_flow_file_count = str(signal.attributes.get("changed_flow_file_count", "")).strip() or "1"
+        example_files = str(signal.attributes.get("example_files", "")).strip() or signal.source_ref
+        check_terms = str(signal.attributes.get("check_terms", "")).strip() or flow_id
+        spec_path = str(signal.attributes.get("spec_path", "")).strip() or ".riskmap.yml"
+        finding_id = f"business_critical_flow_changed_without_check_delta:{flow_id}:{signal.id}"
+
+        findings.append(
+            Finding(
+                id=finding_id,
+                rule_id="business_critical_flow_changed_without_check_delta",
+                title=f"Declared critical flow '{flow_id}' changed without matching check delta",
+                description=(
+                    "The PR touches files matching a repository-declared critical business flow, "
+                    "but no changed test, smoke, or e2e check matched the declared check tokens."
+                ),
+                severity="medium",
+                confidence=cast(Confidence, signal.confidence),
+                evidence=(
+                    f"Flow '{flow_id}' from {spec_path} matched {changed_flow_file_count} changed file(s). "
+                    f"Example files: {example_files}. Expected changed check tokens: {check_terms}."
+                ),
+                source_ref=signal.source_ref,
+                suppression_key=finding_id,
+                recommendation=(
+                    f"Add or update a focused check for critical flow '{flow_id}', or update `{spec_path}` "
+                    "if the declared check tokens are stale."
+                ),
+                origin="deterministic",
+                evidence_refs=list(signal.evidence_refs),
+                generated_without_llm=True,
+            )
+        )
 
     return findings
 

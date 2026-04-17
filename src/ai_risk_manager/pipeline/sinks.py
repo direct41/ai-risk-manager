@@ -38,7 +38,14 @@ class EnvironmentSink(Protocol):
 
 
 class ArtifactSink(Protocol):
-    def write(self, *, ctx: RunContext, result: PipelineResult, notes: list[str]) -> list[str]:
+    def write(
+        self,
+        *,
+        ctx: RunContext,
+        result: PipelineResult,
+        notes: list[str],
+        changed_files: set[str] | None = None,
+    ) -> list[str]:
         ...
 
 
@@ -99,7 +106,14 @@ class OsEnvironmentSink:
 
 
 class LocalArtifactSink:
-    def write(self, *, ctx: RunContext, result: PipelineResult, notes: list[str]) -> list[str]:
+    def write(
+        self,
+        *,
+        ctx: RunContext,
+        result: PipelineResult,
+        notes: list[str],
+        changed_files: set[str] | None = None,
+    ) -> list[str]:
         output_notes: list[str] = []
         ctx.output_dir.mkdir(parents=True, exist_ok=True)
         generated_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -124,7 +138,12 @@ class LocalArtifactSink:
             write_json(ctx.output_dir / "merge_triage.json", _with_metadata(to_dict(result.merge_triage), generated_at))
             write_json(ctx.output_dir / "run_metrics.json", _with_metadata(to_dict(result.run_metrics), generated_at))
             if ctx.mode == "pr":
-                pr_summary = build_pr_summary(result, notes + output_notes, only_new=ctx.only_new)
+                pr_summary = build_pr_summary(
+                    result,
+                    notes + output_notes,
+                    only_new=ctx.only_new,
+                    changed_files=changed_files,
+                )
                 write_json(ctx.output_dir / "pr_summary.json", _with_metadata(to_dict(pr_summary), generated_at))
                 github_check = build_github_check_payload(pr_summary)
                 write_json(ctx.output_dir / "github_check.json", _with_metadata(to_dict(github_check), generated_at))
@@ -134,7 +153,12 @@ class LocalArtifactSink:
             write_report(ctx.output_dir / "report.md", report)
             write_report(ctx.output_dir / "merge_triage.md", render_merge_triage_md(result.merge_triage))
             if ctx.mode == "pr":
-                pr_summary = build_pr_summary(result, notes + output_notes, only_new=ctx.only_new)
+                pr_summary = build_pr_summary(
+                    result,
+                    notes + output_notes,
+                    only_new=ctx.only_new,
+                    changed_files=changed_files,
+                )
                 write_report(ctx.output_dir / "pr_summary.md", render_pr_summary_md(pr_summary))
 
         return output_notes

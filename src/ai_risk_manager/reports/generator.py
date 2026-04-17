@@ -30,11 +30,14 @@ _REVIEW_FOCUS_BY_RULE = {
     "pr_payment_boundary_change_requires_review": "Review payment safety, idempotency, and failure handling in the changed area.",
     "pr_admin_surface_change_requires_review": "Review privileged actions and authorization scope in the changed admin surface.",
     "pr_workflow_change_requires_review": "Review CI automation trust boundaries, permissions, and rollout behavior.",
+    "ui_journey_smoke_failed": "Investigate the failed declared browser smoke before merge for the changed UI journey.",
     "workflow_untrusted_context_to_shell": "Check automation trust boundaries and shell interpolation handling.",
     "workflow_external_action_not_pinned": "Review automation supply-chain controls and immutable action pinning.",
     "agent_generated_test_missing_negative_path": "Add negative-path coverage for changed write or validation flows.",
     "agent_generated_test_nondeterministic_dependency": "Stabilize flaky tests before relying on them in merge decisions.",
 }
+_PR_SCOPED_RULE_IDS = {"ui_journey_smoke_failed"}
+_PR_SCOPED_RULE_PREFIXES = ("pr_",)
 
 
 def _summary_counts(findings: FindingsReport) -> dict[str, int]:
@@ -47,10 +50,55 @@ def _summary_counts(findings: FindingsReport) -> dict[str, int]:
     }
 
 
-def _rank_findings(findings):
+def _normalize_path(path: str) -> str:
+    normalized = path.replace("\\", "/").strip()
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized
+
+
+def _source_ref_path(source_ref: str) -> str:
+    parts = source_ref.rsplit(":", 1)
+    if len(parts) == 2 and parts[1].isdigit():
+        return parts[0]
+    return source_ref
+
+
+def _finding_matches_changed_files(finding, changed_files: set[str]) -> bool:
+    refs = [finding.source_ref, *finding.evidence_refs]
+    for ref in refs:
+        if _normalize_path(_source_ref_path(ref)) in changed_files:
+            return True
+    return False
+
+
+def _is_pr_scoped_finding(finding, changed_files: set[str]) -> bool:
+    if finding.rule_id.startswith(_PR_SCOPED_RULE_PREFIXES) or finding.rule_id in _PR_SCOPED_RULE_IDS:
+        return True
+    return bool(changed_files) and _finding_matches_changed_files(finding, changed_files)
+
+
+def _cap_repo_wide_repeated_findings(findings, changed_files: set[str]):
+    if not changed_files:
+        return list(findings)
+
+    capped = []
+    repo_wide_rule_counts: dict[str, int] = {}
+    for finding in findings:
+        if not _is_pr_scoped_finding(finding, changed_files):
+            repo_wide_rule_counts[finding.rule_id] = repo_wide_rule_counts.get(finding.rule_id, 0) + 1
+            if repo_wide_rule_counts[finding.rule_id] > 1:
+                continue
+        capped.append(finding)
+    return capped
+
+
+def _rank_findings(findings, *, changed_files: set[str] | None = None, prefer_pr_scope: bool = False):
+    normalized_changed_files = {_normalize_path(path) for path in (changed_files or set())}
     return sorted(
         findings,
         key=lambda f: (
+            0 if prefer_pr_scope and _is_pr_scoped_finding(f, normalized_changed_files) else 1,
             SEVERITY_INDEX.get(f.severity, len(SEVERITY_ORDER)),
             CONFIDENCE_ORDER.get(f.confidence, 3),
             -len(f.evidence_refs),
@@ -59,10 +107,10 @@ def _rank_findings(findings):
     )
 
 
-def _review_focus(findings) -> list[str]:
+def _review_focus(findings, *, changed_files: set[str] | None = None, prefer_pr_scope: bool = False) -> list[str]:
     focus: list[str] = []
     seen: set[str] = set()
-    for finding in _rank_findings(findings):
+    for finding in _rank_findings(findings, changed_files=changed_files, prefer_pr_scope=prefer_pr_scope):
         message = _REVIEW_FOCUS_BY_RULE.get(finding.rule_id)
         if not message or message in seen:
             continue
@@ -73,10 +121,25 @@ def _review_focus(findings) -> list[str]:
     return focus
 
 
-def _suppression_hints(findings) -> list[str]:
+def _merge_review_focus(*groups: list[str], limit: int = 4) -> list[str]:
+    focus: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        for item in group:
+            cleaned = item.strip()
+            if not cleaned or cleaned in seen:
+                continue
+            focus.append(cleaned)
+            seen.add(cleaned)
+            if len(focus) >= limit:
+                return focus
+    return focus
+
+
+def _suppression_hints(findings, *, changed_files: set[str] | None = None, prefer_pr_scope: bool = False) -> list[str]:
     hints: list[str] = []
     seen: set[str] = set()
-    for finding in _rank_findings(findings):
+    for finding in _rank_findings(findings, changed_files=changed_files, prefer_pr_scope=prefer_pr_scope):
         key = finding.suppression_key.strip()
         if not key or key in seen:
             continue
@@ -85,6 +148,60 @@ def _suppression_hints(findings) -> list[str]:
         if len(hints) >= 4:
             break
     return hints
+
+
+def _estimated_pr_action_minutes(finding) -> int:
+    if finding.severity in {"critical", "high"}:
+        return 5
+    return 3
+
+
+def _pr_summary_actions(result: PipelineResult, ranked_findings) -> list[PRSummaryAction]:
+    actions_by_finding_id = {action.finding_id: action for action in result.merge_triage.actions}
+    actions: list[PRSummaryAction] = []
+    seen: set[str] = set()
+    for finding in ranked_findings:
+        if finding.id in seen:
+            continue
+        seen.add(finding.id)
+        action = actions_by_finding_id.get(finding.id)
+        if action is not None:
+            actions.append(
+                PRSummaryAction(
+                    rule_id=action.rule_id,
+                    priority=action.priority,
+                    source_ref=action.source_ref,
+                    action=action.action,
+                    estimated_minutes=action.estimated_minutes,
+                )
+            )
+        else:
+            actions.append(
+                PRSummaryAction(
+                    rule_id=finding.rule_id,
+                    priority=finding.severity,
+                    source_ref=finding.source_ref,
+                    action=finding.recommendation,
+                    estimated_minutes=_estimated_pr_action_minutes(finding),
+                )
+            )
+        if len(actions) >= 3:
+            break
+    return actions
+
+
+def _format_profiles(summary: PRSummary) -> str:
+    if not summary.profiles:
+        return "none"
+    return ", ".join(f"{profile.profile_id}:{profile.applicability}" for profile in summary.profiles)
+
+
+def _format_trust(finding) -> str | None:
+    trust_band = getattr(finding, "trust_band", None)
+    trust_score = getattr(finding, "trust_score", None)
+    if trust_band is None or trust_score is None:
+        return None
+    return f"{trust_band} ({trust_score:.2f})"
 
 
 def render_report_md(result: PipelineResult, notes: list[str]) -> str:
@@ -110,6 +227,11 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
     lines.append(f"- analysis_scope: `{result.analysis_scope}`")
     lines.append(f"- support_level_applied: `{result.summary.support_level_applied}`")
     lines.append(f"- repository_support_state: `{result.summary.repository_support_state}`")
+    if result.summary.profiles:
+        lines.append(
+            "- active_profiles: "
+            + ", ".join(f"`{profile.profile_id}:{profile.applicability}`" for profile in result.summary.profiles)
+        )
     lines.append(f"- effective_ci_mode: `{result.summary.effective_ci_mode}`")
     lines.append(f"- competitive_mode: `{result.summary.competitive_mode}`")
     lines.append(f"- graph_mode_applied: `{result.summary.graph_mode_applied}`")
@@ -145,6 +267,13 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
     if result.merge_triage.reasons:
         for reason in result.merge_triage.reasons[:3]:
             lines.append(f"- Reason: {reason}")
+
+    if result.summary.profile_review_focus:
+        lines.append("")
+        lines.append("## Profile Review Focus")
+        lines.append("")
+        for item in result.summary.profile_review_focus:
+            lines.append(f"- {item}")
 
     lines.append("")
     lines.append("## Why This Matters for Release Risk")
@@ -187,6 +316,11 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
             lines.append(f"- Status: `{finding.status}`")
             lines.append(f"- Origin: `{finding.origin}`")
             lines.append(f"- Source: `{finding.source_ref}`")
+            if finding.trust is not None:
+                lines.append(
+                    f"- Trust: `{finding.trust.band}` / score=`{finding.trust.score:.2f}` / "
+                    f"precision=`{finding.trust.estimated_precision:.2f}`"
+                )
             lines.append(f"- Why: {finding.description}")
             lines.append(f"- Action: {finding.recommendation}")
             lines.append(f"- Suppress key: `{finding.suppression_key}`")
@@ -207,8 +341,11 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
     if not result.test_plan.items:
         lines.append("No additional test recommendations.")
     else:
-        for item in result.test_plan.items:
-            lines.append(f"- [{item.priority}] {item.recommendation} (source: `{item.source_ref}`)")
+        for recommendation in result.test_plan.items:
+            lines.append(
+                f"- [{recommendation.priority}] {recommendation.recommendation} "
+                f"(source: `{recommendation.source_ref}`)"
+            )
 
     lines.append("")
     lines.append("## 10-Minute Test-First Order")
@@ -230,7 +367,13 @@ def write_report(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def build_pr_summary(result: PipelineResult, notes: list[str], *, only_new: bool = False) -> PRSummary:
+def build_pr_summary(
+    result: PipelineResult,
+    notes: list[str],
+    *,
+    only_new: bool = False,
+    changed_files: set[str] | None = None,
+) -> PRSummary:
     top_candidates = result.findings.findings
     if only_new:
         min_rank = SEVERITY_INDEX["high"]
@@ -239,6 +382,13 @@ def build_pr_summary(result: PipelineResult, notes: list[str], *, only_new: bool
             for finding in top_candidates
             if finding.status == "new" and SEVERITY_INDEX.get(finding.severity, len(SEVERITY_ORDER)) <= min_rank
         ]
+    normalized_changed_files = {_normalize_path(path) for path in (changed_files or set())}
+    ranked_top_candidates = _rank_findings(
+        top_candidates,
+        changed_files=normalized_changed_files,
+        prefer_pr_scope=True,
+    )
+    pr_summary_candidates = _cap_repo_wide_repeated_findings(ranked_top_candidates, normalized_changed_files)
 
     top_findings = [
         PRSummaryFinding(
@@ -251,19 +401,12 @@ def build_pr_summary(result: PipelineResult, notes: list[str], *, only_new: bool
             recommendation=finding.recommendation,
             evidence_ref_count=len(finding.evidence_refs),
             suppression_key=finding.suppression_key,
+            trust_band=finding.trust.band if finding.trust is not None else None,
+            trust_score=finding.trust.score if finding.trust is not None else None,
         )
-        for finding in _rank_findings(top_candidates)[:5]
+        for finding in pr_summary_candidates[:5]
     ]
-    top_actions = [
-        PRSummaryAction(
-            rule_id=action.rule_id,
-            priority=action.priority,
-            source_ref=action.source_ref,
-            action=action.action,
-            estimated_minutes=action.estimated_minutes,
-        )
-        for action in result.merge_triage.actions[:3]
-    ]
+    top_actions = _pr_summary_actions(result, pr_summary_candidates)
     return PRSummary(
         marker="ai-risk-manager",
         decision=result.merge_triage.decision,
@@ -273,17 +416,26 @@ def build_pr_summary(result: PipelineResult, notes: list[str], *, only_new: bool
         support_level_applied=result.summary.support_level_applied,
         repository_support_state=result.summary.repository_support_state,
         effective_ci_mode=result.summary.effective_ci_mode,
+        profiles=list(result.summary.profiles),
         findings_count=len(result.findings.findings),
         new_count=result.summary.new_count,
         resolved_count=result.summary.resolved_count,
         unchanged_count=result.summary.unchanged_count,
         fallback_reason=result.summary.fallback_reason,
         reasons=list(result.merge_triage.reasons[:3]),
-        review_focus=_review_focus(top_candidates),
-        suppression_hints=_suppression_hints(top_candidates),
+        review_focus=_merge_review_focus(
+            result.summary.profile_review_focus,
+            _review_focus(top_candidates, changed_files=normalized_changed_files, prefer_pr_scope=True),
+        ),
+        suppression_hints=_suppression_hints(
+            pr_summary_candidates,
+            changed_files=normalized_changed_files,
+            prefer_pr_scope=True,
+        ),
         notes=list(notes),
         top_findings=top_findings,
         top_actions=top_actions,
+        changed_files=sorted(normalized_changed_files),
     )
 
 
@@ -294,12 +446,15 @@ def render_pr_summary_md(summary: PRSummary) -> str:
     lines.append(f"- Headline: {summary.headline}")
     lines.append(f"- Risk score: `{summary.risk_score}/100`")
     lines.append(f"- Scope: `{summary.analysis_scope}`")
+    if summary.changed_files:
+        lines.append(f"- Changed files: `{len(summary.changed_files)}`")
     lines.append(
         f"- PR delta: new=`{summary.new_count}`, resolved=`{summary.resolved_count}`, unchanged=`{summary.unchanged_count}`"
     )
     lines.append(
         f"- Support: `{summary.support_level_applied}` / `{summary.repository_support_state}` / ci=`{summary.effective_ci_mode}`"
     )
+    lines.append(f"- Profiles: `{_format_profiles(summary)}`")
     if summary.fallback_reason:
         lines.append(f"- Fallback: `{summary.fallback_reason}`")
     lines.append("")
@@ -324,9 +479,10 @@ def render_pr_summary_md(summary: PRSummary) -> str:
         lines.append("No findings in current PR scope.")
     else:
         for finding in summary.top_findings:
+            trust_suffix = f" Trust: `{trust}`." if (trust := _format_trust(finding)) is not None else ""
             lines.append(
                 f"- [{finding.severity}] [{finding.status}] `{finding.rule_id}` at `{finding.source_ref}`: "
-                f"{finding.title}. Action: {finding.recommendation}"
+                f"{finding.title}.{trust_suffix} Action: {finding.recommendation}"
             )
     lines.append("")
     if summary.suppression_hints:
@@ -372,10 +528,16 @@ def build_github_check_payload(summary: PRSummary) -> GitHubCheckPayload:
     if summary.review_focus:
         short_lines.append(f"Review focus: {summary.review_focus[0]}")
     if summary.top_findings:
+        top_finding = summary.top_findings[0]
         short_lines.append(
             "Top risk: "
-            f"{summary.top_findings[0].rule_id} at {summary.top_findings[0].source_ref}"
+            f"{top_finding.rule_id} at {top_finding.source_ref}"
         )
+        trust = _format_trust(top_finding)
+        if trust is not None:
+            short_lines.append(f"Top risk trust: {trust}")
+    if summary.profiles:
+        short_lines.append(f"Profiles: {_format_profiles(summary)}")
     text = render_pr_summary_md(summary)
     return GitHubCheckPayload(
         name="AI Risk Manager",

@@ -1,0 +1,17 @@
+critical_flows:
+  - id: checkout
+    description: User can complete checkout with a payable cart.
+    match: [checkout, cart, billing]
+    checks: [checkout]
+
+state_invariants:
+  - id: paid_orders_are_immutable
+    description: Paid orders cannot be changed without an explicit refund or exchange flow.
+
+payment_invariants:
+  - id: payment_retry_is_idempotent
+    description: Payment retry must not create duplicate charges.
+
+negative_paths:
+  - id: checkout_rejects_empty_cart
+    description: Checkout must reject empty carts.

@@ -64,6 +64,8 @@ def test_api_analyze_matches_pipeline_for_same_input(tmp_path: Path, write_file)
     assert api_data["summary"] is not None
     assert "new_count" in api_data["summary"]
     assert "effective_ci_mode" in api_data["summary"]
+    assert "profiles" in api_data["summary"]
+    assert "profile_review_focus" in api_data["summary"]
     assert api_data["result"]["analysis_scope"] == direct_result.analysis_scope
     assert len(api_data["result"]["findings"]["findings"]) == len(direct_result.findings.findings)
     assert isinstance(api_data["correlation_id"], str)
@@ -102,6 +104,7 @@ def test_api_pr_mode_exposes_pr_summary_artifacts(tmp_path: Path, write_file) ->
     pr_summary = json.loads((output_dir / "pr_summary.json").read_text(encoding="utf-8"))
     assert pr_summary["marker"] == "ai-risk-manager"
     assert "top_findings" in pr_summary
+    assert "profiles" in pr_summary
 
 
 def test_api_returns_400_for_missing_repo_path(tmp_path: Path) -> None:
@@ -196,6 +199,8 @@ def test_api_accepts_ai_first_request_fields(tmp_path: Path, write_file) -> None
     assert payload["summary"]["effective_ci_mode"] == "advisory"
     assert "verification_pass_rate" in payload["summary"]
     assert "evidence_completeness" in payload["summary"]
+    assert "profiles" in payload["summary"]
+    assert "profile_review_focus" in payload["summary"]
     assert payload["summary"]["competitive_mode"] in {"deterministic", "hybrid"}
     assert payload["summary"]["graph_mode_applied"] in {"deterministic", "enriched"}
     assert isinstance(payload["summary"]["semantic_signal_count"], int)

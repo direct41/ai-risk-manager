@@ -36,6 +36,15 @@ _ROUTE_CALL_RE = re.compile(
     r"(?P<quote>['\"`])(?P<path>[^'\"`]+)(?P=quote)\s*(?:,\s*(?P<handler>[A-Za-z_$][A-Za-z0-9_$]*))?",
     re.IGNORECASE,
 )
+_INLINE_HANDLER_PSEUDONAMES = {"async", "function"}
+_ROUTE_HANDLER_WRAPPERS = {
+    "asyncroute",
+    "asynchandler",
+    "asyncwrapper",
+    "catchasync",
+    "catchasyncerrors",
+    "wrapasync",
+}
 _TEST_CALL_RE = re.compile(
     r"\.(?P<method>post|put|patch|delete)\s*\(\s*(?P<quote>['\"`])(?P<path>[^'\"`]+)(?P=quote)",
     re.IGNORECASE,
@@ -180,8 +189,13 @@ def _line_snippet(source_lines: list[str], line: int, *, window: int = 3) -> str
     return "\n".join(part.rstrip() for part in source_lines[start:end]).strip()
 
 
+def _is_named_route_handler(handler: str) -> bool:
+    normalized = re.sub(r"[^a-z0-9]+", "", handler.strip().lower())
+    return bool(normalized) and normalized not in _INLINE_HANDLER_PSEUDONAMES and normalized not in _ROUTE_HANDLER_WRAPPERS
+
+
 def _normalize_endpoint_name(method: str, route_path: str, line: int, handler: str | None) -> str:
-    if handler and handler not in {"async", "function"}:
+    if handler and _is_named_route_handler(handler):
         return handler
     normalized_path = re.sub(r"[^a-zA-Z0-9]+", "_", route_path).strip("_").lower() or "root"
     return f"{method.lower()}_{normalized_path}_{line}"

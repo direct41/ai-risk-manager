@@ -94,18 +94,17 @@ def render_plugin_scaffold(spec: PluginScaffoldSpec) -> str:
         "    }\n"
         "\n"
         "    def probe(self, repo_path: Path) -> StackProbeResult | None:\n"
-        "        # TODO: implement stack detection logic.\n"
+        "        # Replace this stub with stack detection logic for the generated plugin.\n"
         "        return None\n"
         "\n"
         "    def preflight(self, repo_path: Path, probe_data: object | None = None) -> PreflightResult:\n"
-        "        # TODO: implement stack preflight checks.\n"
+        "        # Replace this stub with stack preflight checks for the generated plugin.\n"
         '        return PreflightResult(status="PASS", reasons=[])\n'
         "\n"
         "    def collect(self, repo_path: Path) -> ArtifactBundle:\n"
-        "        # TODO: implement artifact extraction logic.\n"
+        "        # Replace this stub with artifact extraction logic for the generated plugin.\n"
         "        return ArtifactBundle()\n"
         "\n"
         "\n"
         f'__all__ = ["{spec.class_name}"]\n'
     )
-

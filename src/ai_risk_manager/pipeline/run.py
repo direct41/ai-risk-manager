@@ -12,19 +12,23 @@ from ai_risk_manager.agents.generic_advisory_agent import generate_generic_advis
 from ai_risk_manager.agents.qa_strategy_agent import generate_test_plan
 from ai_risk_manager.agents.semantic_risk_agent import generate_semantic_findings
 from ai_risk_manager.agents.semantic_signal_agent import generate_semantic_signals
-from ai_risk_manager.collectors.plugins.base import ArtifactBundle, CollectorPlugin
-from ai_risk_manager.collectors.plugins.registry import get_plugin_for_stack
-from ai_risk_manager.collectors.plugins.universal_artifacts import collect_universal_artifacts
+from ai_risk_manager.collectors.plugins.base import ArtifactBundle
 from ai_risk_manager.graph.builder import build_graph, low_confidence_ratio
 from ai_risk_manager.pipeline.merge_findings import ensure_fingerprint, merge_findings
 from ai_risk_manager.pipeline.pr_change_signals import build_pr_change_signal_bundle
 from ai_risk_manager.pipeline.sinks import PipelineSinks
+from ai_risk_manager.profiles.business_invariant import BusinessInvariantPreparedProfile, BusinessInvariantProfile
+from ai_risk_manager.profiles.code_risk import CodeRiskPreparedProfile, CodeRiskProfile
+from ai_risk_manager.profiles.registry import get_profile
+from ai_risk_manager.profiles.ui_flow import UiFlowPreparedProfile, UiFlowProfile
 from ai_risk_manager.rules.engine import run_rules
 from ai_risk_manager.rules.policy import PolicyConfig, apply_policy, is_blocking_enabled_for_finding, load_policy
 from ai_risk_manager.rules.suppressions import apply_suppressions, load_suppressions
-from ai_risk_manager.signals.adapters import artifact_bundle_to_signal_bundle
 from ai_risk_manager.signals.merge import merge_signal_bundles
 from ai_risk_manager.signals.types import SignalBundle
+from ai_risk_manager.stacks.discovery import detect_stack
+from ai_risk_manager.trust.outcomes import load_trust_outcomes
+from ai_risk_manager.trust.scoring import annotate_finding_trust
 from ai_risk_manager.triage.merge import build_merge_triage
 from ai_risk_manager.schemas.types import (
     AnalysisScope,
@@ -37,6 +41,7 @@ from ai_risk_manager.schemas.types import (
     Graph,
     MergeTriage,
     PipelineResult,
+    ProfileSummary,
     PreflightResult,
     RepositorySupportState,
     RunContext,
@@ -44,7 +49,6 @@ from ai_risk_manager.schemas.types import (
     RunSummary,
     TestPlan,
 )
-from ai_risk_manager.stacks.discovery import detect_stack
 
 SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 CONFIDENCE_RANK = {"high": 3, "medium": 2, "low": 1}
@@ -66,33 +70,6 @@ CI_MODE_MATRIX: dict[AppliedSupportLevel, dict[CIMode, CIMode]] = {
         "block_new_critical": "block_new_critical",
     },
 }
-DEFAULT_SUPPORT_LEVEL_BY_STACK: dict[str, AppliedSupportLevel] = {
-    "fastapi_pytest": "l2",
-    "django_drf": "l2",
-    "express_node": "l2",
-    "unknown": "l0",
-}
-_SUPPORT_LEVEL_DOWNGRADE: dict[AppliedSupportLevel, AppliedSupportLevel] = {
-    "l2": "l1",
-    "l1": "l0",
-    "l0": "l0",
-}
-
-
-def _resolve_support_level(requested: str, detected_stack: str) -> AppliedSupportLevel:
-    if requested in {"l0", "l1", "l2"}:
-        return cast(AppliedSupportLevel, requested)
-    return cast(AppliedSupportLevel, DEFAULT_SUPPORT_LEVEL_BY_STACK.get(detected_stack, "l0"))
-
-
-def _downgrade_support_level(level: AppliedSupportLevel) -> AppliedSupportLevel:
-    return _SUPPORT_LEVEL_DOWNGRADE[level]
-
-
-def _resolve_competitive_mode(analysis_engine: str) -> CompetitiveMode:
-    if analysis_engine == "deterministic":
-        return "deterministic"
-    return "hybrid"
 
 
 def _resolve_effective_ci_mode(requested: CIMode, support_level_applied: AppliedSupportLevel) -> tuple[CIMode, str | None]:
@@ -104,18 +81,6 @@ def _resolve_effective_ci_mode(requested: CIMode, support_level_applied: Applied
     if support_level_applied == "l1":
         return effective, f"ci_mode downgraded to soft for support_level=l1 (requested: {requested})."
     return effective, None
-
-
-def _resolve_repository_support_state(
-    *,
-    plugin: CollectorPlugin | None,
-    support_level_applied: AppliedSupportLevel,
-) -> RepositorySupportState:
-    if support_level_applied == "l0":
-        return "partial"
-    if plugin is None:
-        return "unsupported"
-    return "supported"
 
 
 def _normalize_path(path: str) -> str:
@@ -330,6 +295,21 @@ def _compute_run_metrics(
     analysis_scope: AnalysisScope,
     duration_ms: int,
 ) -> RunMetrics:
+    if not findings.findings:
+        return RunMetrics(
+            precision_proxy=1.0,
+            fallback_reason=summary.fallback_reason,
+            new_findings_count=summary.new_count,
+            actionability_proxy=1.0,
+            triage_time_proxy_min=0.0,
+            verification_pass_rate=verification_pass_rate,
+            evidence_completeness=evidence_completeness,
+            support_level_applied=support_level_applied,
+            competitive_mode=competitive_mode,
+            analysis_scope=analysis_scope,
+            duration_ms=duration_ms,
+        )
+
     total = max(1, len(findings.findings))
     supported = [
         finding
@@ -358,10 +338,9 @@ def _compute_run_metrics(
 @dataclass
 class _PreflightStage:
     preflight: PreflightResult
-    plugin: CollectorPlugin | None
-    support_level_applied: AppliedSupportLevel
-    competitive_mode: CompetitiveMode
-    repository_support_state: RepositorySupportState
+    prepared_profile: CodeRiskPreparedProfile
+    ui_flow_profile: UiFlowPreparedProfile
+    business_invariant_profile: BusinessInvariantPreparedProfile
 
 
 @dataclass
@@ -402,55 +381,39 @@ def _stage_preflight(
 ) -> tuple[_PreflightStage | None, int | None]:
     t = sinks.progress.start(1, total_steps, "Stack detection and pre-flight")
     detection = detect_stack(ctx.repo_path)
-    notes.append(f"Detected stack: {detection.stack_id} (confidence: {detection.confidence}).")
-    support_level_applied = _resolve_support_level(ctx.support_level, detection.stack_id)
-    competitive_mode = _resolve_competitive_mode(ctx.analysis_engine)
-    if ctx.risk_policy != "balanced":
-        notes.append(f"Risk policy: {ctx.risk_policy}.")
 
-    plugin = get_plugin_for_stack(detection.stack_id)
-    if plugin is None and support_level_applied != "l0":
+    code_risk_profile = get_profile("code_risk")
+    if code_risk_profile is None:
         sinks.progress.finish(1, total_steps, "Stack detection and pre-flight", t)
-        notes.append(f"Support level applied: {support_level_applied}.")
-        notes.extend(detection.reasons)
-        notes.append(f"No collector plugin is registered for stack '{detection.stack_id}'.")
+        notes.append("Shipped code_risk profile is not registered.")
         return None, 2
+    code_risk_profile = cast(CodeRiskProfile, code_risk_profile)
 
-    if plugin is None:
-        preflight = PreflightResult(
-            status="WARN",
-            reasons=[*detection.reasons, "Unknown stack: fallback to L0 universal risk mode."],
-        )
-    else:
-        preflight = plugin.preflight(ctx.repo_path, probe_data=detection.probe_data)
+    prepared_profile, exit_code = code_risk_profile.prepare(ctx, notes, detection=detection)
     sinks.progress.finish(1, total_steps, "Stack detection and pre-flight", t)
+    if exit_code is not None or prepared_profile is None:
+        return None, exit_code or 2
 
-    if preflight.status == "FAIL":
-        notes.append(f"Support level applied: {support_level_applied}.")
-        notes.extend(preflight.reasons)
+    ui_flow_profile = get_profile("ui_flow_risk")
+    if ui_flow_profile is None:
+        notes.append("Shipped ui_flow_risk profile is not registered.")
         return None, 2
-    if preflight.status == "WARN":
-        notes.extend(preflight.reasons)
-        if plugin is not None and ctx.support_level == "auto":
-            downgraded = _downgrade_support_level(support_level_applied)
-            if downgraded != support_level_applied:
-                notes.append(
-                    f"Support level downgraded from {support_level_applied} to {downgraded} due to pre-flight warnings."
-                )
-                support_level_applied = downgraded
+    ui_flow_profile = cast(UiFlowProfile, ui_flow_profile)
+    prepared_ui_flow = ui_flow_profile.prepare(ctx.repo_path)
 
-    notes.append(f"Support level applied: {support_level_applied}.")
+    business_invariant_profile = get_profile("business_invariant_risk")
+    if business_invariant_profile is None:
+        notes.append("Shipped business_invariant_risk profile is not registered.")
+        return None, 2
+    business_invariant_profile = cast(BusinessInvariantProfile, business_invariant_profile)
+    prepared_business_invariant = business_invariant_profile.prepare(ctx.repo_path, notes)
 
     return (
         _PreflightStage(
-            preflight=preflight,
-            plugin=plugin,
-            support_level_applied=support_level_applied,
-            competitive_mode=competitive_mode,
-            repository_support_state=_resolve_repository_support_state(
-                plugin=plugin,
-                support_level_applied=support_level_applied,
-            ),
+            preflight=prepared_profile.preflight,
+            prepared_profile=prepared_profile,
+            ui_flow_profile=prepared_ui_flow,
+            business_invariant_profile=prepared_business_invariant,
         ),
         None,
     )
@@ -459,17 +422,16 @@ def _stage_preflight(
 def _stage_collect_artifacts(
     ctx: RunContext,
     *,
-    plugin: CollectorPlugin | None,
+    prepared_profile: CodeRiskPreparedProfile,
     sinks: PipelineSinks,
     total_steps: int,
 ) -> _CollectStage:
     t = sinks.progress.start(2, total_steps, "Collecting artifacts")
-    artifacts = collect_universal_artifacts(ctx.repo_path) if plugin is None else plugin.collect(ctx.repo_path)
-    collect_signals_from_artifacts = getattr(plugin, "collect_signals_from_artifacts", None) if plugin is not None else None
-    if callable(collect_signals_from_artifacts):
-        signals = collect_signals_from_artifacts(artifacts)
-    else:
-        signals = artifact_bundle_to_signal_bundle(artifacts)
+    code_risk_profile = get_profile("code_risk")
+    if code_risk_profile is None:
+        raise RuntimeError("Shipped code_risk profile is not registered.")
+    code_risk_profile = cast(CodeRiskProfile, code_risk_profile)
+    artifacts, signals = code_risk_profile.collect(prepared_profile, ctx.repo_path)
     sinks.progress.finish(2, total_steps, "Collecting artifacts", t)
     return _CollectStage(artifacts=artifacts, signals=signals)
 
@@ -555,6 +517,34 @@ def _resolve_provider_for_analysis(
     return provider_resolution, None
 
 
+def _resolve_ui_flow_assessment(
+    *,
+    repo_path: Path,
+    ui_flow_profile: UiFlowPreparedProfile,
+    changed_files: set[str] | None,
+) -> tuple[list[str], list[str], SignalBundle]:
+    ui_profile = get_profile("ui_flow_risk")
+    if ui_profile is None:
+        return [], [], SignalBundle()
+    ui_profile = cast(UiFlowProfile, ui_profile)
+    assessment = ui_profile.assess_changed_scope(ui_flow_profile, repo_path, changed_files)
+    return assessment.review_focus, assessment.notes, assessment.smoke_signals
+
+
+def _resolve_business_invariant_assessment(
+    *,
+    repo_path: Path,
+    business_invariant_profile: BusinessInvariantPreparedProfile,
+    changed_files: set[str] | None,
+) -> tuple[list[str], SignalBundle]:
+    profile = get_profile("business_invariant_risk")
+    if profile is None:
+        return [], SignalBundle()
+    profile = cast(BusinessInvariantProfile, profile)
+    assessment = profile.assess_changed_scope(business_invariant_profile, repo_path, changed_files)
+    return assessment.notes, assessment.signals
+
+
 def _combine_ai_findings(*reports: FindingsReport) -> FindingsReport:
     combined: list[Finding] = []
     generated_without_llm = True
@@ -586,6 +576,9 @@ def _stage_analysis(
     support_level_applied: AppliedSupportLevel,
     competitive_mode: CompetitiveMode,
     repository_support_state: RepositorySupportState,
+    profile_summaries: list[ProfileSummary],
+    profile_review_focus: list[str],
+    profile_signals: SignalBundle,
     sinks: PipelineSinks,
     total_steps: int,
     notes: list[str],
@@ -596,6 +589,9 @@ def _stage_analysis(
         if pr_change_signals.signals:
             notes.append(f"Universal PR heuristics produced {len(pr_change_signals.signals)} signal(s).")
             deterministic_signals = merge_signal_bundles(deterministic_signals, pr_change_signals, min_confidence="low")
+        if profile_signals.signals:
+            notes.append(f"Profile heuristics produced {len(profile_signals.signals)} signal(s).")
+            deterministic_signals = merge_signal_bundles(deterministic_signals, profile_signals, min_confidence="low")
 
     t = sinks.progress.start(4, total_steps, "Running deterministic rules")
     findings_raw = run_rules(deterministic_signals, risk_policy=ctx.risk_policy)
@@ -686,9 +682,19 @@ def _stage_analysis(
         baseline_fingerprints=baseline_fingerprints,
         fallback_reason=fallback_reason,
     )
+    trust_outcomes, trust_notes = load_trust_outcomes(ctx.repo_path / ".airisktrust.json")
+    notes.extend(trust_notes)
+    annotate_finding_trust(
+        findings.findings,
+        repo_path=ctx.repo_path,
+        repository_support_state=repository_support_state,
+        outcomes=trust_outcomes,
+    )
     verification_pass_rate, evidence_completeness, verified_fingerprints = _verification_stats(findings, ctx.repo_path)
     summary.support_level_applied = support_level_applied
     summary.repository_support_state = repository_support_state
+    summary.profiles = list(profile_summaries)
+    summary.profile_review_focus = list(profile_review_focus)
     summary.verification_pass_rate = verification_pass_rate
     summary.evidence_completeness = evidence_completeness
     summary.competitive_mode = competitive_mode
@@ -782,18 +788,47 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
 
     collected_stage = _stage_collect_artifacts(
         ctx,
-        plugin=preflight_stage.plugin,
+        prepared_profile=preflight_stage.prepared_profile,
         sinks=active_sinks,
         total_steps=total_steps,
     )
     graph = _stage_build_graph(collected_stage.signals, sinks=active_sinks, total_steps=total_steps)
     scope_stage = _stage_resolve_scope(ctx, graph, collected_stage.signals, sinks=active_sinks, notes=notes)
+    profile_review_focus, profile_notes, profile_signals = _resolve_ui_flow_assessment(
+        repo_path=ctx.repo_path,
+        ui_flow_profile=preflight_stage.ui_flow_profile,
+        changed_files=scope_stage.changed_files,
+    )
+    notes.extend(profile_notes)
+    business_invariant_notes, business_invariant_signals = _resolve_business_invariant_assessment(
+        repo_path=ctx.repo_path,
+        business_invariant_profile=preflight_stage.business_invariant_profile,
+        changed_files=scope_stage.changed_files,
+    )
+    notes.extend(business_invariant_notes)
+    profile_signals = merge_signal_bundles(profile_signals, business_invariant_signals, min_confidence="low")
     analysis_stage, analysis_exit = _stage_analysis(
         ctx,
         scope=scope_stage,
-        support_level_applied=preflight_stage.support_level_applied,
-        competitive_mode=preflight_stage.competitive_mode,
-        repository_support_state=preflight_stage.repository_support_state,
+        support_level_applied=preflight_stage.prepared_profile.support_level_applied,
+        competitive_mode=preflight_stage.prepared_profile.competitive_mode,
+        repository_support_state=preflight_stage.prepared_profile.repository_support_state,
+        profile_summaries=[
+            ProfileSummary(
+                profile_id=preflight_stage.prepared_profile.profile_id,
+                applicability=preflight_stage.prepared_profile.applicability,
+            ),
+            ProfileSummary(
+                profile_id=preflight_stage.ui_flow_profile.profile_id,
+                applicability=preflight_stage.ui_flow_profile.applicability,
+            ),
+            ProfileSummary(
+                profile_id=preflight_stage.business_invariant_profile.profile_id,
+                applicability=preflight_stage.business_invariant_profile.applicability,
+            ),
+        ],
+        profile_review_focus=profile_review_focus,
+        profile_signals=profile_signals,
         sinks=active_sinks,
         total_steps=total_steps,
         notes=notes,
@@ -812,7 +847,6 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
         analysis_scope=scope_stage.analysis_scope,
         duration_ms=duration_ms,
     )
-
     result = PipelineResult(
         preflight=preflight_stage.preflight,
         analysis_scope=scope_stage.analysis_scope,
@@ -837,7 +871,7 @@ def run_pipeline(ctx: RunContext, *, sinks: PipelineSinks | None = None) -> tupl
         notes=notes,
     )
 
-    output_notes = active_sinks.artifacts.write(ctx=ctx, result=result, notes=notes)
+    output_notes = active_sinks.artifacts.write(ctx=ctx, result=result, notes=notes, changed_files=scope_stage.changed_files)
     notes.extend(output_notes)
 
     return result, exit_code, notes

@@ -1,0 +1,14 @@
+[[journeys]]
+id = "checkout"
+match = ["checkout", "payment", "billing"]
+command = ["pnpm", "exec", "playwright", "test", "--grep", "@checkout"]
+
+[[journeys]]
+id = "product"
+match = ["product", "product/[slug]", "productgallery", "gallery"]
+command = ["pnpm", "exec", "playwright", "test", "--grep", "@product"]
+
+[[journeys]]
+id = "cart"
+match = ["cart", "cartmodal", "usecart", "mini-cart"]
+command = ["pnpm", "exec", "playwright", "test", "--grep", "@cart"]
