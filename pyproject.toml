@@ -43,7 +43,7 @@ api = [
   "uvicorn==0.44.0",
 ]
 dev = [
-  "pytest==9.0.2",
+  "pytest==9.0.3",
   "pytest-cov==7.1.0",
   "ruff==0.15.11",
   "mypy==1.11.0",
