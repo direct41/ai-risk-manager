@@ -38,7 +38,7 @@ riskmap-api = "ai_risk_manager.api.server:app_entry"
 
 [project.optional-dependencies]
 api = [
-  "fastapi==0.135.3",
+  "fastapi==0.136.0",
   "pydantic==2.13.2",
   "uvicorn==0.44.0",
 ]
@@ -47,7 +47,7 @@ dev = [
   "pytest-cov==7.1.0",
   "ruff==0.15.11",
   "mypy==1.11.0",
-  "fastapi==0.135.3",
+  "fastapi==0.136.0",
   "httpx==0.28.1",
   "pydantic==2.13.2",
   "uvicorn==0.44.0",
