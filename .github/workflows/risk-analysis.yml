@@ -15,7 +15,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - uses: ./.github/actions/setup-python-env
 
@@ -46,14 +46,14 @@ jobs:
 
       - name: Save baseline cache
         if: hashFiles('./.riskmap/baseline/graph.json') != '' && hashFiles('./.riskmap/baseline/findings.json') != ''
-        uses: actions/cache/save@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ./.riskmap/baseline
           key: baseline-${{ github.repository }}-${{ github.sha }}
 
       - name: Upload artifacts
         if: hashFiles('./.riskmap/report.md') != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: risk-analysis-main-${{ github.sha }}
           path: ./.riskmap/
@@ -64,14 +64,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # fetch-depth: 0 is required for PR diff mode against the base branch.
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
 
       - uses: ./.github/actions/setup-python-env
 
       - name: Restore baseline cache
-        uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ./.riskmap/baseline
           key: baseline-${{ github.repository }}-${{ github.event.pull_request.base.sha }}
@@ -115,7 +115,7 @@ jobs:
           }
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: risk-analysis-pr-${{ github.event.pull_request.number }}-${{ github.sha }}
           path: ./.riskmap/
