@@ -14,7 +14,7 @@ from ai_risk_manager.signals.types import CapabilitySignal, SignalBundle
 from ai_risk_manager.stacks.discovery import StackDetectionResult
 
 
-def test_preflight_fail_for_non_fastapi(tmp_path: Path, write_file) -> None:
+def test_preflight_fail_for_unsupported_stack(tmp_path: Path, write_file) -> None:
     write_file(tmp_path / "app.py", "def hello():\n    return 'ok'\n")
 
     ctx = RunContext(
@@ -789,6 +789,41 @@ def test_pipeline_writes_metadata_to_json_artifacts(tmp_path: Path, write_file) 
     assert "verification_pass_rate" in metrics
     assert "evidence_completeness" in metrics
     assert "triage_time_proxy_min" in metrics
+
+
+def test_no_finding_runs_have_non_misleading_quality_metrics(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.get('/health')\n"
+        "def health():\n"
+        "    return {'ok': True}\n",
+    )
+
+    out_dir = tmp_path / ".riskmap"
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="full",
+        base=None,
+        output_dir=out_dir,
+        provider="auto",
+        no_llm=True,
+        analysis_engine="deterministic",
+    )
+
+    result, code, _ = run_pipeline(ctx)
+    assert code == 0
+    assert result is not None
+    assert result.findings.findings == []
+    assert result.run_metrics.precision_proxy == 1.0
+    assert result.run_metrics.actionability_proxy == 1.0
+    assert result.run_metrics.triage_time_proxy_min == 0.0
+
+    metrics = json.loads((out_dir / "run_metrics.json").read_text(encoding="utf-8"))
+    assert metrics["precision_proxy"] == 1.0
+    assert metrics["actionability_proxy"] == 1.0
+    assert metrics["triage_time_proxy_min"] == 0.0
 
 
 def test_pipeline_applies_airiskignore_suppressions(tmp_path: Path, write_file) -> None:

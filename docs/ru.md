@@ -14,15 +14,25 @@ AI Risk Manager помогает перед merge/release ответить на 
 1. Установка:
 
 ```bash
-pip install -e '.[dev]'
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e '.[dev]'
 ```
 
 2. Запуск на встроенном примере:
 
 ```bash
-riskmap analyze --sample --no-llm --output-dir ./.riskmap
+riskmap analyze --sample --no-llm --analysis-engine deterministic --output-dir ./.riskmap
 cat ./.riskmap/report.md
 cat ./.riskmap/merge_triage.md
+```
+
+Самый короткий вариант:
+
+```bash
+make install
+make analyze-demo
 ```
 
 Если нужно, можно переопределить sample:
@@ -146,6 +156,19 @@ riskmap analyze \
 - Команды, которым нужны конкретные test actions.
 - Команды, где AI быстро генерирует код, а review должен быстро понять, что тестировать первым.
 
+## Альфа-тестирование
+
+Проект готов к ограниченной открытой альфе для команд, которые готовы запускать CLI локально или в GitHub Actions и оценивать advisory-отчет перед включением blocking gates.
+
+Лучший фидбек:
+
+- какие top 3 findings были полезными или шумными;
+- какой тест вы добавили после отчета;
+- какой важный риск инструмент пропустил;
+- где инструкция или wording были непонятны.
+
+Короткий гайд для альфа-пользователей: `ALPHA.md`.
+
 ## Merge risk triage
 
 Новый triage-слой не ищет новые findings. Он берет уже проверенные findings и test plan, затем собирает короткий decision package:
@@ -211,11 +234,12 @@ curl -s http://127.0.0.1:8000/healthz
 ## Где смотреть дальше
 
 - Полная англ. документация: `README.md`
+- Альфа-гайд: `ALPHA.md`
 - Архитектурное решение: `docs/architecture.md`
 - Roadmap: `docs/roadmap.md`
 - Workspace/monorepo usage: `docs/workspaces.md`
 - UI flow pilot log: `docs/ui-flow-pilots.md`
 - Business invariants: `docs/business-invariants.md`
-- Legacy review: `docs/legacy-review.md`
 - Совместимость контрактов: `docs/compatibility.md`
+- Legacy review: `docs/legacy-review.md`
 - Совместимые legacy surfaces: `docs/capability-signals.md`, `docs/ingress-contract.md`, `docs/plugin-contract.md`

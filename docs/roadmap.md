@@ -221,6 +221,6 @@ Recommended PR sequence:
 
 ## Recommended Next Actions
 
-1. Start `ui_flow_risk` with repository discovery and changed-journey mapping only.
-2. Keep browser execution opt-in and targeted to declared critical journeys.
-3. Treat `ui_flow_risk` and `business_invariant_risk` as optional profiles, never as a new product branch.
+1. Run limited open alpha on real PRs and collect precision/noise feedback for the top 3 findings.
+2. Validate `business_invariant_risk` on at least two repositories with real `.riskmap.yml` critical flows before adding more invariant rules.
+3. Keep `ui_flow_risk` browser execution opt-in and targeted; do not add screenshot diffing or cross-browser matrices until declared smoke usefulness is proven.

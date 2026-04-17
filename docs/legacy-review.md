@@ -1,6 +1,6 @@
 # Legacy Review
 
-This review identifies current candidates for deletion or demotion after the new architecture lands.
+This review identifies current candidates for deletion or demotion after the profile-based architecture has landed.
 
 The rule used here is simple:
 
@@ -10,11 +10,16 @@ The rule used here is simple:
 
 ## Immediate Removals
 
-These documents were useful during earlier design stages but should not remain as active architecture guidance:
+These documents were useful during earlier design stages but should not remain as active architecture guidance.
+They have been removed from the repository root or replaced by canonical docs:
 
 - `docs/architecture-next.md`
 - `docs/merge-risk-triage-architecture.md`
 - `docs/stack-expansion-candidates.md`
+- `ROADMAP.md`
+- `PLAN.md`
+- `PLAN_UNIVERSAL_AI.md`
+- `BACKLOG_TRUST_FIRST.md`
 
 Reason:
 
@@ -25,7 +30,7 @@ Reason:
 ## Compatibility-Only Code Candidates
 
 These are not deletion targets today because the runtime still depends on them.
-They are candidates to retire after the profile registry is in place.
+They are candidates to retire after alpha feedback confirms the profile-based output is stable.
 
 ### 1. Stack-first selection path
 
@@ -42,7 +47,7 @@ Why it is legacy:
 
 Deletion trigger:
 
-- once profile selection becomes the primary runtime entrypoint
+- once `code_risk` no longer needs stack plugin selection and all stack-specific behavior is behind profile-owned adapters
 
 ### 2. Plugin contract v1 surface
 
@@ -131,12 +136,12 @@ Reason:
 The product does not need a rewrite.
 It needs:
 
-- removal of stale architecture documents now
+- continued removal of stale architecture documents
 - demotion of stack-plugin contracts to compatibility status
-- eventual retirement of stack-first runtime selection after profile selection is introduced
+- eventual retirement of stack-first runtime selection after real alpha feedback confirms profile behavior
 
 ## Recommended Next Actions
 
-1. Remove obsolete architecture documents immediately.
-2. Treat stack-plugin contracts as compatibility-only in docs.
-3. Start profile-registry implementation before deleting runtime stack-selection code.
+1. Keep `README.md`, `ALPHA.md`, and `docs/roadmap.md` as the public planning sources of truth.
+2. Treat stack-plugin contracts as compatibility-only in docs and avoid expanding the public product around them.
+3. Do not delete runtime stack-selection code until alpha users confirm profile-level output is useful and stable.

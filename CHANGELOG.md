@@ -7,6 +7,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Alpha testing guide (`ALPHA.md`) with local usage steps, feedback prompts, and LinkedIn-ready positioning text.
+- Profile-based architecture and roadmap documentation for `code_risk`, `ui_flow_risk`, and `business_invariant_risk`.
 - Trust-first eval gates with in-repo thresholds (`eval/trust_thresholds.json`) and CI enforcement in weekly eval workflow.
 - Eval trend tracking artifacts:
   - `eval/results/trust_gate.json`
@@ -33,8 +35,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   - `merge_triage.md`
   - `merge_triage.json`
 - Added `ready|review_required|block_recommended` merge decision packaging with a 10-minute test-first order.
+- Declared UI smoke examples and explicit business critical-flow documentation for alpha validation.
 
 ### Changed
+- Local Makefile onboarding now uses the project `.venv` and runs the bundled demo in deterministic/no-LLM mode.
+- Development/API dependency pins were updated to Python 3.13-compatible versions.
 - `block-new-critical` guardrails now trigger only for `new + critical + high confidence + verified evidence` findings.
 - Transition invariant rule reduced false positives via declared transition anchors.
 - PR-focused summary behavior and reporting metadata improved for trust-first rollout.
@@ -46,8 +51,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - README was streamlined for faster onboarding and updated baseline guidance.
 - CI risk-analysis baseline now uses deterministic/no-llm mode and caches both `graph.json` and `findings.json` for correct PR delta status.
 - Reports and PR summaries now surface merge triage decision, release-risk score, and top test-first actions.
+- Root-level planning docs were removed in favor of `README.md`, `ALPHA.md`, and `docs/roadmap.md`.
 
 ### Fixed
+- No-finding runs now report perfect precision/actionability proxies and zero triage time instead of misleading `0%` quality metrics.
 - Pipeline/report consistency: `effective_ci_mode` and CI/fail notes are now computed before markdown artifact generation.
 - Semantic AI payload validation now rejects unsupported severity/confidence labels and degrades gracefully.
 - Collector noise reduction: scanning skips `eval/`, `fixtures/`, and `testdata/` directories.

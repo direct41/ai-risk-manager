@@ -126,7 +126,8 @@ def _run_analyze(args: argparse.Namespace) -> int:
         return 1
 
     if result is None and exit_code == 2:
-        print("Pre-flight FAIL: repository is unsupported for MVP (expected FastAPI patterns).")
+        print("Pre-flight FAIL: repository is unsupported for the selected support level.")
+        print("Try --support-level auto for advisory fallback, or run on a supported app root.")
         for note in notes:
             print(f"- {note}")
         return 2

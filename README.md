@@ -44,8 +44,24 @@ See:
 ## Install
 
 ```bash
-pip install -e '.[dev]'
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e '.[dev]'
 ```
+
+## Try In 60 Seconds
+
+Run the bundled deterministic demo:
+
+```bash
+make install
+make analyze-demo
+cat .riskmap/report.md
+cat .riskmap/merge_triage.md
+```
+
+The demo does not call an LLM. It should finish quickly and produce a small report with concrete test-first actions.
 
 ## Quick Start
 
@@ -69,7 +85,7 @@ cat ./.riskmap/merge_triage.md
 If you want to try the bundled sample first:
 
 ```bash
-riskmap analyze --sample --no-llm --output-dir ./.riskmap
+riskmap analyze --sample --no-llm --analysis-engine deterministic --output-dir ./.riskmap
 ```
 
 ## Example Output
@@ -161,6 +177,24 @@ Place it in `./.riskmap-ui.toml`. The command runs only for changed UI journeys 
 
 For workspaces or monorepos, run analysis from the package that owns the changed app. See `docs/workspaces.md`.
 
+## Alpha Testing
+
+AI Risk Manager is ready for limited open alpha with teams that:
+
+- review fast-moving PRs and want a short release-risk checklist
+- use AI-generated code and need to know what to test first
+- can run a CLI locally or in GitHub Actions
+- are comfortable with advisory output before adopting blocking CI gates
+
+Best feedback to send:
+
+- repository type and stack
+- whether the top 3 findings were useful or noisy
+- what test you added or skipped because of the report
+- any false positive, missing risk, or confusing instruction
+
+See `ALPHA.md` for a concise alpha-user guide.
+
 ## Works Best For
 
 - backend teams doing pre-merge or pre-release reviews
@@ -203,22 +237,24 @@ If you need persistent API audit logging outside the output directory, set `AIRI
 ```bash
 make install
 make test
+make analyze-demo
 ```
 
 ## Docs
 
+- `ALPHA.md`
 - `docs/architecture.md`
 - `docs/roadmap.md`
 - `docs/workspaces.md`
 - `docs/ui-flow-pilots.md`
 - `docs/business-invariants.md`
-- `docs/legacy-review.md`
 - `docs/ru.md`
 - `docs/compatibility.md`
 - `docs/deployment-hardening.md`
 
-Legacy compatibility notes:
+Internal and compatibility notes:
 
+- `docs/legacy-review.md`
 - `docs/capability-signals.md`
 - `docs/ingress-contract.md`
 - `docs/plugin-contract.md`

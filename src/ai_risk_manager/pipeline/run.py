@@ -295,6 +295,21 @@ def _compute_run_metrics(
     analysis_scope: AnalysisScope,
     duration_ms: int,
 ) -> RunMetrics:
+    if not findings.findings:
+        return RunMetrics(
+            precision_proxy=1.0,
+            fallback_reason=summary.fallback_reason,
+            new_findings_count=summary.new_count,
+            actionability_proxy=1.0,
+            triage_time_proxy_min=0.0,
+            verification_pass_rate=verification_pass_rate,
+            evidence_completeness=evidence_completeness,
+            support_level_applied=support_level_applied,
+            competitive_mode=competitive_mode,
+            analysis_scope=analysis_scope,
+            duration_ms=duration_ms,
+        )
+
     total = max(1, len(findings.findings))
     supported = [
         finding
