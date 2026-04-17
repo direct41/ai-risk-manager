@@ -11,4 +11,4 @@
 - Command used
 - Tool output and exit code
 - `report.md` and `findings.json` snippets
-- Repository shape (FastAPI/pytest layout)
+- Repository shape, framework, test tools, and project layout
