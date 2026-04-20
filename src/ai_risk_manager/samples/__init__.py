@@ -1,1 +1,1 @@
-"""Packaged sample repositories for first-run CLI smoke paths."""
+"""Packaged sample repositories used by first-run CLI smoke paths."""
