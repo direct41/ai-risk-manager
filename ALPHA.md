@@ -19,8 +19,11 @@ Use it if you want a short PR risk review that says:
 ## Try It Locally
 
 ```bash
-make install
-make analyze-demo
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install "git+https://github.com/direct41/ai-risk-manager.git"
+riskmap analyze --sample --no-llm --analysis-engine deterministic --output-dir ./.riskmap
 cat .riskmap/report.md
 cat .riskmap/merge_triage.md
 ```

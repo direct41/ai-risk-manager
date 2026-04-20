@@ -11,12 +11,18 @@ AI Risk Manager помогает перед merge/release ответить на 
 
 ## Быстрый старт (5 минут)
 
-1. Установка:
+1. Самостоятельная CLI-установка из GitHub:
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
+python -m pip install "git+https://github.com/direct41/ai-risk-manager.git"
+```
+
+Для локальной разработки из checkout используйте dev-установку:
+
+```bash
 python -m pip install -e '.[dev]'
 ```
 
@@ -28,7 +34,7 @@ cat ./.riskmap/report.md
 cat ./.riskmap/merge_triage.md
 ```
 
-Самый короткий вариант:
+Самый короткий вариант из checkout:
 
 ```bash
 make install
