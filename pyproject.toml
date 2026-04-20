@@ -59,6 +59,12 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+ai_risk_manager = [
+  "samples/milestone2_fastapi/app/*.py",
+  "samples/milestone2_fastapi/tests/*.py",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

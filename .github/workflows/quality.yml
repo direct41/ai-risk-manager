@@ -32,11 +32,20 @@ jobs:
 
       - name: Minimal install smoke (no extras)
         run: |
+          set -o pipefail
           python -m venv .venv-min
           . .venv-min/bin/activate
           python -m pip install --upgrade pip
           python -m pip install .
           python -c "import ai_risk_manager.api.server"
+          riskmap analyze \
+            --sample \
+            --no-llm \
+            --analysis-engine deterministic \
+            --output-dir "${RUNNER_TEMP}/riskmap-sample" \
+            | tee "${RUNNER_TEMP}/riskmap-sample.log"
+          test -s "${RUNNER_TEMP}/riskmap-sample/report.md"
+          grep -Fq "Support level applied: l2" "${RUNNER_TEMP}/riskmap-sample.log"
           set +e
           output="$(riskmap-api 2>&1)"
           code=$?

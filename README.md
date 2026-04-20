@@ -43,6 +43,17 @@ See:
 
 ## Install
 
+For a self-contained CLI install from GitHub:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install "git+https://github.com/direct41/ai-risk-manager.git"
+```
+
+For local development from a checkout:
+
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
@@ -55,13 +66,13 @@ python -m pip install -e '.[dev]'
 Run the bundled deterministic demo:
 
 ```bash
-make install
-make analyze-demo
+riskmap analyze --sample --no-llm --analysis-engine deterministic --output-dir ./.riskmap
 cat .riskmap/report.md
 cat .riskmap/merge_triage.md
 ```
 
 The demo does not call an LLM. It should finish quickly and produce a small report with concrete test-first actions.
+From a source checkout, `make analyze-demo` runs the same path.
 
 ## Quick Start
 

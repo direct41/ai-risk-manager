@@ -56,6 +56,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Root-level planning docs were removed in favor of `README.md`, `ALPHA.md`, and `docs/roadmap.md`.
 
 ### Fixed
+- Packaged the deterministic sample repository so `riskmap analyze --sample` works after a normal wheel/GitHub install, not only from a source checkout.
 - No-finding runs now report perfect precision/actionability proxies and zero triage time instead of misleading `0%` quality metrics.
 - Pipeline/report consistency: `effective_ci_mode` and CI/fail notes are now computed before markdown artifact generation.
 - Semantic AI payload validation now rejects unsupported severity/confidence labels and degrades gracefully.

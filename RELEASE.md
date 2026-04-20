@@ -6,7 +6,7 @@
 2. Run eval suite and review KPI summary + trust trend artifacts (`trust_gate.json`, `trust_trend.json`).
 3. Update `CHANGELOG.md` and release notes with:
    - value proposition
-   - known limits (FastAPI+pytest only)
+   - known limits (strongest support on FastAPI, Django/DRF, and Express/Node; UI and business-invariant profiles are scoped alpha surfaces)
    - quickstart
 4. Create tag: `vX.Y.Z`.
 5. Publish GitHub Release.
