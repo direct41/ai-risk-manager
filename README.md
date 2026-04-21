@@ -213,11 +213,10 @@ make analyze-demo
 - `docs/ru.md` - Russian quickstart
 - `docs/workspaces.md` - workspace and monorepo usage
 - `docs/business-invariants.md` - `.riskmap.yml` critical-flow checks
-- `docs/ui-flow-pilots.md` - UI flow pilot notes
-- `docs/architecture.md` - architecture overview
-- `docs/roadmap.md` - roadmap and scope guardrails
 - `docs/deployment-hardening.md` - API deployment hardening
-- `docs/launch/product-hunt.md` - Product Hunt launch kit
+- `docs/compatibility.md` - CLI/API/artifact compatibility policy
+- `docs/plugin-contract.md` - plugin author contract
+- `docs/ingress-contract.md` - ingress signal contract
 
 ## Open Source
 

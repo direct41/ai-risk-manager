@@ -121,5 +121,5 @@ https://github.com/direct41/ai-risk-manager/issues/new?template=alpha_feedback.y
 - `ALPHA.md` - краткий alpha-user guide.
 - `docs/workspaces.md` - workspace/monorepo usage.
 - `docs/business-invariants.md` - `.riskmap.yml` critical-flow checks.
-- `docs/architecture.md` - архитектура.
-- `docs/roadmap.md` - roadmap и scope guardrails.
+- `docs/deployment-hardening.md` - API deployment hardening.
+- `docs/compatibility.md` - политика совместимости CLI/API/artifacts.
