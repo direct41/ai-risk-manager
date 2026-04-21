@@ -1,0 +1,40 @@
+name: Alpha feedback
+description: Share feedback from running AI Risk Manager on a real repository
+labels: [alpha-feedback]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Repository context
+      description: Stack, framework, test tools, and repository shape.
+      placeholder: FastAPI + pytest service, Django/DRF API, Express API, monorepo package, etc.
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: Command used
+      placeholder: riskmap analyze --mode pr --base main --only-new --output-dir ./.riskmap
+    validations:
+      required: true
+  - type: textarea
+    id: useful
+    attributes:
+      label: What was useful?
+      description: Mention the top findings, test actions, or merge triage output that helped.
+    validations:
+      required: true
+  - type: textarea
+    id: noisy
+    attributes:
+      label: What was noisy, confusing, or missing?
+      description: Include false positives, unclear wording, missed risks, or setup blockers.
+    validations:
+      required: true
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Relevant output snippets
+      description: Paste short snippets from report.md, merge_triage.md, or findings.json. Avoid secrets.
+    validations:
+      required: false
