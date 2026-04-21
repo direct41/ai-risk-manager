@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import os
 from pathlib import Path
-import subprocess
+from shutil import which
+import subprocess  # nosec B404
 import time
 from typing import Protocol
 
@@ -62,6 +63,17 @@ def _with_metadata(payload: dict, generated_at: str) -> dict:
     }
 
 
+def _git_executable() -> str | None:
+    return which("git")
+
+
+def _safe_diff_base(base: str) -> str | None:
+    normalized = base.strip()
+    if not normalized or normalized.startswith("-") or "\x00" in normalized:
+        return None
+    return normalized
+
+
 class ConsoleProgressSink:
     def start(self, step: int, total: int, label: str) -> float:
         print(f"[{step}/{total}] {label} ...", flush=True)
@@ -82,11 +94,17 @@ class GitChangedFilesSink:
         if not base:
             return None
 
-        candidate_refs = [f"{base}...HEAD", f"origin/{base}...HEAD"]
+        safe_base = _safe_diff_base(base)
+        git = _git_executable()
+        if safe_base is None or git is None:
+            return None
+
+        candidate_refs = [f"{safe_base}...HEAD", f"origin/{safe_base}...HEAD"]
         for ref in candidate_refs:
             try:
-                proc = subprocess.run(
-                    ["git", "-C", str(repo_path), "diff", "--name-only", "--diff-filter=ACMRTUXB", ref],
+                # Git path is resolved and shell=False; ref is sanitized.
+                proc = subprocess.run(  # nosec B603
+                    [git, "-C", str(repo_path), "diff", "--name-only", "--diff-filter=ACMRTUXB", ref, "--"],
                     capture_output=True,
                     text=True,
                     check=False,

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from ai_risk_manager.api.server import app
+from ai_risk_manager.api.server import _PayloadSizeLimitMiddleware, _RATE_LIMIT_STATE, app
 from ai_risk_manager.pipeline.run import run_pipeline
 from ai_risk_manager.schemas.types import RunContext
 from ai_risk_manager.stacks.discovery import StackDetectionResult
@@ -139,6 +140,7 @@ def test_api_returns_exit_1_for_unavailable_explicit_provider(tmp_path: Path, wr
                     "mode": "full",
                     "provider": "api",
                     "no_llm": False,
+                    "analysis_engine": "ai_first",
                 },
             )
 
@@ -237,6 +239,7 @@ def test_api_requires_token_when_airisk_api_token_is_configured(tmp_path: Path, 
 
 
 def test_api_respects_rate_limit_when_configured(tmp_path: Path, write_file, monkeypatch) -> None:
+    _RATE_LIMIT_STATE.clear()
     write_file(
         tmp_path / "app" / "api.py",
         "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
@@ -257,6 +260,29 @@ def test_api_respects_rate_limit_when_configured(tmp_path: Path, write_file, mon
     assert first.status_code == 200
     assert second.status_code == 429
     assert second.json()["detail"] == "Rate limit exceeded"
+
+
+def test_api_rate_limit_does_not_trust_x_forwarded_for_by_default(tmp_path: Path, write_file, monkeypatch) -> None:
+    _RATE_LIMIT_STATE.clear()
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(tmp_path / "tests" / "test_api.py", "def test_smoke():\n    assert True\n")
+    monkeypatch.setenv("AIRISK_API_RATE_LIMIT_PER_MINUTE", "1")
+    monkeypatch.delenv("AIRISK_API_TRUST_X_FORWARDED_FOR", raising=False)
+
+    client = TestClient(app)
+    payload = {
+        "path": str(tmp_path),
+        "mode": "full",
+        "no_llm": True,
+    }
+    first = client.post("/v1/analyze", json=payload, headers={"X-Forwarded-For": "198.51.100.10"})
+    second = client.post("/v1/analyze", json=payload, headers={"X-Forwarded-For": "198.51.100.11"})
+
+    assert first.status_code == 200
+    assert second.status_code == 429
 
 
 def test_api_rejects_payload_above_max_body_size(tmp_path: Path, write_file, monkeypatch) -> None:
@@ -280,6 +306,104 @@ def test_api_rejects_payload_above_max_body_size(tmp_path: Path, write_file, mon
 
     assert response.status_code == 413
     assert response.json()["detail"] == "Payload too large"
+
+
+def test_payload_limit_rejects_stream_without_content_length(monkeypatch) -> None:
+    monkeypatch.setenv("AIRISK_API_MAX_BODY_BYTES", "5")
+    downstream_called = False
+
+    async def downstream(scope, receive, send) -> None:
+        nonlocal downstream_called
+        downstream_called = True
+
+    middleware = _PayloadSizeLimitMiddleware(downstream)
+    inbound = iter(
+        [
+            {"type": "http.request", "body": b"123", "more_body": True},
+            {"type": "http.request", "body": b"456", "more_body": False},
+        ]
+    )
+    sent: list[dict] = []
+
+    async def receive() -> dict:
+        return next(inbound)
+
+    async def send(message: dict) -> None:
+        sent.append(message)
+
+    asyncio.run(middleware({"type": "http", "method": "POST", "headers": []}, receive, send))
+
+    assert downstream_called is False
+    assert sent[0]["status"] == 413
+
+
+def test_api_rejects_output_dir_outside_repo_by_default(tmp_path: Path, write_file) -> None:
+    repo_path = tmp_path / "repo"
+    write_file(
+        repo_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    write_file(repo_path / "tests" / "test_api.py", "def test_smoke():\n    assert True\n")
+
+    client = TestClient(app)
+    response = client.post(
+        "/v1/analyze",
+        json={
+            "path": str(repo_path),
+            "mode": "full",
+            "no_llm": True,
+            "output_dir": str(tmp_path / "outside-output"),
+        },
+    )
+
+    assert response.status_code == 400
+    assert "Output directory is outside allowed API roots" in response.json()["detail"]
+
+
+def test_api_public_host_requires_token_when_unset(tmp_path: Path, write_file, monkeypatch) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    monkeypatch.setenv("AIRISK_API_HOST", "0.0.0.0")
+    monkeypatch.delenv("AIRISK_API_TOKEN", raising=False)
+
+    client = TestClient(app)
+    response = client.post(
+        "/v1/analyze",
+        json={
+            "path": str(tmp_path),
+            "mode": "full",
+            "no_llm": True,
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "API token required"
+
+
+def test_api_public_host_requires_workspace_roots_when_token_is_set(tmp_path: Path, write_file, monkeypatch) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    monkeypatch.setenv("AIRISK_API_HOST", "0.0.0.0")
+    monkeypatch.setenv("AIRISK_API_TOKEN", "secret-token")
+    monkeypatch.delenv("AIRISK_API_WORKSPACE_ROOTS", raising=False)
+
+    client = TestClient(app)
+    response = client.post(
+        "/v1/analyze",
+        json={
+            "path": str(tmp_path),
+            "mode": "full",
+            "no_llm": True,
+        },
+        headers={"X-API-Key": "secret-token"},
+    )
+
+    assert response.status_code == 400
+    assert "AIRISK_API_WORKSPACE_ROOTS must be configured" in response.json()["detail"]
 
 
 def test_api_uses_provided_correlation_id(tmp_path: Path, write_file) -> None:

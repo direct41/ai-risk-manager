@@ -62,6 +62,11 @@ riskmap analyze \
   --output-dir ./.riskmap
 ```
 
+AI enrichment is opt-in. Deterministic analysis is the CLI default; use
+`--analysis-engine hybrid` or `--analysis-engine ai-first` with an explicit
+provider only when repository snippets are allowed to leave your machine or CI
+runner.
+
 For stronger PR delta attribution, create a baseline on `main` first:
 
 ```bash
@@ -139,6 +144,8 @@ Generate a PR summary locally:
 riskmap analyze \
   --mode pr \
   --base main \
+  --analysis-engine deterministic \
+  --no-llm \
   --only-new \
   --output-dir ./.riskmap
 ```
@@ -160,7 +167,7 @@ A copy-paste GitHub Actions example is available at `examples/github-actions/ris
 Shipped today:
 
 - `code_risk`: supported release-risk review for code, tests, workflows, contracts, dependencies, and critical write paths
-- `ui_flow_risk`: discovery-focused UI review with optional repo-declared smoke commands
+- `ui_flow_risk`: discovery-focused UI review with repo-declared smoke commands only when `AIRISK_UI_SMOKE_ENABLE_COMMANDS=1`
 - `business_invariant_risk`: explicit critical-flow checks through `.riskmap.yml`
 
 Strongest stack support:

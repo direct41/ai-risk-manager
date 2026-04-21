@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -350,7 +351,87 @@ def test_pr_mode_ui_flow_profile_supports_vanilla_public_ui(tmp_path: Path, writ
     assert any("app_shell" in item for item in pr_summary_json["review_focus"])
 
 
-def test_pr_mode_ui_flow_smoke_failure_produces_finding(tmp_path: Path, write_file) -> None:
+def test_pr_mode_ui_flow_smoke_failure_produces_finding(tmp_path: Path, write_file, monkeypatch) -> None:
+    write_file(
+        tmp_path / "package.json",
+        '{"dependencies":{"react":"18.0.0","react-dom":"18.0.0"},"devDependencies":{"vite":"5.0.0"}}',
+    )
+    write_file(
+        tmp_path / "src" / "pages" / "checkout.tsx",
+        "export default function CheckoutPage() {\n"
+        "  return <div>checkout</div>;\n"
+        "}\n",
+    )
+    write_file(
+        tmp_path / ".riskmap-ui.toml",
+        '[[journeys]]\n'
+        'id = "checkout"\n'
+        'match = ["checkout"]\n'
+        f'command = ["{sys.executable}", "-c", "import sys; sys.exit(2)"]\n',
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+    monkeypatch.setenv("AIRISK_UI_SMOKE_ENABLE_COMMANDS", "1")
+
+    with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"src/pages/checkout.tsx"}):
+        result, code, notes = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    assert any(f.rule_id == "ui_journey_smoke_failed" for f in result.findings.findings)
+    assert any("smoke failed for journey 'checkout'" in note for note in notes)
+
+    pr_summary = (tmp_path / ".riskmap" / "pr_summary.md").read_text(encoding="utf-8")
+    assert "ui_journey_smoke_failed" in pr_summary
+
+
+def test_pr_mode_ui_flow_smoke_pass_adds_note_without_finding(tmp_path: Path, write_file, monkeypatch) -> None:
+    write_file(
+        tmp_path / "package.json",
+        '{"dependencies":{"react":"18.0.0","react-dom":"18.0.0"},"devDependencies":{"vite":"5.0.0"}}',
+    )
+    write_file(
+        tmp_path / "src" / "pages" / "checkout.tsx",
+        "export default function CheckoutPage() {\n"
+        "  return <div>checkout</div>;\n"
+        "}\n",
+    )
+    write_file(
+        tmp_path / ".riskmap-ui.toml",
+        '[[journeys]]\n'
+        'id = "checkout"\n'
+        'match = ["checkout"]\n'
+        f'command = ["{sys.executable}", "-c", "print(\'ok\')"]\n',
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+    monkeypatch.setenv("AIRISK_UI_SMOKE_ENABLE_COMMANDS", "1")
+
+    with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"src/pages/checkout.tsx"}):
+        result, code, notes = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    assert not any(f.rule_id == "ui_journey_smoke_failed" for f in result.findings.findings)
+    assert any("smoke passed for journey 'checkout'" in note for note in notes)
+
+
+def test_pr_mode_ui_flow_smoke_skips_commands_by_default(tmp_path: Path, write_file, monkeypatch) -> None:
+    monkeypatch.delenv("AIRISK_UI_SMOKE_ENABLE_COMMANDS", raising=False)
     write_file(
         tmp_path / "package.json",
         '{"dependencies":{"react":"18.0.0","react-dom":"18.0.0"},"devDependencies":{"vite":"5.0.0"}}',
@@ -383,48 +464,8 @@ def test_pr_mode_ui_flow_smoke_failure_produces_finding(tmp_path: Path, write_fi
 
     assert code == 0
     assert result is not None
-    assert any(f.rule_id == "ui_journey_smoke_failed" for f in result.findings.findings)
-    assert any("smoke failed for journey 'checkout'" in note for note in notes)
-
-    pr_summary = (tmp_path / ".riskmap" / "pr_summary.md").read_text(encoding="utf-8")
-    assert "ui_journey_smoke_failed" in pr_summary
-
-
-def test_pr_mode_ui_flow_smoke_pass_adds_note_without_finding(tmp_path: Path, write_file) -> None:
-    write_file(
-        tmp_path / "package.json",
-        '{"dependencies":{"react":"18.0.0","react-dom":"18.0.0"},"devDependencies":{"vite":"5.0.0"}}',
-    )
-    write_file(
-        tmp_path / "src" / "pages" / "checkout.tsx",
-        "export default function CheckoutPage() {\n"
-        "  return <div>checkout</div>;\n"
-        "}\n",
-    )
-    write_file(
-        tmp_path / ".riskmap-ui.toml",
-        '[[journeys]]\n'
-        'id = "checkout"\n'
-        'match = ["checkout"]\n'
-        f'command = ["{sys.executable}", "-c", "print(\'ok\')"]\n',
-    )
-
-    ctx = RunContext(
-        repo_path=tmp_path,
-        mode="pr",
-        base="main",
-        output_dir=tmp_path / ".riskmap",
-        provider="auto",
-        no_llm=True,
-    )
-
-    with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"src/pages/checkout.tsx"}):
-        result, code, notes = run_pipeline(ctx)
-
-    assert code == 0
-    assert result is not None
     assert not any(f.rule_id == "ui_journey_smoke_failed" for f in result.findings.findings)
-    assert any("smoke passed for journey 'checkout'" in note for note in notes)
+    assert any("skipped declared browser smoke command execution" in note for note in notes)
 
 
 def test_pr_mode_business_invariant_flow_without_check_delta_produces_finding(tmp_path: Path, write_file) -> None:
@@ -752,6 +793,8 @@ def test_explicit_provider_unavailable_returns_exit_1(tmp_path: Path, write_file
                     str(tmp_path),
                     "--provider",
                     "api",
+                    "--analysis-engine",
+                    "ai-first",
                 ]
             )
     assert code == 1
@@ -1311,6 +1354,61 @@ def test_pr_baseline_status_and_only_new_summary(tmp_path: Path, write_file) -> 
     assert result.summary.unchanged_count == 1
     pr_summary = (ctx.output_dir / "pr_summary.md").read_text(encoding="utf-8")
     assert "No findings in current PR scope." in pr_summary
+
+
+def test_pr_baseline_matches_legacy_sha1_fingerprint_after_hash_migration(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    baseline = tmp_path / ".riskmap" / "baseline" / "graph.json"
+    write_file(baseline, '{"nodes": []}')
+    legacy_base = "critical_path_no_tests|app/api.py|existing issue|deterministic"
+    legacy_fp = hashlib.sha1(legacy_base.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
+    write_file(
+        baseline.parent / "findings.json",
+        json.dumps({"findings": [{"fingerprint": legacy_fp}, {"fingerprint": "fp-resolved"}]}),
+    )
+
+    mocked = FindingsReport(
+        findings=[
+            Finding(
+                id="f1",
+                rule_id="critical_path_no_tests",
+                title="Existing issue",
+                description="d",
+                severity="high",
+                confidence="high",
+                evidence="e",
+                source_ref="app/api.py:1",
+                suppression_key="f1",
+                recommendation="r",
+                evidence_refs=["app/api.py:1"],
+            )
+        ],
+        generated_without_llm=True,
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+        baseline_graph=baseline,
+        only_new=True,
+    )
+
+    with patch("ai_risk_manager.pipeline.run.run_rules", return_value=mocked):
+        with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"app/api.py"}):
+            result, code, _ = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    assert result.summary.new_count == 0
+    assert result.summary.resolved_count == 1
+    assert result.summary.unchanged_count == 1
 
 
 def test_pipeline_returns_exit_2_when_no_plugin_for_detected_stack(tmp_path: Path, write_file) -> None:

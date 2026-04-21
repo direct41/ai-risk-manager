@@ -111,7 +111,7 @@ Done when:
 Status:
 
 - discovery and changed-journey mapping implemented
-- declared smoke execution for changed journeys implemented
+- declared smoke execution for changed journeys implemented behind `AIRISK_UI_SMOKE_ENABLE_COMMANDS=1`
 - vanilla `public/` and `static/` app shells detected after real-repo pilot
 - screenshot diffing and cross-browser execution still pending
 
@@ -223,4 +223,4 @@ Recommended PR sequence:
 
 1. Run limited open alpha on real PRs and collect precision/noise feedback for the top 3 findings.
 2. Validate `business_invariant_risk` on at least two repositories with real `.riskmap.yml` critical flows before adding more invariant rules.
-3. Keep `ui_flow_risk` browser execution opt-in and targeted; do not add screenshot diffing or cross-browser matrices until declared smoke usefulness is proven.
+3. Keep `ui_flow_risk` browser execution opt-in, env-gated, and targeted; do not add screenshot diffing or cross-browser matrices until declared smoke usefulness is proven.

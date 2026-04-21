@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
 import shlex
-import subprocess
+import subprocess  # nosec B404
 import tomllib
 
 from ai_risk_manager.signals.types import CapabilitySignal, SignalBundle, SignalKind
 
 _MANIFEST_PATH = ".riskmap-ui.toml"
+_ENABLE_COMMANDS_ENV = "AIRISK_UI_SMOKE_ENABLE_COMMANDS"
+_TRUE_VALUES = {"1", "true", "yes", "on"}
 
 
 @dataclass
@@ -37,6 +40,10 @@ def _clean_token(value: str) -> str:
 def _journey_tokens(journey: str) -> set[str]:
     normalized = _clean_token(journey).replace("/", "_").replace("-", "_")
     return {chunk for chunk in normalized.split("_") if chunk}
+
+
+def _commands_enabled() -> bool:
+    return _clean_token(os.getenv(_ENABLE_COMMANDS_ENV, "")) in _TRUE_VALUES
 
 
 def load_ui_smoke_manifest(repo_path: Path) -> tuple[UiSmokeManifest | None, list[str]]:
@@ -128,6 +135,15 @@ def run_ui_smoke(
             notes=["ui_flow_risk found no declared browser smoke mapped to changed journeys."],
         )
 
+    if not _commands_enabled():
+        return UiSmokeRunResult(
+            signals=SignalBundle(),
+            notes=[
+                "ui_flow_risk skipped declared browser smoke command execution; "
+                f"set {_ENABLE_COMMANDS_ENV}=1 only for trusted repositories to run it."
+            ],
+        )
+
     notes: list[str] = []
     signals: list[CapabilitySignal] = []
     supported_kinds: set[SignalKind] = {"ui_journey_smoke"}
@@ -137,7 +153,8 @@ def run_ui_smoke(
         proc: subprocess.CompletedProcess[str] | None = None
         exc: Exception | None = None
         try:
-            proc = subprocess.run(
+            # Command execution is disabled unless explicitly enabled for a trusted repository.
+            proc = subprocess.run(  # nosec B603
                 command,
                 cwd=repo_path,
                 capture_output=True,

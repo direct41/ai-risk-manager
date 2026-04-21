@@ -4,8 +4,9 @@ import json
 import os
 import re
 import shlex
-import subprocess
+import subprocess  # nosec B404
 from urllib import error as urllib_error
+from urllib import parse as urllib_parse
 from urllib import request as urllib_request
 
 
@@ -47,7 +48,7 @@ def _invoke_api(prompt: str, *, timeout_seconds: float | None = None) -> str:
     if not api_key:
         raise LLMRuntimeError("API key is missing for API provider")
 
-    base = os.getenv("AIRISK_API_BASE", "https://api.openai.com/v1").rstrip("/")
+    base = _http_api_base(os.getenv("AIRISK_API_BASE", "https://api.openai.com/v1"))
     model = os.getenv("AIRISK_API_MODEL", "gpt-4o-mini")
     timeout = timeout_seconds if timeout_seconds is not None else float(os.getenv("AIRISK_API_TIMEOUT", "60"))
 
@@ -72,7 +73,8 @@ def _invoke_api(prompt: str, *, timeout_seconds: float | None = None) -> str:
     )
 
     try:
-        with urllib_request.urlopen(req, timeout=timeout) as resp:
+        # URL scheme and host are validated by _http_api_base before Request construction.
+        with urllib_request.urlopen(req, timeout=timeout) as resp:  # nosec B310
             data = json.loads(resp.read().decode("utf-8"))
     except urllib_error.URLError as exc:
         raise LLMRuntimeError(f"API request failed: {exc}") from exc
@@ -90,6 +92,14 @@ def _invoke_api(prompt: str, *, timeout_seconds: float | None = None) -> str:
     return content
 
 
+def _http_api_base(raw_base: str) -> str:
+    base = raw_base.rstrip("/")
+    parsed = urllib_parse.urlsplit(base)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise LLMRuntimeError("AIRISK_API_BASE must be an http(s) URL")
+    return base
+
+
 def _invoke_cli(prompt: str, *, timeout_seconds: float | None = None) -> str:
     configured = os.getenv("AIRISK_CLI_COMMAND")
     if configured:
@@ -105,7 +115,8 @@ def _invoke_cli(prompt: str, *, timeout_seconds: float | None = None) -> str:
     cmd = cmd + [prompt]
     timeout = timeout_seconds if timeout_seconds is not None else float(os.getenv("AIRISK_CLI_TIMEOUT", "120"))
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        # CLI provider is explicit operator opt-in and shell is never used.
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)  # nosec B603
     except subprocess.TimeoutExpired as exc:
         raise LLMRuntimeError(f"CLI command timed out after {timeout:.1f}s") from exc
     output = (proc.stdout or "").strip()

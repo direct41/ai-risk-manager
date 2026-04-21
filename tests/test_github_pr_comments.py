@@ -94,6 +94,21 @@ def test_upsert_pr_comment_creates_when_marker_not_found(monkeypatch) -> None:
     assert calls[1][0] == "POST"
 
 
+def test_upsert_pr_comment_rejects_non_http_api_base() -> None:
+    try:
+        upsert_pr_comment(
+            repo_full_name="owner/repo",
+            pr_number=7,
+            body="## AI Risk Manager\nbody",
+            token="secret",
+            api_base="file:///tmp/github",
+        )
+    except GitHubCommentError as exc:
+        assert "http" in str(exc)
+    else:
+        raise AssertionError("Expected GitHubCommentError")
+
+
 def test_cli_publish_pr_comment_supports_dry_run(tmp_path: Path, write_file, capsys) -> None:
     summary = tmp_path / "pr_summary.md"
     write_file(summary, "## AI Risk Manager\nbody")

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 import json
 from pathlib import Path
 import time
@@ -14,7 +13,13 @@ from ai_risk_manager.agents.semantic_risk_agent import generate_semantic_finding
 from ai_risk_manager.agents.semantic_signal_agent import generate_semantic_signals
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle
 from ai_risk_manager.graph.builder import build_graph, low_confidence_ratio
-from ai_risk_manager.pipeline.merge_findings import ensure_fingerprint, merge_findings
+from ai_risk_manager.pipeline.merge_findings import (
+    ensure_fingerprint,
+    fingerprint_aliases,
+    fingerprint_base,
+    legacy_fingerprint,
+    merge_findings,
+)
 from ai_risk_manager.pipeline.pr_change_signals import build_pr_change_signal_bundle
 from ai_risk_manager.pipeline.sinks import PipelineSinks
 from ai_risk_manager.profiles.business_invariant import BusinessInvariantPreparedProfile, BusinessInvariantProfile
@@ -130,15 +135,14 @@ def _load_baseline_fingerprints(baseline_graph: Path | None) -> tuple[set[str] |
         if isinstance(fp, str) and fp:
             fingerprints.add(fp)
             continue
-        base = "|".join(
-            [
-                str(row.get("rule_id", "")),
-                _source_file_ref(str(row.get("source_ref", ""))),
-                str(row.get("title", "")).strip().lower(),
-                str(row.get("origin", "deterministic")),
-            ]
+        base = fingerprint_base(
+            rule_id=str(row.get("rule_id", "")),
+            source_ref=_source_file_ref(str(row.get("source_ref", ""))),
+            title=str(row.get("title", "")),
+            origin=str(row.get("origin", "deterministic")),
         )
-        fingerprints.add(hashlib.sha1(base.encode("utf-8")).hexdigest()[:16])
+        # Missing fingerprint fields are legacy/malformed baseline rows; preserve old SHA-1 matching.
+        fingerprints.add(legacy_fingerprint(base))
     return fingerprints, None
 
 
@@ -206,7 +210,7 @@ def _apply_baseline_status(
         )
 
     normalized = [ensure_fingerprint(finding) for finding in findings.findings]
-    current_fps = {finding.fingerprint for finding in normalized}
+    current_fps = {alias for finding in normalized for alias in fingerprint_aliases(finding)}
     if baseline_fingerprints is None:
         for finding in normalized:
             finding.status = "new"
@@ -218,7 +222,7 @@ def _apply_baseline_status(
         )
 
     for finding in normalized:
-        finding.status = "unchanged" if finding.fingerprint in baseline_fingerprints else "new"
+        finding.status = "unchanged" if fingerprint_aliases(finding) & baseline_fingerprints else "new"
 
     new_count = sum(1 for finding in normalized if finding.status == "new")
     unchanged_count = len(normalized) - new_count

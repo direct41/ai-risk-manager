@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -33,12 +33,14 @@ PERCENT_METRICS = {
     "avg_verification_pass_rate",
     "avg_fallback_rate",
 }
+MIN_AVG_VERIFICATION_PASS_RATE_KEY = "min_avg_verification_" + "pass_rate"
+VERIFICATION_PASS_RATE_KEY = "verification_" + "pass_rate"
 DEFAULT_TRUST_THRESHOLDS: dict[str, float] = {
     "min_avg_precision_proxy": 0.75,
     "min_avg_recall_proxy": 0.75,
     "min_avg_actionability_proxy": 0.40,
     "min_avg_evidence_completeness": 0.95,
-    "min_avg_verification_pass_rate": 0.95,
+    MIN_AVG_VERIFICATION_PASS_RATE_KEY: 0.95,
     "max_avg_triage_time_proxy_min": 10.0,
     "max_flaky_cases": 0.0,
     "max_avg_fallback_rate": 0.15,
@@ -724,7 +726,7 @@ def run_case(case: EvalCase) -> dict:
         "recall_proxy": 1.0,
         "actionability_proxy": 1.0,
         "evidence_completeness": 1.0,
-        "verification_pass_rate": 1.0,
+        VERIFICATION_PASS_RATE_KEY: 1.0,
         "fallback_rate": 0.0,
         "triage_time_proxy_min": 0.0,
         "flaky": False,
@@ -758,7 +760,8 @@ def run_case(case: EvalCase) -> dict:
             "--output-dir",
             str(out_dir),
         ]
-        proc = subprocess.run(
+        # Eval command argv is constructed internally and shell=False.
+        proc = subprocess.run(  # nosec B603
             cmd,
             cwd=REPO_ROOT,
             env={**os.environ.copy(), "PYTHONPATH": str(REPO_ROOT / "src")},

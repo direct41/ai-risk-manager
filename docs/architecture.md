@@ -111,6 +111,7 @@ Current state:
 
 - shipped as discovery-first MVP
 - browser execution is opt-in through `./.riskmap-ui.toml` and limited to declared changed journeys
+- command execution also requires `AIRISK_UI_SMOKE_ENABLE_COMMANDS=1`, and should only be used for trusted repositories
 - screenshot diffing and browser matrices are intentionally not shipped
 
 ### `business_invariant_risk`

@@ -14,7 +14,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Alpha testing guide (`ALPHA.md`) with local usage steps, feedback prompts, and LinkedIn-ready positioning text.
 - Profile-based architecture and roadmap documentation for `code_risk`, `ui_flow_risk`, and `business_invariant_risk`.
 - Trust-first eval gates with in-repo thresholds (`eval/trust_thresholds.json`) and CI enforcement in weekly eval workflow.
-- Eval trend tracking artifacts:
+- Eval trend tracking outputs generated under ignored `eval/results/`:
   - `eval/results/trust_gate.json`
   - `eval/results/trust_history.jsonl`
   - `eval/results/trust_trend.json`
@@ -44,6 +44,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Changed
 - README and Russian quickstart now prioritize the external self-serve path before deeper architecture details.
 - GitHub metadata links, security reporting entrypoint, and CI matrix were hardened for public alpha readiness.
+- CLI/API analysis defaults now stay deterministic/no-LLM unless AI enrichment is explicitly requested.
+- Declared UI smoke command execution is gated behind `AIRISK_UI_SMOKE_ENABLE_COMMANDS=1`.
+- API path access is constrained to approved workspace/output roots for hardened deployments.
+- Internal diagnostic and finding fallback hashes now use SHA-256, while PR baseline comparison still recognizes legacy SHA-1 finding fingerprints.
 - Local Makefile onboarding now uses the project `.venv` and runs the bundled demo in deterministic/no-LLM mode.
 - Development/API dependency pins were updated to Python 3.13-compatible versions.
 - `block-new-critical` guardrails now trigger only for `new + critical + high confidence + verified evidence` findings.
@@ -56,6 +60,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Stack expansion gate criteria are now completion-based (consecutive trust-pass runs) instead of calendar-tied wording.
 - README was streamlined for faster onboarding and updated baseline guidance.
 - CI risk-analysis baseline now uses deterministic/no-llm mode and caches both `graph.json` and `findings.json` for correct PR delta status.
+- PR risk-analysis workflow now separates branch-code analysis from trusted PR comment publication.
 - Reports and PR summaries now surface merge triage decision, release-risk score, and top test-first actions.
 - Root-level planning docs were removed in favor of `README.md`, `ALPHA.md`, and `docs/roadmap.md`.
 
@@ -65,11 +70,12 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Pipeline/report consistency: `effective_ci_mode` and CI/fail notes are now computed before markdown artifact generation.
 - Semantic AI payload validation now rejects unsupported severity/confidence labels and degrades gracefully.
 - Collector noise reduction: scanning skips `eval/`, `fixtures/`, and `testdata/` directories.
+- FastAPI and Django collectors now also skip build, dist, and coverage artifacts.
+- LLM and GitHub outbound API clients now reject non-HTTP(S) API base URLs before opening connections.
 
 ### Refactored
 - Removed unused `risk_agent` layer.
 - Unified bundled sample repository resolution for both CLI and API via shared helper (`sample_repo.py`).
-- Extracted PR scope and baseline helper logic from `pipeline/run.py` into `pipeline/pr_scope.py` to reduce orchestrator complexity.
 
 ## [0.1.0] - 2026-02-19
 
