@@ -1,82 +1,39 @@
 # AI Risk Manager
 
-Find the highest-risk changes before merge and show the first checks to run.
+Know what to test before merging risky or AI-generated PRs.
 
-AI Risk Manager is a PR-native merge-risk assistant.
-It answers three practical questions:
+AI Risk Manager is a PR-native release-risk assistant for engineering and QA teams. It scans a repository or PR branch, highlights high-risk changed areas, and writes a short test-first triage package.
 
-- Which changed areas look risky right now?
-- Which tests should we add first?
-- Is this PR ready to merge, or does it need short release-risk review?
+It starts with deterministic evidence. AI enrichment is optional.
 
-The current shipped profile is `code_risk`.
-It works best on backend-heavy codebases and currently has strongest support on FastAPI, Django/DRF, and Express/Node repositories.
+Use it if you review backend-heavy PRs, adopt AI-generated code, or want a short "what should we test first?" checklist before merge.
 
-## Why AI Risk Manager?
+Do not use it as a SAST replacement, full business-logic verifier, or automatic release approval system.
 
-- Focuses on merge and release risk instead of generic scanner noise.
-- Produces a short PR triage package instead of another long report.
-- Prioritizes test actions, not just findings.
-- Starts with deterministic evidence; AI is optional.
-- Still provides useful heuristics on unknown stacks.
-- Expands by risk profiles, not by multiplying product variants.
+## Start Here
 
-## Architecture
-
-The canonical architecture is now profile-based and capability-aware:
-
-- one shared pipeline for collection, signals, rules, scoring, triage, and reporting
-- optional risk profiles activated only when relevant
-- profile applicability described as `supported`, `partial`, or `not_applicable`
-- one output contract for reports and PR summaries
-
-Current profiles:
-
-- `code_risk` — shipped today
-- `ui_flow_risk` — shipped as discovery-only review focus with optional declared browser smoke
-- `business_invariant_risk` — explicit critical-flow checks through `.riskmap.yml`
-
-See:
-
-- `docs/architecture.md`
-- `docs/roadmap.md`
-
-## Install
-
-For a self-contained CLI install from GitHub:
+Try the bundled demo in about a minute:
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install "git+https://github.com/direct41/ai-risk-manager.git"
-```
 
-For local development from a checkout:
-
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e '.[dev]'
-```
-
-## Try In 60 Seconds
-
-Run the bundled deterministic demo:
-
-```bash
 riskmap analyze --sample --no-llm --analysis-engine deterministic --output-dir ./.riskmap
-cat .riskmap/report.md
 cat .riskmap/merge_triage.md
+cat .riskmap/report.md
 ```
 
-The demo does not call an LLM. It should finish quickly and produce a small report with concrete test-first actions.
-From a source checkout, `make analyze-demo` runs the same path.
+You should see:
 
-## Quick Start
+- a merge decision: `ready`, `review_required`, or `block_recommended`
+- the top risky areas
+- the first tests or review checks to run
 
-Run the trust-first deterministic path on your repository:
+## Run On Your Repo
+
+From the repository you want to inspect:
 
 ```bash
 riskmap analyze \
@@ -86,58 +43,26 @@ riskmap analyze \
   --output-dir ./.riskmap
 ```
 
-Open the main report:
+Read these first:
 
 ```bash
-cat ./.riskmap/report.md
-cat ./.riskmap/merge_triage.md
+cat .riskmap/merge_triage.md
+cat .riskmap/report.md
 ```
 
-If you want to try the bundled sample first:
+For PR-focused review:
 
 ```bash
-riskmap analyze --sample --no-llm --analysis-engine deterministic --output-dir ./.riskmap
+riskmap analyze \
+  --mode pr \
+  --base main \
+  --analysis-engine deterministic \
+  --no-llm \
+  --only-new \
+  --output-dir ./.riskmap
 ```
 
-## Example Output
-
-```md
-# Risk Analysis Report
-
-## Summary
-
-| Severity | Count |
-|---|---:|
-| critical | 0 |
-| high | 1 |
-| medium | 1 |
-| low | 0 |
-
-## Top Actions for Next Sprint
-
-- Add API/service tests for endpoint 'POST /orders', including success and error paths.
-- Implement handler logic for transition 'pending -> cancelled' or remove stale declaration.
-```
-
-## What You Get
-
-- `report.md`: human-readable summary and top actions
-- `merge_triage.md`: 10-minute merge decision, reasons, and test-first order
-- `findings.json`: machine-readable findings, including additive trust metadata
-- `merge_triage.json`: machine-readable merge triage package
-- `test_plan.json`: prioritized test recommendations
-- `run_metrics.json`: machine-readable run quality and execution metrics
-- PR mode also writes `pr_summary.md`, `pr_summary.json`, and `github_check.json`; these include active profile applicability and compact trust data for top findings. JSON output also includes graph artifacts (`graph.json`, `graph.analysis.json`, `graph.deterministic.json`)
-
-For all flags and modes:
-
-```bash
-riskmap analyze --help
-```
-
-## PR Workflow
-
-Create a deterministic baseline on `main`:
+For stronger PR delta attribution, create a baseline on `main` first:
 
 ```bash
 riskmap analyze \
@@ -147,7 +72,7 @@ riskmap analyze \
   --output-dir ./.riskmap/baseline
 ```
 
-Run PR-scoped analysis on your feature branch:
+Then run the PR branch with:
 
 ```bash
 riskmap analyze \
@@ -158,9 +83,67 @@ riskmap analyze \
   --output-dir ./.riskmap
 ```
 
-For PR delta to work, the baseline directory must contain both `graph.json` and `findings.json`.
+The baseline directory must contain both `graph.json` and `findings.json`.
 
-Publish the generated PR summary back to GitHub:
+## Good Fit
+
+AI Risk Manager is currently best for:
+
+- backend-heavy FastAPI, Django/DRF, and Express/Node repositories
+- teams reviewing fast-moving or AI-generated PRs
+- engineers who want test-first release-risk guidance before merge
+- advisory CI checks before adopting blocking gates
+
+It is not yet a good fit if you need:
+
+- a generic SAST replacement
+- full business-logic verification without repo-owned invariants
+- broad UI screenshot diffing or cross-browser testing
+- production release approval without human review
+
+## What It Produces
+
+The most useful files are:
+
+- `.riskmap/merge_triage.md` - 10-minute merge decision and test-first order
+- `.riskmap/report.md` - human-readable findings and top actions
+- `.riskmap/findings.json` - machine-readable findings
+- `.riskmap/test_plan.json` - prioritized test recommendations
+
+PR mode can also produce:
+
+- `.riskmap/pr_summary.md`
+- `.riskmap/pr_summary.json`
+- `.riskmap/github_check.json`
+
+## Example Output
+
+```md
+# Merge Risk Triage
+
+- Decision: `review_required`
+- Headline: Run a focused 10-minute risk review before merge; risk score `61`.
+- Risk score: `61/100`
+
+## Test First
+
+1. [high] `critical_path_no_tests` at `app/main.py:31`
+   Action: Add API/service tests for endpoint 'POST /orders', including success and error paths.
+```
+
+## GitHub PR Comment
+
+Generate a PR summary locally:
+
+```bash
+riskmap analyze \
+  --mode pr \
+  --base main \
+  --only-new \
+  --output-dir ./.riskmap
+```
+
+Publish it to GitHub:
 
 ```bash
 export GITHUB_TOKEN=...
@@ -171,104 +154,63 @@ riskmap publish-pr-comment \
 ```
 
 A copy-paste GitHub Actions example is available at `examples/github-actions/riskmap-pr-review.yml`.
-An optional UI smoke manifest example is available at `examples/ui/.riskmap-ui.toml`.
-Nuxt checkout/product/cart examples are available at `examples/ui/nuxt/.riskmap-ui.toml`.
-The PR summary includes grouped `.airiskignore` suppression hints for intentional risk acceptance, plus changed-file-aware top risks, trust metadata, active profile applicability, changed UI journey review focus when a web surface is detected, and declared browser smoke failures as normal findings.
-
-Optional `ui_flow_risk` smoke config:
-
-```toml
-[[journeys]]
-id = "checkout"
-match = ["checkout", "billing"]
-command = ["npm", "run", "test:e2e", "--", "checkout"]
-```
-
-Place it in `./.riskmap-ui.toml`. The command runs only for changed UI journeys that match a declared entry.
-
-For workspaces or monorepos, run analysis from the package that owns the changed app. See `docs/workspaces.md`.
-
-## Alpha Testing
-
-AI Risk Manager is ready for limited open alpha with teams that:
-
-- review fast-moving PRs and want a short release-risk checklist
-- use AI-generated code and need to know what to test first
-- can run a CLI locally or in GitHub Actions
-- are comfortable with advisory output before adopting blocking CI gates
-
-Best feedback to send:
-
-- repository type and stack
-- whether the top 3 findings were useful or noisy
-- what test you added or skipped because of the report
-- any false positive, missing risk, or confusing instruction
-
-See `ALPHA.md` for a concise alpha-user guide.
-
-## Works Best For
-
-- backend teams doing pre-merge or pre-release reviews
-- repositories where release risk is mostly in code, tests, workflows, contracts, and privileged paths
-- teams that want advisory signals before enabling CI gates
-- teams reviewing fast AI-generated code and deciding what to test first
 
 ## Current Scope
 
-- Shipped profile: `code_risk`
-- Discovery-only profile: `ui_flow_risk`
-- Stack plugins with strongest coverage: `fastapi_pytest`, `django_drf`, `express_node`
-- Universal heuristics on unknown stacks: PR delta signals, workflow automation checks, generated test quality checks, dependency policy checks
-- UI profile behavior: detect whether a UI surface exists, including vanilla `public/` or `static/` app shells, mark API-only repositories as `not_applicable`, surface changed route/component journeys in PR review focus, and optionally run declared journey smoke commands from `./.riskmap-ui.toml`
-- Business invariant behavior: with explicit `.riskmap.yml` / `.riskmap.yaml`, flag declared critical-flow changes that lack a matching changed check file
-- Merge triage: `ready`, `review_required`, or `block_recommended` with a short test-first order
+Shipped today:
 
-## Limits
+- `code_risk`: supported release-risk review for code, tests, workflows, contracts, dependencies, and critical write paths
+- `ui_flow_risk`: discovery-focused UI review with optional repo-declared smoke commands
+- `business_invariant_risk`: explicit critical-flow checks through `.riskmap.yml`
 
-- Not a generic multi-language SAST replacement
-- Not a full business-logic verifier; current invariant support is limited to declared critical-flow PR deltas
-- `ui_flow_risk` only runs declared journey smoke commands; it is not a generic browser runner, screenshot diff system, or cross-browser matrix
-- Unknown stacks fall back to partial `code_risk` support with universal heuristics
-- Merge triage is an evidence-backed review aid, not an automatic release approval
+Strongest stack support:
 
-## API
+- `fastapi_pytest`
+- `django_drf`
+- `express_node`
 
-If you need a local API service:
+Unknown stacks fall back to partial advisory support with universal heuristics.
 
-```bash
-pip install -e '.[api]'
-riskmap-api
-```
+## Feedback
 
-Optional hardening is available through environment variables such as `AIRISK_API_TOKEN`, `AIRISK_API_RATE_LIMIT_PER_MINUTE`, and `AIRISK_API_MAX_BODY_BYTES`.
-If you need persistent API audit logging outside the output directory, set `AIRISK_API_AUDIT_LOG`.
+AI Risk Manager is in limited open alpha.
+
+Useful feedback includes:
+
+- repository stack and shape
+- command you ran
+- top 3 findings
+- which findings were useful or noisy
+- what important risk was missed
+- whether setup or wording blocked you
+
+Use the [alpha feedback issue template](https://github.com/direct41/ai-risk-manager/issues/new?template=alpha_feedback.yml) or see `ALPHA.md`.
 
 ## Development
 
+From a source checkout:
+
 ```bash
-make install
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e '.[dev]'
+
 make test
 make analyze-demo
 ```
 
 ## Docs
 
-- `ALPHA.md`
-- `docs/architecture.md`
-- `docs/roadmap.md`
-- `docs/workspaces.md`
-- `docs/ui-flow-pilots.md`
-- `docs/business-invariants.md`
-- `docs/ru.md`
-- `docs/compatibility.md`
-- `docs/deployment-hardening.md`
-
-Internal and compatibility notes:
-
-- `docs/legacy-review.md`
-- `docs/capability-signals.md`
-- `docs/ingress-contract.md`
-- `docs/plugin-contract.md`
+- `ALPHA.md` - concise alpha-user guide
+- `docs/ru.md` - Russian quickstart
+- `docs/workspaces.md` - workspace and monorepo usage
+- `docs/business-invariants.md` - `.riskmap.yml` critical-flow checks
+- `docs/ui-flow-pilots.md` - UI flow pilot notes
+- `docs/architecture.md` - architecture overview
+- `docs/roadmap.md` - roadmap and scope guardrails
+- `docs/deployment-hardening.md` - API deployment hardening
+- `docs/launch/product-hunt.md` - Product Hunt launch kit
 
 ## Open Source
 

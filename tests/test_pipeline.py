@@ -6,6 +6,7 @@ import sys
 from typing import cast
 from unittest.mock import patch
 
+from ai_risk_manager import __version__
 from ai_risk_manager.agents.provider import ProviderResolution
 from ai_risk_manager.cli import main
 from ai_risk_manager.pipeline.run import _resolve_effective_ci_mode, run_pipeline
@@ -778,7 +779,7 @@ def test_pipeline_writes_metadata_to_json_artifacts(tmp_path: Path, write_file) 
     payload = json.loads((out_dir / "findings.json").read_text(encoding="utf-8"))
     assert payload["schema_version"] == "1.1"
     assert "generated_at" in payload
-    assert payload["tool_version"] == "0.1.0"
+    assert payload["tool_version"] == __version__
 
     analysis_graph_payload = json.loads((out_dir / "graph.analysis.json").read_text(encoding="utf-8"))
     deterministic_graph_payload = json.loads((out_dir / "graph.deterministic.json").read_text(encoding="utf-8"))

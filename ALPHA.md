@@ -2,7 +2,7 @@
 
 AI Risk Manager is in limited open alpha.
 
-Use it if you want a short PR risk review that says:
+Use it when you want a short PR risk review that says:
 
 - what changed areas look risky
 - what to test first
@@ -18,6 +18,8 @@ Use it if you want a short PR risk review that says:
 
 ## Try It Locally
 
+Start with the bundled sample before running on a private repository:
+
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
@@ -28,7 +30,7 @@ cat .riskmap/report.md
 cat .riskmap/merge_triage.md
 ```
 
-Run on your own repository:
+Then run on your own repository:
 
 ```bash
 riskmap analyze \
@@ -37,6 +39,11 @@ riskmap analyze \
   --no-llm \
   --output-dir ./.riskmap
 ```
+
+Read these first:
+
+- `.riskmap/merge_triage.md`
+- `.riskmap/report.md`
 
 Run on a PR branch:
 
@@ -58,6 +65,23 @@ riskmap analyze \
 - Did the output explain support level and profile applicability clearly?
 - Did setup or CLI usage block you?
 
+## Send Feedback
+
+Use the alpha feedback issue template:
+
+```text
+https://github.com/direct41/ai-risk-manager/issues/new?template=alpha_feedback.yml
+```
+
+Include:
+
+- repository stack and shape
+- command you ran
+- top 3 findings
+- which findings were useful or noisy
+- what important risk was missed
+- whether setup or wording blocked you
+
 ## Current Limits
 
 - It is not a generic SAST replacement.
@@ -65,17 +89,6 @@ riskmap analyze \
 - `ui_flow_risk` runs only repo-declared smoke commands.
 - Unknown stacks run in partial/advisory mode.
 - Merge triage is advisory unless you explicitly enable stricter CI gates.
-
-## Feedback Format
-
-Send:
-
-- stack and repository shape
-- command you ran
-- top 3 findings
-- which findings were useful
-- which findings were false positives or confusing
-- what you expected but did not get
 
 ## Suggested LinkedIn Positioning
 
