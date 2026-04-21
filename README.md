@@ -191,7 +191,7 @@ Useful feedback includes:
 - what important risk was missed
 - whether setup or wording blocked you
 
-Use the [alpha feedback issue template](https://github.com/direct41/ai-risk-manager/issues/new?template=alpha_feedback.yml) or see `ALPHA.md`.
+Use the [alpha feedback issue template](https://github.com/direct41/ai-risk-manager/issues/new?template=alpha_feedback.yml).
 
 ## Development
 
@@ -209,7 +209,6 @@ make analyze-demo
 
 ## Docs
 
-- `ALPHA.md` - concise alpha-user guide
 - `docs/ru.md` - Russian quickstart
 - `docs/workspaces.md` - workspace and monorepo usage
 - `docs/business-invariants.md` - `.riskmap.yml` critical-flow checks
@@ -221,6 +220,8 @@ make analyze-demo
 ## Open Source
 
 - License: `LICENSE` (MIT)
-- Contributing: `CONTRIBUTING.md`
-- Security Policy: `SECURITY.md`
+- Contributing: `.github/CONTRIBUTING.md`
+- Security Policy: `.github/SECURITY.md`
+- Support: `.github/SUPPORT.md`
+- Code of Conduct: `.github/CODE_OF_CONDUCT.md`
 - Changelog: `CHANGELOG.md`

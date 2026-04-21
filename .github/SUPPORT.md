@@ -4,7 +4,7 @@
 
 - Usage questions: GitHub Issues
 - Bug reports: GitHub Issues
-- Security concerns: follow `SECURITY.md` (private reporting preferred)
+- Security concerns: follow `.github/SECURITY.md` (private reporting preferred)
 
 ## What to include in bug reports
 
