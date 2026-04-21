@@ -37,3 +37,9 @@ build/
 .riskmap/
 eval/results/
 eval/.history/
+
+# Local maintainer notes and launch/pilot planning
+RELEASE.md
+docs/roadmap.md
+docs/ui-flow-pilots.md
+docs/launch/
