@@ -86,7 +86,7 @@ Include:
 
 - It is not a generic SAST replacement.
 - It is not a full business-logic verifier.
-- `ui_flow_risk` runs only repo-declared smoke commands.
+- `ui_flow_risk` runs repo-declared smoke commands only when `AIRISK_UI_SMOKE_ENABLE_COMMANDS=1` is set for a trusted repository.
 - Unknown stacks run in partial/advisory mode.
 - Merge triage is advisory unless you explicitly enable stricter CI gates.
 

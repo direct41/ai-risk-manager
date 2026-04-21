@@ -26,8 +26,8 @@ def _build_parser() -> argparse.ArgumentParser:
     analyze.add_argument(
         "--analysis-engine",
         choices=["deterministic", "hybrid", "ai-first"],
-        default="ai-first",
-        help="Analysis strategy. ai-first prioritizes semantic AI findings.",
+        default="deterministic",
+        help="Analysis strategy. Use hybrid or ai-first only when AI enrichment is explicitly intended.",
     )
     analyze.add_argument("--only-new", action="store_true", help="PR summary: show only new high/critical findings")
     analyze.add_argument(

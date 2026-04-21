@@ -28,7 +28,7 @@ def ensure_fingerprint(finding: Finding) -> Finding:
             finding.origin,
         ]
     )
-    fingerprint = hashlib.sha1(base.encode("utf-8")).hexdigest()[:16]
+    fingerprint = hashlib.sha256(base.encode("utf-8")).hexdigest()[:16]
     return replace(finding, fingerprint=fingerprint)
 
 

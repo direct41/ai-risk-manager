@@ -30,8 +30,13 @@ _AUDIT_LOCK = threading.Lock()
 
 if TYPE_CHECKING:
     from fastapi import FastAPI as FastAPIApp
+    from starlette.requests import Request as StarletteRequest
 else:
     FastAPIApp = Any
+    try:
+        from starlette.requests import Request as StarletteRequest
+    except Exception:  # pragma: no cover - minimal installs without API extras.
+        StarletteRequest = Any
 
 try:
     from fastapi import FastAPI as FastAPIImport
@@ -83,6 +88,156 @@ def _load_api_dependencies() -> tuple[Any, Any, Any, Any, Any, Any, Any]:
     return _FastAPI, _HTTPException, _Body, _Header, _AnalyzeRequest, _AnalyzeResponse, _HealthResponse
 
 
+async def _send_payload_too_large(send: Any) -> None:
+    body = b'{"detail":"Payload too large"}'
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode("ascii")),
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
+
+
+class _PayloadSizeLimitMiddleware:
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        if scope.get("type") != "http" or str(scope.get("method", "")).upper() not in {"POST", "PUT", "PATCH"}:
+            await self.app(scope, receive, send)
+            return
+
+        max_body_bytes = _configured_max_body_bytes()
+        if max_body_bytes <= 0:
+            await self.app(scope, receive, send)
+            return
+
+        headers = {key.lower(): value for key, value in scope.get("headers", [])}
+        raw_content_length = headers.get(b"content-length")
+        if raw_content_length:
+            try:
+                content_length = int(raw_content_length.decode("ascii"))
+            except ValueError:
+                content_length = 0
+            if content_length > max_body_bytes:
+                await _send_payload_too_large(send)
+                return
+
+        body_parts: list[bytes] = []
+        body_size = 0
+        while True:
+            message = await receive()
+            if message["type"] != "http.request":
+                await self.app(scope, receive, send)
+                return
+            chunk = message.get("body", b"")
+            if chunk:
+                body_parts.append(chunk)
+                body_size += len(chunk)
+                if body_size > max_body_bytes:
+                    await _send_payload_too_large(send)
+                    return
+            if not message.get("more_body", False):
+                break
+
+        body = b"".join(body_parts)
+        replayed = False
+
+        async def replay_receive() -> dict[str, Any]:
+            nonlocal replayed
+            if replayed:
+                return {"type": "http.request", "body": b"", "more_body": False}
+            replayed = True
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        await self.app(scope, replay_receive, send)
+
+
+def _env_flag(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _api_host_is_loopback() -> bool:
+    host = os.getenv("AIRISK_API_HOST", "127.0.0.1").strip().lower()
+    return host in {"127.0.0.1", "localhost", "::1"}
+
+
+def _unauthenticated_api_allowed() -> bool:
+    if _env_flag("AIRISK_API_ALLOW_UNAUTHENTICATED"):
+        return True
+    if _env_flag("AIRISK_API_REQUIRE_TOKEN"):
+        return False
+    return _api_host_is_loopback()
+
+
+def _split_configured_paths(raw: str) -> list[str]:
+    normalized = raw.replace("\n", os.pathsep).replace(",", os.pathsep)
+    return [part.strip() for part in normalized.split(os.pathsep) if part.strip()]
+
+
+def _configured_roots(env_name: str) -> tuple[Path, ...]:
+    raw = os.getenv(env_name, "").strip()
+    if not raw:
+        return ()
+    roots: list[Path] = []
+    for part in _split_configured_paths(raw):
+        roots.append(Path(part).expanduser().resolve())
+    return tuple(roots)
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def _enforce_path_roots(path: Path, roots: tuple[Path, ...], *, label: str) -> None:
+    if not roots:
+        return
+    if not any(path == root or _is_relative_to(path, root) for root in roots):
+        allowed = ", ".join(str(root) for root in roots)
+        raise ValueError(f"{label} is outside allowed API roots: {path}. Allowed roots: {allowed}")
+
+
+def _workspace_roots() -> tuple[Path, ...]:
+    return _configured_roots("AIRISK_API_WORKSPACE_ROOTS")
+
+
+def _public_api_requires_workspace_roots() -> bool:
+    return not _api_host_is_loopback() and not _env_flag("AIRISK_API_ALLOW_UNRESTRICTED_PATHS")
+
+
+def _resolve_api_path(raw: str, *, base: Path) -> Path:
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        path = base / path
+    return path.resolve()
+
+
+def _resolve_input_file_path(raw: str | None, *, repo_path: Path, label: str) -> Path | None:
+    if not raw:
+        return None
+    path = _resolve_api_path(raw, base=repo_path)
+    roots = _workspace_roots() or (repo_path,)
+    _enforce_path_roots(path, roots, label=label)
+    return path
+
+
+def _resolve_output_dir(raw: str, *, repo_path: Path) -> Path:
+    path = _resolve_api_path(raw, base=repo_path)
+    output_roots = _configured_roots("AIRISK_API_OUTPUT_ROOTS")
+    roots = output_roots or _workspace_roots() or (repo_path,)
+    _enforce_path_roots(path, roots, label="Output directory")
+    return path
+
+
 def _configured_api_token() -> str | None:
     token = os.getenv("AIRISK_API_TOKEN", "").strip()
     return token or None
@@ -117,17 +272,28 @@ def _configured_audit_log_path() -> Path | None:
     return Path(raw).expanduser().resolve()
 
 
-def _rate_limit_key(x_forwarded_for: str | None) -> str:
+def _rate_limit_key(x_forwarded_for: str | None, client_host: str | None) -> str:
+    if _env_flag("AIRISK_API_TRUST_X_FORWARDED_FOR") and x_forwarded_for:
+        first = x_forwarded_for.split(",", 1)[0].strip()
+        return first or "anonymous"
+    if client_host:
+        return client_host
     if not x_forwarded_for:
         return "anonymous"
     first = x_forwarded_for.split(",", 1)[0].strip()
     return first or "anonymous"
 
 
-def _enforce_rate_limit(*, limit_per_minute: int, x_forwarded_for: str | None, http_exception_cls: Any) -> None:
+def _enforce_rate_limit(
+    *,
+    limit_per_minute: int,
+    x_forwarded_for: str | None,
+    client_host: str | None,
+    http_exception_cls: Any,
+) -> None:
     if limit_per_minute <= 0:
         return
-    key = _rate_limit_key(x_forwarded_for)
+    key = _rate_limit_key(x_forwarded_for, client_host)
     now = time.monotonic()
     window_seconds = 60.0
     with _RATE_LIMIT_LOCK:
@@ -162,7 +328,7 @@ def _utc_now_iso() -> str:
 
 def _build_failure_diagnostics(exc: Exception, correlation_id: str) -> dict[str, str]:
     seed = f"{exc.__class__.__name__}:{exc}"
-    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
     return {
         "diagnostic_id": f"diag-{digest}",
         "correlation_id": correlation_id,
@@ -262,6 +428,8 @@ def _enforce_api_auth(
     http_exception_cls: Any,
 ) -> None:
     if expected_token is None:
+        if not _unauthenticated_api_allowed():
+            raise http_exception_cls(status_code=401, detail="API token required")
         return
     provided_token = (x_api_key or "").strip() or (_extract_bearer_token(authorization) or "")
     if provided_token != expected_token:
@@ -270,13 +438,19 @@ def _enforce_api_auth(
 
 def _resolve_repo_path(path: str, sample: bool) -> Path:
     if sample:
-        return resolve_sample_repo_path()
+        repo_path = resolve_sample_repo_path()
+    else:
+        repo_path = _resolve_api_path(path, base=Path.cwd())
 
-    repo_path = Path(path).resolve()
     if not repo_path.exists():
         raise ValueError(f"Repository path does not exist: {repo_path}")
     if not repo_path.is_dir():
         raise ValueError(f"Repository path is not a directory: {repo_path}")
+
+    roots = _workspace_roots()
+    if not roots and _public_api_requires_workspace_roots():
+        raise ValueError("AIRISK_API_WORKSPACE_ROOTS must be configured when AIRISK_API_HOST is not loopback.")
+    _enforce_path_roots(repo_path, roots, label="Repository path")
     return repo_path
 
 
@@ -290,10 +464,9 @@ def _collect_artifacts(output_dir: Path) -> dict[str, str]:
 
 
 def create_app() -> FastAPIApp:
-    FastAPI, HTTPException, Body, Header, AnalyzeRequestModel, AnalyzeResponseModel, HealthResponseModel = (
-        _load_api_dependencies()
-    )
+    FastAPI, HTTPException, Body, Header, AnalyzeRequestModel, AnalyzeResponseModel, HealthResponseModel = _load_api_dependencies()
     app = FastAPI(title="AI Risk Manager API", version=__version__)
+    app.add_middleware(_PayloadSizeLimitMiddleware)
 
     @app.get("/healthz", response_model=HealthResponseModel)
     def healthz() -> Any:
@@ -301,6 +474,7 @@ def create_app() -> FastAPIApp:
 
     @app.post("/v1/analyze", response_model=AnalyzeResponseModel)
     def analyze(
+        request_obj: StarletteRequest,
         request_payload: dict[str, Any] = Body(...),
         x_api_key: str | None = Header(default=None, alias="X-API-Key"),
         authorization: str | None = Header(default=None, alias="Authorization"),
@@ -339,6 +513,7 @@ def create_app() -> FastAPIApp:
             _enforce_rate_limit(
                 limit_per_minute=_configured_rate_limit_per_minute(),
                 x_forwarded_for=x_forwarded_for,
+                client_host=request_obj.client.host if request_obj.client else None,
                 http_exception_cls=HTTPException,
             )
             _enforce_payload_size(
@@ -372,9 +547,29 @@ def create_app() -> FastAPIApp:
             )
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-        output_dir = Path(request.output_dir).resolve()
-        baseline_graph = Path(request.baseline_graph).resolve() if request.baseline_graph else None
-        suppress_file = Path(request.suppress_file).resolve() if request.suppress_file else None
+        try:
+            output_dir = _resolve_output_dir(request.output_dir, repo_path=repo_path)
+            baseline_graph = _resolve_input_file_path(
+                request.baseline_graph,
+                repo_path=repo_path,
+                label="Baseline graph",
+            )
+            suppress_file = _resolve_input_file_path(
+                request.suppress_file,
+                repo_path=repo_path,
+                label="Suppression file",
+            )
+        except ValueError as exc:
+            _write_audit_event(
+                started_at=started_at,
+                correlation_id=correlation_id,
+                status="invalid_api_path",
+                http_status=400,
+                request_payload=request_payload,
+                output_dir=None,
+                error_detail=str(exc),
+            )
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         try:
             ctx = build_run_context(

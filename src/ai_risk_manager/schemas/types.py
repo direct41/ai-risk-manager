@@ -244,7 +244,7 @@ class RunContext:
     fail_on_severity: Severity | None = None
     suppress_file: Path | None = None
     baseline_graph: Path | None = None
-    analysis_engine: AnalysisEngine = "ai_first"
+    analysis_engine: AnalysisEngine = "deterministic"
     only_new: bool = False
     min_confidence: Confidence = "low"
     ci_mode: CIMode = "advisory"

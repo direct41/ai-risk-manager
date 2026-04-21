@@ -138,7 +138,7 @@ def _load_baseline_fingerprints(baseline_graph: Path | None) -> tuple[set[str] |
                 str(row.get("origin", "deterministic")),
             ]
         )
-        fingerprints.add(hashlib.sha1(base.encode("utf-8")).hexdigest()[:16])
+        fingerprints.add(hashlib.sha256(base.encode("utf-8")).hexdigest()[:16])
     return fingerprints, None
 
 

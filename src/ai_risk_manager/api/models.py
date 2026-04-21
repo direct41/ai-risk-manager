@@ -24,7 +24,7 @@ class AnalyzeRequest(BaseModel):
     path: str = "."
     mode: Literal["full", "pr"] = "full"
     base: str = "main"
-    no_llm: bool = False
+    no_llm: bool = True
     provider: Literal["auto", "api", "cli"] = "auto"
     baseline_graph: str | None = None
     output_dir: str = ".riskmap"
@@ -32,7 +32,7 @@ class AnalyzeRequest(BaseModel):
     fail_on_severity: Severity | None = None
     suppress_file: str | None = None
     sample: bool = False
-    analysis_engine: AnalysisEngine = "ai_first"
+    analysis_engine: AnalysisEngine = "deterministic"
     only_new: bool = False
     min_confidence: Confidence = "low"
     ci_mode: CIMode = "advisory"

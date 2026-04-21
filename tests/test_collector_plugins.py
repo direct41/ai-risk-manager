@@ -717,7 +717,7 @@ def test_fastapi_plugin_marks_dev_scope_from_requirements_filename(tmp_path: Pat
     assert ("pytest", "range_not_pinned", "development") in violations
 
 
-def test_fastapi_plugin_skips_eval_and_fixture_directories(tmp_path: Path, write_file) -> None:
+def test_fastapi_plugin_skips_non_source_artifact_directories(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",
         "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
@@ -734,6 +734,18 @@ def test_fastapi_plugin_skips_eval_and_fixture_directories(tmp_path: Path, write
         tmp_path / "testdata" / "fixture_test.py",
         "def test_fixture():\n    assert True\n",
     )
+    write_file(
+        tmp_path / "build" / "lib" / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/build')\ndef build_ep():\n    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "dist" / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/dist')\ndef dist_ep():\n    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "coverage" / "generated.py",
+        "def test_coverage_artifact():\n    assert True\n",
+    )
 
     plugin = get_plugin_for_stack("fastapi_pytest")
     assert plugin is not None
@@ -748,6 +760,9 @@ def test_fastapi_plugin_skips_eval_and_fixture_directories(tmp_path: Path, write
     assert all(not ref.startswith("eval/") for ref in collected_refs)
     assert all(not ref.startswith("fixtures/") for ref in collected_refs)
     assert all(not ref.startswith("testdata/") for ref in collected_refs)
+    assert all(not ref.startswith("build/") for ref in collected_refs)
+    assert all(not ref.startswith("dist/") for ref in collected_refs)
+    assert all(not ref.startswith("coverage/") for ref in collected_refs)
 
 
 def test_django_plugin_collects_write_endpoint_and_test_http_call(tmp_path: Path, write_file) -> None:
@@ -785,6 +800,47 @@ def test_django_plugin_collects_write_endpoint_and_test_http_call(tmp_path: Path
     assert endpoint[2] == "POST"
     assert endpoint[3] == "/orders/{order_id}/pay"
     assert any(call[2] == "POST" and call[3] == "/orders/ord_1/pay" for call in bundle.test_http_calls)
+
+
+def test_django_plugin_skips_build_dist_and_coverage_directories(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "views.py",
+        "from rest_framework.decorators import api_view\n"
+        "@api_view(['POST'])\n"
+        "def create_order(request):\n"
+        "    return None\n",
+    )
+    write_file(
+        tmp_path / "app" / "urls.py",
+        "from django.urls import path\n"
+        "from .views import create_order\n"
+        "urlpatterns = [path('orders/', create_order)]\n",
+    )
+    write_file(
+        tmp_path / "build" / "lib" / "app" / "views.py",
+        "from rest_framework.decorators import api_view\n"
+        "@api_view(['POST'])\n"
+        "def build_order(request):\n"
+        "    return None\n",
+    )
+    write_file(
+        tmp_path / "dist" / "app" / "views.py",
+        "from rest_framework.decorators import api_view\n"
+        "@api_view(['POST'])\n"
+        "def dist_order(request):\n"
+        "    return None\n",
+    )
+    write_file(tmp_path / "coverage" / "generated.py", "def test_coverage_artifact():\n    assert True\n")
+
+    plugin = get_plugin_for_stack("django_drf")
+    assert plugin is not None
+    bundle = plugin.collect(tmp_path)
+
+    collected_refs = {row[0] for row in bundle.write_endpoints}
+    assert "app/views.py" in collected_refs
+    assert all(not ref.startswith("build/") for ref in collected_refs)
+    assert all(not ref.startswith("dist/") for ref in collected_refs)
+    assert all(not ref.startswith("coverage/") for ref in collected_refs)
 
 
 def test_django_plugin_collects_viewset_routes_and_reverse_calls(tmp_path: Path, write_file) -> None:

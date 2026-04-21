@@ -29,7 +29,7 @@ Breaking changes include:
 - moving pipeline execution errors from `exit_code` to incompatible HTTP semantics
 
 Additive response fields are allowed in minor releases.
-Enabling optional API auth via `AIRISK_API_TOKEN` is considered additive hardening; endpoint contracts stay unchanged.
+API hardening that rejects unsafe unauthenticated public-host or out-of-root path requests is considered compatible because the endpoint contract stays unchanged for valid requests.
 
 ## JSON artifact compatibility
 
@@ -42,7 +42,7 @@ Artifacts include metadata fields:
 Additional artifacts (for example `run_metrics.json`, `expansion_gate.json`) may be added in minor releases.
 PR-mode helper artifacts such as `pr_summary.json`, `pr_summary.md`, and `github_check.json` are additive and may evolve with new additive fields.
 That includes additive profile summary fields and compact trust metadata on top findings.
-Optional repo-local config such as `./.riskmap-ui.toml` may add behavior in minor releases without changing the output contract shape.
+Optional repo-local config such as `./.riskmap-ui.toml` may add behavior in minor releases without changing the output contract shape; command execution remains gated by environment.
 Finding-level additive metadata such as `trust` is allowed in minor releases.
 
 Breaking changes include:

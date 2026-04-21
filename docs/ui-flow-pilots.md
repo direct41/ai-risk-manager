@@ -93,12 +93,13 @@ Decision:
 - Clean labels are part of signal quality. A correct risk with a noisy label feels untrustworthy.
 - PR comments should prioritize changed-scope findings and keep repo-wide scans in detailed artifacts.
 - `ui_flow_risk` should stay opt-in for browser execution through `.riskmap-ui.toml`.
+- Declared smoke commands are disabled by default; set `AIRISK_UI_SMOKE_ENABLE_COMMANDS=1` only for trusted repositories.
 
 ## Next Validation
 
 Before screenshot or cross-browser work:
 
-- run at least one declared smoke command in a real frontend package
+- run at least one declared smoke command in a trusted real frontend package with `AIRISK_UI_SMOKE_ENABLE_COMMANDS=1`
 - confirm failed smoke appears as `ui_journey_smoke_failed`
 - confirm successful smoke adds notes without findings
 - collect whether QA users prefer journey IDs such as `checkout` or test-suite tags such as `@checkout`

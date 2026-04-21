@@ -25,7 +25,11 @@ def load_pr_comment_body(path: Path) -> str:
 
 
 def _api_url(api_base: str, path: str) -> str:
-    return f"{api_base.rstrip('/')}{path}"
+    base = api_base.rstrip("/")
+    parsed = parse.urlsplit(base)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise GitHubCommentError("GitHub API base must be an http(s) URL.")
+    return f"{base}{path}"
 
 
 def _comment_id(value: object) -> int:
@@ -61,7 +65,8 @@ def _github_json_request(
         },
     )
     try:
-        with request.urlopen(req, timeout=20) as response:
+        # URL scheme and host are validated by _api_url before Request construction.
+        with request.urlopen(req, timeout=20) as response:  # nosec B310
             raw = response.read()
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:400]

@@ -65,6 +65,6 @@ The current rule is simple:
 
 - if each package has its own `.git`, run inside that package
 - if the monorepo has one shared `.git`, run against the package root and pass package-relative changed files when needed
-- keep declared UI smoke config (`.riskmap-ui.toml`) in the same package root as the app
+- keep declared UI smoke config (`.riskmap-ui.toml`) in the same package root as the app, and enable command execution only for trusted packages with `AIRISK_UI_SMOKE_ENABLE_COMMANDS=1`
 
 This keeps `ui_flow_risk` focused on the app that changed and avoids treating the whole workspace as one large UI surface.

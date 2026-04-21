@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from ai_risk_manager.agents.llm_runtime import LLMRuntimeError, _invoke_cli, call_llm_json
+from ai_risk_manager.agents.llm_runtime import LLMRuntimeError, _invoke_api, _invoke_cli, call_llm_json
 
 
 def test_call_llm_json_retries_and_succeeds() -> None:
@@ -31,6 +31,14 @@ def test_call_llm_json_passes_timeout_to_provider() -> None:
 
     assert payload == {"ok": True}
     assert mock_invoke.call_args.kwargs["timeout_seconds"] == 7.5
+
+
+def test_invoke_api_rejects_non_http_base(monkeypatch) -> None:
+    monkeypatch.setenv("AIRISK_API_KEY", "secret")
+    monkeypatch.setenv("AIRISK_API_BASE", "file:///tmp/socket")
+
+    with pytest.raises(LLMRuntimeError, match="http"):
+        _invoke_api("prompt")
 
 
 def test_invoke_cli_uses_codex_prompt_as_positional_argument() -> None:

@@ -44,7 +44,7 @@ def build_run_context(
     fail_on_severity: str | None = None,
     suppress_file: Path | None = None,
     baseline_graph: Path | None = None,
-    analysis_engine: str = "ai_first",
+    analysis_engine: str = "deterministic",
     only_new: bool = False,
     min_confidence: str = "low",
     ci_mode: str = "advisory",
