@@ -1,0 +1,13 @@
+prune .github
+prune docs
+prune eval
+prune examples
+prune scripts
+prune tests
+prune build
+prune dist
+
+prune .riskmap
+prune htmlcov
+
+global-exclude __pycache__ *.py[cod] .DS_Store ALPHA.md RELEASE.md .gitkeep uv.lock

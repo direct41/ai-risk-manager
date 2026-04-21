@@ -27,4 +27,4 @@ any behavior they deem inappropriate.
 
 ## Reporting
 
-Report incidents using security/contact channels in `SECURITY.md`.
+Report incidents using security/contact channels in `.github/SECURITY.md`.

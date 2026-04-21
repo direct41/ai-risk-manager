@@ -8,16 +8,21 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Changed
 - Public documentation was narrowed to user, operator, and contributor references; maintainer-only roadmap, release checklist, UI pilot notes, and launch kit are now local ignored files.
+- Root-level public documents were reduced to README, changelog, and license files; GitHub community docs now live under `.github/`.
+- Alpha onboarding was consolidated into README feedback guidance; `ALPHA.md` is now a local ignored maintainer note.
+- Source distributions now explicitly exclude repository-only docs, eval fixtures, tests, examples, scripts, and local maintainer notes.
+- Package license metadata now uses SPDX-style `MIT` metadata with explicit license-file declaration.
 
 ### Removed
 - Removed stale `docs/legacy-review.md` from the repository.
+- Removed the empty root `.gitkeep` placeholder.
 
 ## [0.1.1] - 2026-04-21
 
 ### Added
 - Dependabot configuration for Python dependencies and GitHub Actions.
 - Alpha feedback issue template for public alpha onboarding.
-- Alpha testing guide (`ALPHA.md`) with local usage steps, feedback prompts, and LinkedIn-ready positioning text.
+- Public alpha onboarding prompts and local usage steps.
 - Profile-based architecture and roadmap documentation for `code_risk`, `ui_flow_risk`, and `business_invariant_risk`.
 - Trust-first eval gates with in-repo thresholds (`eval/trust_thresholds.json`) and CI enforcement in weekly eval workflow.
 - Eval trend tracking outputs generated under ignored `eval/results/`:
@@ -68,7 +73,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - CI risk-analysis baseline now uses deterministic/no-llm mode and caches both `graph.json` and `findings.json` for correct PR delta status.
 - PR risk-analysis workflow now separates branch-code analysis from trusted PR comment publication.
 - Reports and PR summaries now surface merge triage decision, release-risk score, and top test-first actions.
-- Root-level planning docs were removed in favor of `README.md`, `ALPHA.md`, and focused user/operator docs.
+- Root-level planning docs were removed in favor of `README.md` and focused user/operator docs.
 
 ### Fixed
 - Packaged the deterministic sample repository so `riskmap analyze --sample` works after a normal wheel/GitHub install, not only from a source checkout.

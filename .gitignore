@@ -7,6 +7,7 @@ __pycache__/
 *.pyo
 *.pyd
 .venv/
+.venv*/
 venv/
 
 # Test and coverage
@@ -38,7 +39,8 @@ build/
 eval/results/
 eval/.history/
 
-# Local maintainer notes and launch/pilot planning
+# Local maintainer notes and alpha/launch/pilot planning
+ALPHA.md
 RELEASE.md
 docs/roadmap.md
 docs/ui-flow-pilots.md
