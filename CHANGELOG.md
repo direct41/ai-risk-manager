@@ -47,7 +47,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - CLI/API analysis defaults now stay deterministic/no-LLM unless AI enrichment is explicitly requested.
 - Declared UI smoke command execution is gated behind `AIRISK_UI_SMOKE_ENABLE_COMMANDS=1`.
 - API path access is constrained to approved workspace/output roots for hardened deployments.
-- Internal diagnostic and finding fallback hashes now use SHA-256 instead of SHA-1.
+- Internal diagnostic and finding fallback hashes now use SHA-256, while PR baseline comparison still recognizes legacy SHA-1 finding fingerprints.
 - Local Makefile onboarding now uses the project `.venv` and runs the bundled demo in deterministic/no-LLM mode.
 - Development/API dependency pins were updated to Python 3.13-compatible versions.
 - `block-new-critical` guardrails now trigger only for `new + critical + high confidence + verified evidence` findings.

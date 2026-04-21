@@ -17,19 +17,50 @@ def _normalize_source_ref(source_ref: str) -> str:
     return source_ref
 
 
+def fingerprint_base(*, rule_id: str, source_ref: str, title: str, origin: str) -> str:
+    return "|".join(
+        [
+            rule_id,
+            _normalize_source_ref(source_ref),
+            title.strip().lower(),
+            origin,
+        ]
+    )
+
+
+def stable_fingerprint(base: str) -> str:
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()[:16]
+
+
+def legacy_fingerprint(base: str) -> str:
+    return hashlib.sha1(base.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
+
+
 def ensure_fingerprint(finding: Finding) -> Finding:
     if finding.fingerprint:
         return finding
-    base = "|".join(
-        [
-            finding.rule_id,
-            _normalize_source_ref(finding.source_ref),
-            finding.title.strip().lower(),
-            finding.origin,
-        ]
+    base = fingerprint_base(
+        rule_id=finding.rule_id,
+        source_ref=finding.source_ref,
+        title=finding.title,
+        origin=finding.origin,
     )
-    fingerprint = hashlib.sha256(base.encode("utf-8")).hexdigest()[:16]
+    fingerprint = stable_fingerprint(base)
     return replace(finding, fingerprint=fingerprint)
+
+
+def fingerprint_aliases(finding: Finding) -> set[str]:
+    base = fingerprint_base(
+        rule_id=finding.rule_id,
+        source_ref=finding.source_ref,
+        title=finding.title,
+        origin=finding.origin,
+    )
+    current = stable_fingerprint(base)
+    aliases = {current, legacy_fingerprint(base)}
+    if finding.fingerprint and finding.fingerprint != current:
+        aliases = {finding.fingerprint}
+    return aliases
 
 
 def _meets_min_confidence(confidence: Confidence, min_confidence: Confidence) -> bool:

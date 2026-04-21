@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -1353,6 +1354,61 @@ def test_pr_baseline_status_and_only_new_summary(tmp_path: Path, write_file) -> 
     assert result.summary.unchanged_count == 1
     pr_summary = (ctx.output_dir / "pr_summary.md").read_text(encoding="utf-8")
     assert "No findings in current PR scope." in pr_summary
+
+
+def test_pr_baseline_matches_legacy_sha1_fingerprint_after_hash_migration(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/orders')\ndef create_order():\n    return {'ok': True}\n",
+    )
+    baseline = tmp_path / ".riskmap" / "baseline" / "graph.json"
+    write_file(baseline, '{"nodes": []}')
+    legacy_base = "critical_path_no_tests|app/api.py|existing issue|deterministic"
+    legacy_fp = hashlib.sha1(legacy_base.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
+    write_file(
+        baseline.parent / "findings.json",
+        json.dumps({"findings": [{"fingerprint": legacy_fp}, {"fingerprint": "fp-resolved"}]}),
+    )
+
+    mocked = FindingsReport(
+        findings=[
+            Finding(
+                id="f1",
+                rule_id="critical_path_no_tests",
+                title="Existing issue",
+                description="d",
+                severity="high",
+                confidence="high",
+                evidence="e",
+                source_ref="app/api.py:1",
+                suppression_key="f1",
+                recommendation="r",
+                evidence_refs=["app/api.py:1"],
+            )
+        ],
+        generated_without_llm=True,
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+        baseline_graph=baseline,
+        only_new=True,
+    )
+
+    with patch("ai_risk_manager.pipeline.run.run_rules", return_value=mocked):
+        with patch("ai_risk_manager.pipeline.run._resolve_changed_files", return_value={"app/api.py"}):
+            result, code, _ = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    assert result.summary.new_count == 0
+    assert result.summary.resolved_count == 1
+    assert result.summary.unchanged_count == 1
 
 
 def test_pipeline_returns_exit_2_when_no_plugin_for_detected_stack(tmp_path: Path, write_file) -> None:
