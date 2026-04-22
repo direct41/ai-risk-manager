@@ -1,0 +1,5 @@
+# Require maintainer review for every public repository change.
+* @direct41
+
+# Keep ownership policy changes under the same maintainer review.
+/.github/CODEOWNERS @direct41
