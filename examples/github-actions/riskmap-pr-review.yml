@@ -22,7 +22,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install AI Risk Manager
-        run: pip install ai-risk-manager
+        run: python -m pip install "git+https://github.com/direct41/ai-risk-manager.git"
 
       - name: Analyze main
         run: |
@@ -58,7 +58,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install AI Risk Manager
-        run: pip install ai-risk-manager
+        run: python -m pip install "git+https://github.com/direct41/ai-risk-manager.git"
 
       - name: Restore baseline cache
         uses: actions/cache/restore@v4
