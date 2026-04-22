@@ -17,6 +17,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Removed stale `docs/legacy-review.md` from the repository.
 - Removed the empty root `.gitkeep` placeholder.
 
+### Fixed
+- GitHub Actions example now installs from the GitHub repository while the package is not published on PyPI.
+
 ## [0.1.1] - 2026-04-21
 
 ### Added
