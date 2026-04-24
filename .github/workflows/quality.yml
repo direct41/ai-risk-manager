@@ -24,6 +24,9 @@ jobs:
       - name: Ruff
         run: ruff check src tests scripts
 
+      - name: Public artifact gate
+        run: python scripts/check_public_artifacts.py
+
       - name: Mypy
         run: mypy src
 

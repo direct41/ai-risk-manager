@@ -1,0 +1,13 @@
+# Public documentation intentionally tracked in the open repository.
+#
+# Any new docs/*.md file must be added here in the same PR, with the PR
+# explaining why the document is safe and useful for public readers.
+docs/architecture.md
+docs/business-invariants.md
+docs/capability-signals.md
+docs/compatibility.md
+docs/deployment-hardening.md
+docs/ingress-contract.md
+docs/plugin-contract.md
+docs/ru.md
+docs/workspaces.md
