@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- Added a CI public-artifact gate and PR release-manager checklist to prevent accidental publication of local notes, generated outputs, secrets, or unreviewed public docs.
+
 ### Changed
 - Public documentation was narrowed to user, operator, and contributor references; maintainer-only roadmap, release checklist, UI pilot notes, and launch kit are now local ignored files.
 - Root-level public documents were reduced to README, changelog, and license files; GitHub community docs now live under `.github/`.
