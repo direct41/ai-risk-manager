@@ -138,6 +138,22 @@ def test_public_artifact_gate_detects_secret_patterns(
     assert any("src/leak.py: contains OpenAI-style API key" == failure for failure in failures)
 
 
+def test_public_artifact_gate_detects_nested_key_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_guard_files(tmp_path, allowlist="")
+    key_file = tmp_path / "secrets" / "id_rsa.pem"
+    key_file.parent.mkdir(parents=True)
+    key_header = "-----BEGIN OPENSSH " + "PRIVATE KEY-----"
+    key_file.write_text(f"{key_header}\nfake-key\n", encoding="utf-8")
+    _configure_gate(monkeypatch, tmp_path, ["secrets/id_rsa.pem"])
+
+    failures = check_public_artifacts.check_public_artifacts()
+
+    assert "secrets/id_rsa.pem: contains private key block" in failures
+
+
 def test_public_artifact_gate_requires_manifest_and_gitignore_guards(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

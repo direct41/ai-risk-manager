@@ -76,6 +76,19 @@ TEXT_SUFFIXES = {
     ".yaml",
     ".yml",
 }
+SECRET_SCAN_SUFFIXES = TEXT_SUFFIXES | {
+    ".crt",
+    ".env",
+    ".key",
+    ".pem",
+}
+SECRET_SCAN_BASENAMES = {
+    ".env",
+    "id_dsa",
+    "id_ecdsa",
+    "id_ed25519",
+    "id_rsa",
+}
 SECRET_PATTERNS = (
     ("private key block", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |)?PRIVATE KEY-----")),
     ("OpenAI-style API key", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b")),
@@ -127,7 +140,14 @@ def _read_required_lines(path: Path, required: set[str]) -> list[str]:
 
 
 def _should_scan_for_secrets(path: str) -> bool:
-    return Path(path).suffix.lower() in TEXT_SUFFIXES or "/" not in path
+    candidate = Path(path)
+    name = candidate.name.lower()
+    return (
+        candidate.suffix.lower() in SECRET_SCAN_SUFFIXES
+        or name in SECRET_SCAN_BASENAMES
+        or name.startswith(".env.")
+        or "/" not in path
+    )
 
 
 def _scan_for_secrets(path: str) -> list[str]:
