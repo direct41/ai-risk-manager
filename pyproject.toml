@@ -40,7 +40,7 @@ riskmap-api = "ai_risk_manager.api.server:app_entry"
 api = [
   "fastapi==0.136.0",
   "pydantic==2.13.2",
-  "uvicorn==0.44.0",
+  "uvicorn==0.46.0",
 ]
 dev = [
   "pytest==9.0.3",
@@ -50,7 +50,7 @@ dev = [
   "fastapi==0.136.0",
   "httpx==0.28.1",
   "pydantic==2.13.2",
-  "uvicorn==0.44.0",
+  "uvicorn==0.46.0",
 ]
 
 [tool.setuptools]
