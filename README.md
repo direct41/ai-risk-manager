@@ -1,14 +1,39 @@
 # AI Risk Manager
 
+> PR-native release-risk assistant that tells engineering and QA teams what to test before merging risky or AI-generated code.
+
+[![Quality Gates](https://github.com/direct41/ai-risk-manager/actions/workflows/quality.yml/badge.svg)](https://github.com/direct41/ai-risk-manager/actions/workflows/quality.yml)
+[![Eval Suite](https://github.com/direct41/ai-risk-manager/actions/workflows/eval-suite.yml/badge.svg)](https://github.com/direct41/ai-risk-manager/actions/workflows/eval-suite.yml)
+![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)
+![Status](https://img.shields.io/badge/status-open%20alpha-orange)
+![Analysis](https://img.shields.io/badge/analysis-deterministic--first-brightgreen)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 Know what to test before merging risky or AI-generated PRs.
 
-AI Risk Manager is a PR-native release-risk assistant for engineering and QA teams. It scans a repository or PR branch, highlights high-risk changed areas, and writes a short test-first triage package.
-
-It starts with deterministic evidence. AI enrichment is optional.
+AI Risk Manager scans a repository or PR branch, highlights high-risk changed areas, and writes a short test-first triage package. It starts with deterministic evidence. AI enrichment is optional.
 
 Use it if you review backend-heavy PRs, adopt AI-generated code, or want a short "what should we test first?" checklist before merge.
 
 Do not use it as a SAST replacement, full business-logic verifier, or automatic release approval system.
+
+## Why This Exists
+
+Fast-moving and AI-generated PRs often fail in the gap between "the code compiles" and "we know what release risk changed." Generic scanners can find security or style issues, but they usually do not tell a reviewer which API paths, write flows, tests, and invariants deserve attention before merge.
+
+AI Risk Manager is built for that review moment. It gives engineering and QA teams a compact, evidence-backed answer: what changed, why it looks risky, and what to test first.
+
+## At a Glance
+
+| Capability | What it does |
+|---|---|
+| PR risk triage | Ranks risky changed areas before merge. |
+| Deterministic-first analysis | Runs locally without sending repository snippets to an LLM by default. |
+| Test-first output | Writes `merge_triage.md`, `report.md`, `findings.json`, and `test_plan.json`. |
+| Supported stacks | Strongest on FastAPI, Django/DRF, and Express/Node repositories. |
+| Optional AI enrichment | Adds semantic findings only when explicitly enabled. |
+| Advisory CI mode | Starts as a review aid before teams adopt stricter blocking gates. |
+| Repo-owned invariants | Uses `.riskmap.yml` for critical-flow checks instead of guessing business rules. |
 
 ## Start Here
 
@@ -90,6 +115,18 @@ riskmap analyze \
 
 The baseline directory must contain both `graph.json` and `findings.json`.
 
+## Quick Paths
+
+| Goal | Start here |
+|---|---|
+| Try the product quickly | Run `riskmap analyze --sample --no-llm --analysis-engine deterministic`. |
+| Review a PR locally | Use `riskmap analyze --mode pr --base main --only-new`. |
+| Add CI advisory review | Start from `examples/github-actions/riskmap-pr-review.yml`. |
+| Add GitLab merge request review | Start from `examples/gitlab-ci/riskmap-merge-request-review.yml`. |
+| Add domain checks | Read `docs/business-invariants.md` and define `.riskmap.yml`. |
+| Use a monorepo | Read `docs/workspaces.md` and run one package root at a time. |
+| Harden API deployment | Read `docs/deployment-hardening.md`. |
+
 ## Good Fit
 
 AI Risk Manager is currently best for:
@@ -136,6 +173,16 @@ PR mode can also produce:
    Action: Add API/service tests for endpoint 'POST /orders', including success and error paths.
 ```
 
+## How It Works
+
+1. Detect repository shape and support level.
+2. Collect stack-specific and universal evidence from code, tests, workflows, dependencies, and configured invariants.
+3. Normalize evidence into capability signals.
+4. Run deterministic rules first.
+5. Optionally add AI semantic enrichment when explicitly enabled.
+6. Score trust from evidence, support level, confidence, and suppression history.
+7. Emit human-readable and machine-readable triage artifacts for local review or CI.
+
 ## GitHub PR Comment
 
 Generate a PR summary locally:
@@ -160,7 +207,10 @@ riskmap publish-pr-comment \
   --summary-file ./.riskmap/pr_summary.md
 ```
 
-A copy-paste GitHub Actions example is available at `examples/github-actions/riskmap-pr-review.yml`.
+Copy-paste CI examples are available for GitHub Actions and GitLab CI:
+
+- `examples/github-actions/riskmap-pr-review.yml`
+- `examples/gitlab-ci/riskmap-merge-request-review.yml`
 
 ## Current Scope
 
