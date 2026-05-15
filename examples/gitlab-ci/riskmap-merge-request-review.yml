@@ -17,7 +17,7 @@ riskmap_merge_request_review:
     - apt-get install -y --no-install-recommends git
     - python -m pip install --upgrade pip
     - python -m pip install "git+https://github.com/direct41/ai-risk-manager.git"
-    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --depth=100 || true
+    - git fetch --depth=100 origin "+refs/heads/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}:refs/remotes/origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}" || true
   script:
     - |
       set +e
