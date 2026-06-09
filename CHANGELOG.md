@@ -15,6 +15,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added a GitLab CI merge-request review example for advisory risk analysis.
 
 ### Changed
+- Public PR benchmark seed corpus now labels all initial public PR cases with expected product outcomes.
 - Alpha feedback prompts now lead with public PR URL validation and safer output-snippet guidance.
 - README now leads with the one-command public GitHub PR review path and feedback prompts tied to real PR URLs.
 - README now has a clearer public first screen with badges, problem framing, capability summary, quick paths, and a concise "How it works" section for human and AI discovery.
@@ -29,6 +30,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Removed the empty root `.gitkeep` placeholder.
 
 ### Fixed
+- Full-fallback PR summaries now hide unscoped new high-severity repo-wide findings from top risks and test-first actions.
 - PR summaries now stay aligned with merge triage test-first actions, and full-fallback PR analysis hides repo-wide unchanged noise from merge triage scoring.
 - GitHub Actions example now installs from the GitHub repository while the package is not published on PyPI.
 

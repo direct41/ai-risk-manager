@@ -35,40 +35,53 @@
       "id": "drf-9975",
       "url": "https://github.com/encode/django-rest-framework/pull/9975",
       "stack": "django_drf",
-      "reason": "Exploratory Django/DRF public PR for corpus growth and human quality labeling.",
+      "reason": "DRF validator fix with matching regression tests; should stay ready with no surfaced top risks.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
       }
     },
     {
       "id": "express-7291",
       "url": "https://github.com/expressjs/express/pull/7291",
       "stack": "express_node",
-      "reason": "Exploratory Express public PR for changed-file attribution and regression action quality.",
+      "reason": "Express forwarded-host parsing change with matching regression test; should stay ready with no surfaced top risks.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
       }
     },
     {
       "id": "full-stack-fastapi-template-2239",
       "url": "https://github.com/fastapi/full-stack-fastapi-template/pull/2239",
       "stack": "fastapi_pytest",
-      "reason": "Exploratory FastAPI application-template PR for broader real-repo signal quality.",
+      "reason": "FastAPI private user creation adds duplicate-email validation but only updates success status assertion.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "useful",
+        "decision": "ready",
+        "required_rules": ["agent_generated_test_missing_negative_path"],
+        "required_paths": ["backend/tests/api/routes/test_private.py"],
+        "max_top_findings": 1
       }
     },
     {
       "id": "drf-9883",
       "url": "https://github.com/encode/django-rest-framework/pull/9883",
       "stack": "django_drf",
-      "reason": "Exploratory Django/DRF public PR for false-positive and missed-risk review.",
+      "reason": "DRF exception inheritance change without tests; should ask for changed-file regression coverage without repo-wide fallback noise.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "useful",
+        "decision": "review_required",
+        "required_rules": ["pr_code_change_without_test_delta"],
+        "required_paths": ["rest_framework/exceptions.py"],
+        "forbidden_top_rules": ["critical_path_no_tests"],
+        "max_top_findings": 1
       }
     }
   ]

@@ -382,7 +382,12 @@ def build_pr_summary(
     only_new: bool = False,
     changed_files: set[str] | None = None,
 ) -> PRSummary:
+    normalized_changed_files = {normalize_path(path) for path in (changed_files or set())}
     top_candidates = result.findings.findings
+    if result.analysis_scope == "full_fallback" and normalized_changed_files:
+        top_candidates = [
+            finding for finding in top_candidates if is_pr_scoped_finding(finding, normalized_changed_files)
+        ]
     if only_new:
         min_rank = SEVERITY_INDEX["high"]
         top_candidates = [
@@ -391,7 +396,6 @@ def build_pr_summary(
             if finding.status == "new" and SEVERITY_INDEX.get(finding.severity, len(SEVERITY_ORDER)) <= min_rank
         ]
         top_candidates = _dedupe_findings([*top_candidates, *_merge_triage_action_findings(result)])
-    normalized_changed_files = {normalize_path(path) for path in (changed_files or set())}
     ranked_top_candidates = _rank_findings(
         top_candidates,
         changed_files=normalized_changed_files,
