@@ -24,7 +24,7 @@ def test_parse_github_pr_url_rejects_non_github_url() -> None:
     try:
         parse_github_pr_url("https://example.com/example/project/pull/123")
     except GitHubPRReviewError as exc:
-        assert "github.com" in str(exc)
+        assert str(exc) == "review-pr expects an https://github.com/<owner>/<repo>/pull/<number> URL."
     else:
         raise AssertionError("Expected GitHubPRReviewError")
 
