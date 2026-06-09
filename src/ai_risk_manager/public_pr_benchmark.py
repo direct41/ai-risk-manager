@@ -83,6 +83,7 @@ class PublicPRCaseResult:
     evaluation_status: EvaluationStatus
     decision: str | None = None
     risk_score: int | None = None
+    top_finding_count: int = 0
     top_rules: list[str] = field(default_factory=list)
     action_rules: list[str] = field(default_factory=list)
     top_paths: list[str] = field(default_factory=list)
@@ -213,7 +214,7 @@ def _run_case(
     try:
         proc = command_runner(command, Path.cwd(), _benchmark_env(), options.timeout_seconds)
     except subprocess.TimeoutExpired as exc:
-        return _base_result(
+        result = _base_result(
             case,
             output_dir=case_output_dir,
             command=command,
@@ -222,6 +223,8 @@ def _run_case(
             stdout=str(exc.stdout or ""),
             stderr=str(exc.stderr or ""),
         )
+        _evaluate_case_result(case, result)
+        return result
 
     execution_status = _resolve_execution_status(proc.returncode, case_output_dir)
     result = _base_result(
@@ -326,6 +329,7 @@ def _populate_observed_artifacts(result: PublicPRCaseResult, output_dir: Path) -
     top_findings = _object_list(pr_summary.get("top_findings"))
     top_actions = _object_list(pr_summary.get("top_actions"))
     merge_actions = _object_list(merge_triage.get("actions"))
+    result.top_finding_count = len(top_findings)
     result.top_rules = _unique_strings(_extract_field(top_findings, "rule_id"))
     result.action_rules = _unique_strings(
         [*_extract_field(top_actions, "rule_id"), *_extract_field(merge_actions, "rule_id")]
@@ -359,9 +363,9 @@ def _evaluate_case_result(case: PublicPRCase, result: PublicPRCaseResult) -> Non
         if missing_paths:
             result.errors.append(f"missing required surfaced path(s): {missing_paths}")
 
-        if expected.max_top_findings is not None and len(result.top_rules) > expected.max_top_findings:
+        if expected.max_top_findings is not None and result.top_finding_count > expected.max_top_findings:
             result.errors.append(
-                f"expected at most {expected.max_top_findings} top finding(s), got {len(result.top_rules)}"
+                f"expected at most {expected.max_top_findings} top finding(s), got {result.top_finding_count}"
             )
 
     if result.errors:

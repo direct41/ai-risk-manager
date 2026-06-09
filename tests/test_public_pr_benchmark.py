@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import subprocess
 
 from ai_risk_manager.cli import main
 from ai_risk_manager.public_pr_benchmark import (
@@ -39,6 +40,7 @@ def _write_review_artifacts(
     decision: str = "review_required",
     rule_id: str = "pr_code_change_without_test_delta",
     source_ref: str = "lib/response.js",
+    top_findings: list[dict] | None = None,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     top_finding = {
@@ -61,12 +63,13 @@ def _write_review_artifacts(
         "action": "Add a regression test.",
         "estimated_minutes": 3,
     }
+    resolved_top_findings = top_findings or [top_finding]
     (output_dir / "pr_summary.json").write_text(
         json.dumps(
             {
                 "decision": decision,
                 "risk_score": 38,
-                "top_findings": [top_finding],
+                "top_findings": resolved_top_findings,
                 "top_actions": [action],
             }
         ),
@@ -76,7 +79,7 @@ def _write_review_artifacts(
         json.dumps({"decision": decision, "risk_score": 38, "actions": [action]}),
         encoding="utf-8",
     )
-    (output_dir / "findings.json").write_text(json.dumps({"findings": [top_finding]}), encoding="utf-8")
+    (output_dir / "findings.json").write_text(json.dumps({"findings": resolved_top_findings}), encoding="utf-8")
 
 
 def test_load_public_pr_corpus_reads_expected_fields(tmp_path: Path) -> None:
@@ -193,6 +196,78 @@ def test_run_public_pr_benchmark_can_expect_setup_failure(tmp_path: Path) -> Non
     assert result.passed_cases == 1
     assert result.cases[0].execution_status == "setup_fail"
     assert result.cases[0].evaluation_status == "passed"
+
+
+def test_run_public_pr_benchmark_can_expect_timeout(tmp_path: Path) -> None:
+    corpus = tmp_path / "public_prs.json"
+    _write_corpus(
+        corpus,
+        [
+            _case(
+                {
+                    "execution": "timeout",
+                    "product": "not_useful",
+                }
+            )
+        ],
+    )
+
+    def _fake_runner(command: list[str], cwd: Path, env: dict[str, str], timeout_seconds: int) -> ReviewCommandResult:
+        raise subprocess.TimeoutExpired(cmd=command, timeout=timeout_seconds)
+
+    result = run_public_pr_benchmark(corpus, tmp_path / "out", command_runner=_fake_runner)
+
+    assert result.passed_cases == 1
+    assert result.cases[0].execution_status == "timeout"
+    assert result.cases[0].evaluation_status == "passed"
+
+
+def test_run_public_pr_benchmark_counts_top_finding_entries_not_unique_rules(tmp_path: Path) -> None:
+    corpus = tmp_path / "public_prs.json"
+    _write_corpus(
+        corpus,
+        [
+            _case(
+                {
+                    "execution": "pass",
+                    "product": "useful",
+                    "required_rules": ["pr_code_change_without_test_delta"],
+                    "max_top_findings": 1,
+                }
+            )
+        ],
+    )
+    duplicate_rule_findings = [
+        {
+            "rule_id": "pr_code_change_without_test_delta",
+            "title": "first",
+            "severity": "medium",
+            "confidence": "medium",
+            "status": "new",
+            "source_ref": "lib/response.js",
+            "recommendation": "Add a regression test.",
+        },
+        {
+            "rule_id": "pr_code_change_without_test_delta",
+            "title": "second",
+            "severity": "medium",
+            "confidence": "medium",
+            "status": "new",
+            "source_ref": "lib/request.js",
+            "recommendation": "Add a regression test.",
+        },
+    ]
+
+    def _fake_runner(command: list[str], cwd: Path, env: dict[str, str], timeout_seconds: int) -> ReviewCommandResult:
+        _write_review_artifacts(_output_dir_from_command(command), top_findings=duplicate_rule_findings)
+        return ReviewCommandResult(returncode=0)
+
+    result = run_public_pr_benchmark(corpus, tmp_path / "out", command_runner=_fake_runner)
+
+    assert result.failed_cases == 1
+    assert result.cases[0].top_rules == ["pr_code_change_without_test_delta"]
+    assert result.cases[0].top_finding_count == 2
+    assert "expected at most 1 top finding(s), got 2" in result.cases[0].errors
 
 
 def test_cli_benchmark_prs_wires_options(tmp_path: Path, monkeypatch, capsys) -> None:
