@@ -15,6 +15,7 @@ from ai_risk_manager.integrations.github_pr_review import (
 )
 from ai_risk_manager.pipeline.context_builder import build_run_context, normalize_cli_choice
 from ai_risk_manager.pipeline.run import run_pipeline
+from ai_risk_manager.public_pr_benchmark import PublicPRBenchmarkOptions, run_public_pr_benchmark
 from ai_risk_manager.sample_repo import resolve_sample_repo_path
 
 
@@ -163,6 +164,70 @@ def _build_parser() -> argparse.ArgumentParser:
         help="GitHub API base URL (for GitHub Enterprise use cases)",
     )
     publish.add_argument("--dry-run", action="store_true", help="Print the comment body instead of publishing it")
+
+    benchmark = subparsers.add_parser(
+        "benchmark-prs",
+        help="Run a public GitHub PR corpus through review-pr and evaluate expected outcomes.",
+    )
+    benchmark.add_argument(
+        "corpus",
+        nargs="?",
+        default="eval/public_prs.json",
+        help="Path to public PR corpus JSON.",
+    )
+    benchmark.add_argument(
+        "--output-dir",
+        default=".riskmap/public-pr-corpus",
+        help="Output directory for benchmark artifacts.",
+    )
+    benchmark.add_argument(
+        "--case-id",
+        action="append",
+        default=[],
+        help="Run only the selected corpus case id. May be passed multiple times.",
+    )
+    benchmark.add_argument("--limit", type=int, default=None, help="Run at most N corpus cases.")
+    benchmark.add_argument("--skip-baseline", action="store_true", help="Pass --skip-baseline to review-pr.")
+    benchmark.add_argument("--include-unchanged", action="store_true", help="Pass --include-unchanged to review-pr.")
+    benchmark.add_argument("--enable-llm", action="store_true", help="Allow LLM enrichment for each review-pr run.")
+    benchmark.add_argument("--provider", choices=["auto", "api", "cli"], default="auto", help="LLM provider")
+    benchmark.add_argument(
+        "--analysis-engine",
+        choices=["deterministic", "hybrid", "ai-first"],
+        default="deterministic",
+        help="Analysis strategy for each review-pr run.",
+    )
+    benchmark.add_argument(
+        "--min-confidence",
+        choices=["high", "medium", "low"],
+        default="low",
+        help="Drop findings below confidence threshold.",
+    )
+    benchmark.add_argument(
+        "--ci-mode",
+        choices=["advisory", "soft", "block-new-critical"],
+        default="advisory",
+        help="CI behavior for each review-pr run.",
+    )
+    benchmark.add_argument(
+        "--support-level",
+        choices=["auto", "l0", "l1", "l2"],
+        default="auto",
+        help="Stack support maturity level.",
+    )
+    benchmark.add_argument(
+        "--risk-policy",
+        choices=["conservative", "balanced", "aggressive"],
+        default="balanced",
+        help="Risk triage policy profile.",
+    )
+    benchmark.add_argument(
+        "--token-env",
+        default="GITHUB_TOKEN",
+        help="Environment variable that contains an optional GitHub token for PR metadata lookup.",
+    )
+    benchmark.add_argument("--api-base", default="https://api.github.com", help="GitHub API base URL.")
+    benchmark.add_argument("--timeout-seconds", type=int, default=900, help="Timeout per public PR case.")
 
     return parser
 
@@ -362,6 +427,41 @@ def _run_publish_pr_comment(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_benchmark_prs(args: argparse.Namespace) -> int:
+    corpus_path = Path(args.corpus).resolve()
+    output_dir = Path(args.output_dir).resolve()
+    options = PublicPRBenchmarkOptions(
+        case_ids=list(args.case_id),
+        limit=args.limit,
+        skip_baseline=args.skip_baseline,
+        include_unchanged=args.include_unchanged,
+        enable_llm=args.enable_llm,
+        provider=args.provider,
+        analysis_engine=args.analysis_engine,
+        min_confidence=args.min_confidence,
+        ci_mode=args.ci_mode,
+        support_level=args.support_level,
+        risk_policy=args.risk_policy,
+        token_env=args.token_env,
+        api_base=args.api_base,
+        timeout_seconds=args.timeout_seconds,
+    )
+    try:
+        result = run_public_pr_benchmark(corpus_path, output_dir, options=options)
+    except (OSError, ValueError) as exc:
+        print(f"Public PR benchmark setup error: {exc}")
+        return 2
+
+    print(
+        "Public PR benchmark completed. "
+        f"cases={result.total_cases} passed={result.passed_cases} "
+        f"needs_human_review={result.needs_human_review_cases} failed={result.failed_cases}"
+    )
+    print(f"Summary: {output_dir / 'benchmark_summary.md'}")
+    print(f"Machine summary: {output_dir / 'benchmark_summary.json'}")
+    return 3 if result.failed_cases else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -372,6 +472,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_review_pr(args)
     if args.command == "publish-pr-comment":
         return _run_publish_pr_comment(args)
+    if args.command == "benchmark-prs":
+        return _run_benchmark_prs(args)
 
     parser.print_help()
     return 2

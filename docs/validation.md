@@ -31,6 +31,15 @@ cat .riskmap/review-pr-OWNER-REPO-123/pr_summary.md
 
 The command clones the PR into a temporary checkout, builds a baseline on the base branch, runs deterministic/no-LLM analysis by default, and writes local artifacts. Use `--skip-baseline` only when repository size makes the baseline step impractical; it is faster but noisier.
 
+For repeatable validation across known public PRs, run the corpus benchmark:
+
+```bash
+riskmap benchmark-prs eval/public_prs.json --output-dir .riskmap/public-pr-corpus
+cat .riskmap/public-pr-corpus/benchmark_summary.md
+```
+
+The benchmark records two verdict layers per PR: execution status (`pass`, `setup_fail`, `provider_fail`, `tool_fail`, `artifact_fail`, or `timeout`) and product evaluation (`passed`, `failed`, or `needs_human_review`). Treat `needs_human_review` rows as labeling work, not as product success.
+
 ## Public Request Path
 
 Ask people for one hard public PR, not for a star or a generic opinion.

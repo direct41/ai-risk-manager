@@ -48,6 +48,7 @@ AI Risk Manager is built for that review moment. It gives engineering and QA tea
 | Deterministic-first analysis | Runs locally without sending repository snippets to an LLM by default. |
 | Test-first output | Writes `merge_triage.md`, `report.md`, `findings.json`, and `test_plan.json`. |
 | One-command PR review | Runs `riskmap review-pr <github-pr-url>` against a public GitHub PR. |
+| Public PR benchmark | Runs `riskmap benchmark-prs` against a curated public PR corpus and checks expected outcomes. |
 | Supported stacks | Strongest on FastAPI, Django/DRF, and Express/Node repositories. |
 | Optional AI enrichment | Adds semantic findings only when explicitly enabled. |
 | Advisory CI mode | Starts as a review aid before teams adopt stricter blocking gates. |
@@ -90,6 +91,15 @@ cat .riskmap/review-pr-OWNER-REPO-123/pr_summary.md
 ```
 
 For very large repositories, use `--skip-baseline` to trade faster setup for noisier `full_fallback` PR analysis.
+
+Run the public PR benchmark corpus from this repository:
+
+```bash
+riskmap benchmark-prs eval/public_prs.json --output-dir .riskmap/public-pr-corpus
+cat .riskmap/public-pr-corpus/benchmark_summary.md
+```
+
+Use `--case-id express-7287` for a single regression case while tuning output quality.
 
 From the repository you want to inspect:
 

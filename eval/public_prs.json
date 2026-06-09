@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "description": "Public GitHub PR corpus for deterministic review-pr validation. Use public PRs only.",
+  "cases": [
+    {
+      "id": "express-7287",
+      "url": "https://github.com/expressjs/express/pull/7287",
+      "stack": "express_node",
+      "reason": "Real full_fallback PR that should surface changed application code without test delta, not old repo-wide findings.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "review_required",
+        "required_rules": ["pr_code_change_without_test_delta"],
+        "required_paths": ["lib/response.js"],
+        "forbidden_top_rules": ["critical_path_no_tests", "critical_write_missing_authz"],
+        "max_top_findings": 1
+      }
+    },
+    {
+      "id": "fastapi-15708",
+      "url": "https://github.com/fastapi/fastapi/pull/15708",
+      "stack": "fastapi_pytest",
+      "reason": "Real PR where pr_summary should stay aligned with merge-triage test-first actions on an unchanged changed-file finding.",
+      "expected": {
+        "execution": "pass",
+        "product": "mixed",
+        "decision": "ready",
+        "required_rules": ["agent_generated_test_missing_negative_path"],
+        "required_paths": ["tests/test_sse.py"],
+        "max_top_findings": 1
+      }
+    },
+    {
+      "id": "drf-9975",
+      "url": "https://github.com/encode/django-rest-framework/pull/9975",
+      "stack": "django_drf",
+      "reason": "Exploratory Django/DRF public PR for corpus growth and human quality labeling.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "express-7291",
+      "url": "https://github.com/expressjs/express/pull/7291",
+      "stack": "express_node",
+      "reason": "Exploratory Express public PR for changed-file attribution and regression action quality.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "full-stack-fastapi-template-2239",
+      "url": "https://github.com/fastapi/full-stack-fastapi-template/pull/2239",
+      "stack": "fastapi_pytest",
+      "reason": "Exploratory FastAPI application-template PR for broader real-repo signal quality.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "drf-9883",
+      "url": "https://github.com/encode/django-rest-framework/pull/9883",
+      "stack": "django_drf",
+      "reason": "Exploratory Django/DRF public PR for false-positive and missed-risk review.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    }
+  ]
+}
