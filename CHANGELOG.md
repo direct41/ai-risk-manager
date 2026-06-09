@@ -7,10 +7,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Added `riskmap review-pr <github-pr-url>` to run deterministic PR risk triage on a public GitHub PR without manually checking out the branch, including automatic base-branch baseline generation.
+- Added a public validation playbook for the 30-day product-value test cycle.
 - Added a CI public-artifact gate and PR release-manager checklist to prevent accidental publication of local notes, generated outputs, secrets, or unreviewed public docs.
 - Added a GitLab CI merge-request review example for advisory risk analysis.
 
 ### Changed
+- README now leads with the one-command public GitHub PR review path and feedback prompts tied to real PR URLs.
 - README now has a clearer public first screen with badges, problem framing, capability summary, quick paths, and a concise "How it works" section for human and AI discovery.
 - Public documentation was narrowed to user, operator, and contributor references; maintainer-only roadmap, release checklist, UI pilot notes, and launch kit are now local ignored files.
 - Root-level public documents were reduced to README, changelog, and license files; GitHub community docs now live under `.github/`.

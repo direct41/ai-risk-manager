@@ -17,6 +17,21 @@ Use it if you review backend-heavy PRs, adopt AI-generated code, or want a short
 
 Do not use it as a SAST replacement, full business-logic verifier, or automatic release approval system.
 
+Fastest proof path:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install "git+https://github.com/direct41/ai-risk-manager.git"
+
+riskmap review-pr https://github.com/OWNER/REPO/pull/123
+cat .riskmap/review-pr-OWNER-REPO-123/merge_triage.md
+cat .riskmap/review-pr-OWNER-REPO-123/pr_summary.md
+```
+
+The command clones the public GitHub PR into a temporary checkout, builds a baseline on the base branch, runs deterministic/no-LLM PR analysis by default, and writes artifacts locally.
+
 ## Why This Exists
 
 Fast-moving and AI-generated PRs often fail in the gap between "the code compiles" and "we know what release risk changed." Generic scanners can find security or style issues, but they usually do not tell a reviewer which API paths, write flows, tests, and invariants deserve attention before merge.
@@ -30,6 +45,7 @@ AI Risk Manager is built for that review moment. It gives engineering and QA tea
 | PR risk triage | Ranks risky changed areas before merge. |
 | Deterministic-first analysis | Runs locally without sending repository snippets to an LLM by default. |
 | Test-first output | Writes `merge_triage.md`, `report.md`, `findings.json`, and `test_plan.json`. |
+| One-command PR review | Runs `riskmap review-pr <github-pr-url>` against a public GitHub PR. |
 | Supported stacks | Strongest on FastAPI, Django/DRF, and Express/Node repositories. |
 | Optional AI enrichment | Adds semantic findings only when explicitly enabled. |
 | Advisory CI mode | Starts as a review aid before teams adopt stricter blocking gates. |
@@ -57,6 +73,21 @@ You should see:
 - the first tests or review checks to run
 
 ## Run On Your Repo
+
+Review a public GitHub PR without manually checking out the branch:
+
+```bash
+riskmap review-pr https://github.com/OWNER/REPO/pull/123
+```
+
+Read these first:
+
+```bash
+cat .riskmap/review-pr-OWNER-REPO-123/merge_triage.md
+cat .riskmap/review-pr-OWNER-REPO-123/pr_summary.md
+```
+
+For very large repositories, use `--skip-baseline` to trade faster setup for noisier `full_fallback` PR analysis.
 
 From the repository you want to inspect:
 
@@ -120,9 +151,11 @@ The baseline directory must contain both `graph.json` and `findings.json`.
 | Goal | Start here |
 |---|---|
 | Try the product quickly | Run `riskmap analyze --sample --no-llm --analysis-engine deterministic`. |
+| Review a public GitHub PR by URL | Use `riskmap review-pr https://github.com/OWNER/REPO/pull/123`. |
 | Review a PR locally | Use `riskmap analyze --mode pr --base main --only-new`. |
 | Add CI advisory review | Start from `examples/github-actions/riskmap-pr-review.yml`. |
 | Add GitLab merge request review | Start from `examples/gitlab-ci/riskmap-merge-request-review.yml`. |
+| Validate whether the tool is useful | Follow `docs/validation.md`. |
 | Add domain checks | Read `docs/business-invariants.md` and define `.riskmap.yml`. |
 | Use a monorepo | Read `docs/workspaces.md` and run one package root at a time. |
 | Harden API deployment | Read `docs/deployment-hardening.md`. |
@@ -234,6 +267,7 @@ AI Risk Manager is in limited open alpha.
 
 Useful feedback includes:
 
+- the PR URL you tried
 - repository stack and shape
 - command you ran
 - top 3 findings
@@ -260,6 +294,7 @@ make analyze-demo
 ## Docs
 
 - `docs/ru.md` - Russian quickstart
+- `docs/validation.md` - 30-day validation playbook for testing product value
 - `docs/workspaces.md` - workspace and monorepo usage
 - `docs/business-invariants.md` - `.riskmap.yml` critical-flow checks
 - `docs/deployment-hardening.md` - API deployment hardening

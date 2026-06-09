@@ -10,4 +10,5 @@ docs/deployment-hardening.md
 docs/ingress-contract.md
 docs/plugin-contract.md
 docs/ru.md
+docs/validation.md
 docs/workspaces.md
