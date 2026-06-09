@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from ai_risk_manager.pr_scope import is_pr_scoped_finding, normalize_path
 from ai_risk_manager.schemas.types import (
     AnalysisScope,
     CIMode,
@@ -142,6 +143,19 @@ def _risk_score(findings: list[Finding]) -> int:
     return min(100, sum(top_scores))
 
 
+def _triage_candidates(
+    findings: list[Finding],
+    *,
+    analysis_scope: AnalysisScope,
+    changed_files: set[str] | None,
+) -> list[Finding]:
+    if analysis_scope != "full_fallback" or changed_files is None:
+        return list(findings)
+
+    normalized_changed_files = {normalize_path(path) for path in changed_files}
+    return [finding for finding in findings if is_pr_scoped_finding(finding, normalized_changed_files)]
+
+
 def _resolve_decision(
     findings: list[Finding],
     *,
@@ -194,6 +208,7 @@ def _decision_reasons(
     analysis_scope: AnalysisScope,
     repository_support_state: RepositorySupportState,
     summary: RunSummary,
+    hidden_fallback_finding_count: int = 0,
 ) -> list[str]:
     reasons: list[str] = []
     new_high_or_critical = [
@@ -203,6 +218,10 @@ def _decision_reasons(
         reasons.append(f"{len(new_high_or_critical)} new high/critical release-risk finding(s) in current scope.")
     if analysis_scope == "full_fallback":
         reasons.append("PR impact mapping fell back to full scan, so changed-file risk attribution is weaker.")
+        if hidden_fallback_finding_count:
+            reasons.append(
+                f"{hidden_fallback_finding_count} repo-wide finding(s) hidden from merge triage because they do not match changed files."
+            )
     if analysis_scope == "full" and any(finding.severity in {"critical", "high"} for finding in findings):
         reasons.append("Full repository scan found high/critical release-risk signals.")
     if repository_support_state != "supported":
@@ -212,7 +231,10 @@ def _decision_reasons(
     if summary.verification_pass_rate < 1.0:
         reasons.append(f"Verification pass rate is `{summary.verification_pass_rate:.0%}`.")
     if not findings:
-        reasons.append("No findings survived evidence, policy, suppression, and confidence filters.")
+        if analysis_scope == "full_fallback" and hidden_fallback_finding_count:
+            reasons.append("No changed-file release-risk finding survived fallback filters.")
+        else:
+            reasons.append("No findings survived evidence, policy, suppression, and confidence filters.")
     return reasons
 
 
@@ -222,15 +244,18 @@ def build_merge_triage(
     *,
     summary: RunSummary,
     analysis_scope: AnalysisScope,
+    changed_files: set[str] | None = None,
 ) -> MergeTriage:
-    ranked = _rank_findings(findings.findings)
+    candidates = _triage_candidates(findings.findings, analysis_scope=analysis_scope, changed_files=changed_files)
+    hidden_fallback_finding_count = len(findings.findings) - len(candidates)
+    ranked = _rank_findings(candidates)
     actions = _budgeted_actions(ranked, test_plan)
     risk_score = _risk_score(ranked)
     new_high_or_critical_count = sum(
-        1 for finding in findings.findings if finding.status == "new" and finding.severity in {"critical", "high"}
+        1 for finding in candidates if finding.status == "new" and finding.severity in {"critical", "high"}
     )
     decision = _resolve_decision(
-        findings.findings,
+        candidates,
         analysis_scope=analysis_scope,
         repository_support_state=summary.repository_support_state,
         effective_ci_mode=summary.effective_ci_mode,
@@ -247,10 +272,11 @@ def build_merge_triage(
         verification_pass_rate=summary.verification_pass_rate,
         evidence_completeness=summary.evidence_completeness,
         reasons=_decision_reasons(
-            findings.findings,
+            candidates,
             analysis_scope=analysis_scope,
             repository_support_state=summary.repository_support_state,
             summary=summary,
+            hidden_fallback_finding_count=hidden_fallback_finding_count,
         ),
         actions=actions,
         generated_without_llm=findings.generated_without_llm and test_plan.generated_without_llm,

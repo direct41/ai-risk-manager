@@ -722,6 +722,7 @@ def _stage_analysis(
         test_plan,
         summary=summary,
         analysis_scope=scope.analysis_scope,
+        changed_files=scope.changed_files,
     )
     sinks.progress.finish(6, total_steps, "QA strategy agent", t)
 

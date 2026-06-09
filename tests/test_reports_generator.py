@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from ai_risk_manager.reports.generator import build_pr_summary
+from ai_risk_manager.reports.generator import build_pr_summary, render_report_md
 from ai_risk_manager.schemas.types import (
     Finding,
     FindingsReport,
     Graph,
     MergeTriage,
+    MergeTriageAction,
     PipelineResult,
     PreflightResult,
     RunMetrics,
@@ -21,6 +22,7 @@ def _finding(
     *,
     severity: Severity = "high",
     evidence_refs: list[str] | None = None,
+    status: str = "new",
 ) -> Finding:
     return Finding(
         id=f"{rule_id}:{source_ref}",
@@ -34,7 +36,7 @@ def _finding(
         suppression_key=f"{rule_id}:{source_ref}",
         recommendation=f"fix {rule_id}",
         evidence_refs=evidence_refs or [source_ref],
-        status="new",
+        status=status,
         generated_without_llm=True,
     )
 
@@ -148,3 +150,67 @@ def test_pr_summary_keeps_repeated_findings_when_source_changed() -> None:
     top_dependency_count = sum(1 for finding in summary.top_findings if finding.rule_id == "dependency_risk_policy_violation")
 
     assert top_dependency_count == 3
+
+
+def test_pr_summary_includes_merge_triage_action_when_only_new_hides_unchanged_findings() -> None:
+    unchanged = _finding(
+        "agent_generated_test_missing_negative_path",
+        "tests/test_sse.py:242",
+        severity="high",
+        status="unchanged",
+    )
+    result = _result([unchanged])
+    result.summary.new_count = 0
+    result.summary.unchanged_count = 1
+    result.merge_triage.actions = [
+        MergeTriageAction(
+            id="merge-triage:1",
+            finding_id=unchanged.id,
+            rule_id=unchanged.rule_id,
+            title=unchanged.title,
+            priority=unchanged.severity,
+            confidence=unchanged.confidence,
+            status=unchanged.status,
+            source_ref=unchanged.source_ref,
+            action=unchanged.recommendation,
+            rationale="Optional cleanup remains in a changed test file.",
+            estimated_minutes=5,
+        )
+    ]
+
+    summary = build_pr_summary(
+        result,
+        [],
+        only_new=True,
+        changed_files={"tests/test_sse.py"},
+    )
+
+    assert summary.top_findings[0].status == "unchanged"
+    assert summary.top_actions[0].rule_id == "agent_generated_test_missing_negative_path"
+
+
+def test_report_full_fallback_top_sections_follow_merge_triage_scope() -> None:
+    repo_wide = _finding("critical_path_no_tests", "server/app.js:48", severity="high")
+    changed_scope = _finding("pr_code_change_without_test_delta", "public/app.js", severity="medium")
+    result = _result([repo_wide, changed_scope])
+    result.merge_triage.actions = [
+        MergeTriageAction(
+            id="merge-triage:1",
+            finding_id=changed_scope.id,
+            rule_id=changed_scope.rule_id,
+            title=changed_scope.title,
+            priority=changed_scope.severity,
+            confidence=changed_scope.confidence,
+            status=changed_scope.status,
+            source_ref=changed_scope.source_ref,
+            action=changed_scope.recommendation,
+            rationale="Changed application code has no test delta.",
+            estimated_minutes=3,
+        )
+    ]
+
+    report = render_report_md(result, [])
+    top_sections = report.split("## Findings", maxsplit=1)[0]
+
+    assert "public/app.js" in top_sections
+    assert "server/app.js" not in top_sections
