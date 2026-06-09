@@ -83,6 +83,156 @@
         "forbidden_top_rules": ["critical_path_no_tests"],
         "max_top_findings": 1
       }
+    },
+    {
+      "id": "fastapi-15676",
+      "url": "https://github.com/fastapi/fastapi/pull/15676",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI jsonable_encoder recursion fix with a focused regression test.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "fastapi-15646",
+      "url": "https://github.com/fastapi/fastapi/pull/15646",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI OpenAPI example handling change with broad regression coverage.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "fastapi-15641",
+      "url": "https://github.com/fastapi/fastapi/pull/15641",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI jsonable_encoder invalid UTF-8 bytes crash fix with a regression test.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "full-stack-fastapi-template-2320",
+      "url": "https://github.com/fastapi/full-stack-fastapi-template/pull/2320",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI template DB session dependency cleanup without a matching test delta.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "full-stack-fastapi-template-2253",
+      "url": "https://github.com/fastapi/full-stack-fastapi-template/pull/2253",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI template users route cleanup with updated API tests.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "full-stack-fastapi-template-2285",
+      "url": "https://github.com/fastapi/full-stack-fastapi-template/pull/2285",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI template frontend sidebar interaction fix without a test delta.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "full-stack-fastapi-template-2244",
+      "url": "https://github.com/fastapi/full-stack-fastapi-template/pull/2244",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI template app startup diagnostics change without a test delta.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "drf-9978",
+      "url": "https://github.com/encode/django-rest-framework/pull/9978",
+      "stack": "django_drf",
+      "reason": "DRF header parsing compatibility update without a matching test delta.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "drf-9977",
+      "url": "https://github.com/encode/django-rest-framework/pull/9977",
+      "stack": "django_drf",
+      "reason": "DRF OpenAPI schema numeric-bound fix with focused schema tests.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "drf-9972",
+      "url": "https://github.com/encode/django-rest-framework/pull/9972",
+      "stack": "django_drf",
+      "reason": "DRF TemplateHTMLRenderer list-data fix with renderer tests.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "drf-9951",
+      "url": "https://github.com/encode/django-rest-framework/pull/9951",
+      "stack": "django_drf",
+      "reason": "DRF uniqueness constraint behavior change without a test delta.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "drf-9932",
+      "url": "https://github.com/encode/django-rest-framework/pull/9932",
+      "stack": "django_drf",
+      "reason": "DRF AuthTokenSerializer user-field behavior change without a test delta.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "express-7290",
+      "url": "https://github.com/expressjs/express/pull/7290",
+      "stack": "express_node",
+      "reason": "Express error logging change with dedicated app logging tests.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "express-7265",
+      "url": "https://github.com/expressjs/express/pull/7265",
+      "stack": "express_node",
+      "reason": "Express tiny request parsing maintenance change without a test delta.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
+    },
+    {
+      "id": "express-7142",
+      "url": "https://github.com/expressjs/express/pull/7142",
+      "stack": "express_node",
+      "reason": "Express view lookup path containment change without a test delta.",
+      "expected": {
+        "execution": "pass",
+        "product": "needs_human_review"
+      }
     }
   ]
 }

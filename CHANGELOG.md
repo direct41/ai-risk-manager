@@ -15,6 +15,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added a GitLab CI merge-request review example for advisory risk analysis.
 
 ### Changed
+- Public PR benchmark seed corpus now includes 15 additional unlabeled candidates from FastAPI, DRF, Express, and full-stack FastAPI template repositories.
 - Public PR benchmark seed corpus now labels all initial public PR cases with expected product outcomes.
 - Alpha feedback prompts now lead with public PR URL validation and safer output-snippet guidance.
 - README now leads with the one-command public GitHub PR review path and feedback prompts tied to real PR URLs.
