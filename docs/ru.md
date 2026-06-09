@@ -23,6 +23,24 @@ cat .riskmap/report.md
 - верхние рискованные места;
 - какие тесты или проверки сделать первыми.
 
+## Проверить публичный GitHub PR
+
+Самый полезный альфа-сценарий сейчас - один сложный публичный PR:
+
+```bash
+riskmap review-pr https://github.com/OWNER/REPO/pull/123
+cat .riskmap/review-pr-OWNER-REPO-123/merge_triage.md
+cat .riskmap/review-pr-OWNER-REPO-123/pr_summary.md
+```
+
+Команда клонирует публичный PR во временную директорию, строит baseline по base branch, запускает deterministic/no-LLM анализ по умолчанию и пишет локальные артефакты.
+
+Если у вас есть такой PR, но вы не хотите запускать инструмент сами, откройте issue template:
+
+```text
+https://github.com/direct41/ai-risk-manager/issues/new?template=pr_review_request.yml
+```
+
 ## Запустить на своем репозитории
 
 ```bash
@@ -115,10 +133,18 @@ Baseline должен содержать `.riskmap/baseline/graph.json` и `.ris
 https://github.com/direct41/ai-risk-manager/issues/new?template=alpha_feedback.yml
 ```
 
+Если вы хотите просто прислать один сложный публичный PR для проверки, используйте:
+
+```text
+https://github.com/direct41/ai-risk-manager/issues/new?template=pr_review_request.yml
+```
+
 ## Где смотреть дальше
 
 - `README.md` - основной quickstart на английском.
 - `docs/workspaces.md` - workspace/monorepo usage.
 - `docs/business-invariants.md` - `.riskmap.yml` critical-flow checks.
+- `docs/validation.md` - 30-day validation playbook.
+- `docs/validation-results.md` - шаблон учета внешних прогонов.
 - `docs/deployment-hardening.md` - API deployment hardening.
 - `docs/compatibility.md` - политика совместимости CLI/API/artifacts.

@@ -11,4 +11,5 @@ docs/ingress-contract.md
 docs/plugin-contract.md
 docs/ru.md
 docs/validation.md
+docs/validation-results.md
 docs/workspaces.md

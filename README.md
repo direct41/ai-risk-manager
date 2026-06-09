@@ -32,6 +32,8 @@ cat .riskmap/review-pr-OWNER-REPO-123/pr_summary.md
 
 The command clones the public GitHub PR into a temporary checkout, builds a baseline on the base branch, runs deterministic/no-LLM PR analysis by default, and writes artifacts locally.
 
+Have one hard public PR? Use the [public PR review request template](https://github.com/direct41/ai-risk-manager/issues/new?template=pr_review_request.yml). The most useful alpha input is not a star; it is one real PR where the test-first output is useful, noisy, or wrong.
+
 ## Why This Exists
 
 Fast-moving and AI-generated PRs often fail in the gap between "the code compiles" and "we know what release risk changed." Generic scanners can find security or style issues, but they usually do not tell a reviewer which API paths, write flows, tests, and invariants deserve attention before merge.
@@ -156,6 +158,7 @@ The baseline directory must contain both `graph.json` and `findings.json`.
 | Add CI advisory review | Start from `examples/github-actions/riskmap-pr-review.yml`. |
 | Add GitLab merge request review | Start from `examples/gitlab-ci/riskmap-merge-request-review.yml`. |
 | Validate whether the tool is useful | Follow `docs/validation.md`. |
+| Send one hard public PR | Open the `pr_review_request.yml` issue template. |
 | Add domain checks | Read `docs/business-invariants.md` and define `.riskmap.yml`. |
 | Use a monorepo | Read `docs/workspaces.md` and run one package root at a time. |
 | Harden API deployment | Read `docs/deployment-hardening.md`. |
@@ -275,7 +278,7 @@ Useful feedback includes:
 - what important risk was missed
 - whether setup or wording blocked you
 
-Use the [alpha feedback issue template](https://github.com/direct41/ai-risk-manager/issues/new?template=alpha_feedback.yml).
+Use the [public PR review request template](https://github.com/direct41/ai-risk-manager/issues/new?template=pr_review_request.yml) if you have one hard public PR. Use the [alpha feedback issue template](https://github.com/direct41/ai-risk-manager/issues/new?template=alpha_feedback.yml) if you already ran the tool and want to share results.
 
 ## Development
 
@@ -295,6 +298,7 @@ make analyze-demo
 
 - `docs/ru.md` - Russian quickstart
 - `docs/validation.md` - 30-day validation playbook for testing product value
+- `docs/validation-results.md` - public-safe template for tracking external validation runs
 - `docs/workspaces.md` - workspace and monorepo usage
 - `docs/business-invariants.md` - `.riskmap.yml` critical-flow checks
 - `docs/deployment-hardening.md` - API deployment hardening

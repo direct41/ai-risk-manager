@@ -31,6 +31,18 @@ cat .riskmap/review-pr-OWNER-REPO-123/pr_summary.md
 
 The command clones the PR into a temporary checkout, builds a baseline on the base branch, runs deterministic/no-LLM analysis by default, and writes local artifacts. Use `--skip-baseline` only when repository size makes the baseline step impractical; it is faster but noisier.
 
+## Public Request Path
+
+Ask people for one hard public PR, not for a star or a generic opinion.
+
+Primary issue template:
+
+```text
+https://github.com/direct41/ai-risk-manager/issues/new?template=pr_review_request.yml
+```
+
+Use this path when the person has a public GitHub PR but has not run the tool yet. Use the alpha feedback template only after someone has actual output to discuss.
+
 ## Outreach Script
 
 Use a short request. Ask for a PR, not a star.
@@ -59,6 +71,8 @@ For every PR reviewed, record answers to these questions:
 ## Minimum Evidence Table
 
 Track one row per external PR.
+
+Use `docs/validation-results.md` as the public-safe template. Keep the working copy private until every row has been checked for secrets, customer names, private repository names, and personal contact data.
 
 | Field | Example |
 |---|---|

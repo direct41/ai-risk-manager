@@ -1,0 +1,54 @@
+name: Public PR review request
+description: Send one public GitHub PR for AI Risk Manager validation
+labels: [pr-review-request, alpha-feedback]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for one public GitHub pull request that felt risky, large, or hard to review.
+
+        Do not include secrets, private repository names, customer names, or private vulnerability details.
+  - type: input
+    id: pr_url
+    attributes:
+      label: Public PR URL
+      description: The PR must be public and hosted on GitHub.
+      placeholder: https://github.com/OWNER/REPO/pull/123
+    validations:
+      required: true
+  - type: dropdown
+    id: stack
+    attributes:
+      label: Primary stack
+      description: Pick the closest match.
+      options:
+        - FastAPI + pytest
+        - Django/DRF
+        - Express/Node
+        - Other backend
+        - Unknown
+    validations:
+      required: true
+  - type: textarea
+    id: why_hard
+    attributes:
+      label: Why was this PR hard to review?
+      description: Mention the risky change shape, not confidential business context.
+      placeholder: Large API change, generated code, auth/write path change, weak tests, dependency update, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: current_review_question
+    attributes:
+      label: What would you want the tool to answer?
+      description: Keep this focused on merge-risk or test-first review.
+      placeholder: What should I test before merging? Which changed area deserves review first?
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy_ack
+    attributes:
+      label: Public data acknowledgement
+      options:
+        - label: This PR URL is public, and this issue does not include secrets or private customer information.
+          required: true
