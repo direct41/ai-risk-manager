@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Iterable
 from pathlib import Path
 
+from ai_risk_manager.pr_scope import is_pr_scoped_finding, normalize_path
 from ai_risk_manager.schemas.types import (
+    Finding,
     GitHubCheckPayload,
     GitHubCheckConclusion,
     PRSummary,
@@ -36,8 +39,6 @@ _REVIEW_FOCUS_BY_RULE = {
     "agent_generated_test_missing_negative_path": "Add negative-path coverage for changed write or validation flows.",
     "agent_generated_test_nondeterministic_dependency": "Stabilize flaky tests before relying on them in merge decisions.",
 }
-_PR_SCOPED_RULE_IDS = {"ui_journey_smoke_failed"}
-_PR_SCOPED_RULE_PREFIXES = ("pr_",)
 
 
 def _summary_counts(findings: FindingsReport) -> dict[str, int]:
@@ -50,34 +51,6 @@ def _summary_counts(findings: FindingsReport) -> dict[str, int]:
     }
 
 
-def _normalize_path(path: str) -> str:
-    normalized = path.replace("\\", "/").strip()
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
-    return normalized
-
-
-def _source_ref_path(source_ref: str) -> str:
-    parts = source_ref.rsplit(":", 1)
-    if len(parts) == 2 and parts[1].isdigit():
-        return parts[0]
-    return source_ref
-
-
-def _finding_matches_changed_files(finding, changed_files: set[str]) -> bool:
-    refs = [finding.source_ref, *finding.evidence_refs]
-    for ref in refs:
-        if _normalize_path(_source_ref_path(ref)) in changed_files:
-            return True
-    return False
-
-
-def _is_pr_scoped_finding(finding, changed_files: set[str]) -> bool:
-    if finding.rule_id.startswith(_PR_SCOPED_RULE_PREFIXES) or finding.rule_id in _PR_SCOPED_RULE_IDS:
-        return True
-    return bool(changed_files) and _finding_matches_changed_files(finding, changed_files)
-
-
 def _cap_repo_wide_repeated_findings(findings, changed_files: set[str]):
     if not changed_files:
         return list(findings)
@@ -85,7 +58,7 @@ def _cap_repo_wide_repeated_findings(findings, changed_files: set[str]):
     capped = []
     repo_wide_rule_counts: dict[str, int] = {}
     for finding in findings:
-        if not _is_pr_scoped_finding(finding, changed_files):
+        if not is_pr_scoped_finding(finding, changed_files):
             repo_wide_rule_counts[finding.rule_id] = repo_wide_rule_counts.get(finding.rule_id, 0) + 1
             if repo_wide_rule_counts[finding.rule_id] > 1:
                 continue
@@ -94,11 +67,11 @@ def _cap_repo_wide_repeated_findings(findings, changed_files: set[str]):
 
 
 def _rank_findings(findings, *, changed_files: set[str] | None = None, prefer_pr_scope: bool = False):
-    normalized_changed_files = {_normalize_path(path) for path in (changed_files or set())}
+    normalized_changed_files = {normalize_path(path) for path in (changed_files or set())}
     return sorted(
         findings,
         key=lambda f: (
-            0 if prefer_pr_scope and _is_pr_scoped_finding(f, normalized_changed_files) else 1,
+            0 if prefer_pr_scope and is_pr_scoped_finding(f, normalized_changed_files) else 1,
             SEVERITY_INDEX.get(f.severity, len(SEVERITY_ORDER)),
             CONFIDENCE_ORDER.get(f.confidence, 3),
             -len(f.evidence_refs),
@@ -190,6 +163,22 @@ def _pr_summary_actions(result: PipelineResult, ranked_findings) -> list[PRSumma
     return actions
 
 
+def _merge_triage_action_findings(result: PipelineResult) -> list[Finding]:
+    action_finding_ids = {action.finding_id for action in result.merge_triage.actions}
+    return [finding for finding in result.findings.findings if finding.id in action_finding_ids]
+
+
+def _dedupe_findings(findings: Iterable[Finding]) -> list[Finding]:
+    deduped: list[Finding] = []
+    seen: set[str] = set()
+    for finding in findings:
+        if finding.id in seen:
+            continue
+        deduped.append(finding)
+        seen.add(finding.id)
+    return deduped
+
+
 def _format_profiles(summary: PRSummary) -> str:
     if not summary.profiles:
         return "none"
@@ -204,8 +193,24 @@ def _format_trust(finding) -> str | None:
     return f"{trust_band} ({trust_score:.2f})"
 
 
+def _report_focus_findings(result: PipelineResult) -> list[Finding]:
+    if result.analysis_scope == "full_fallback" and result.merge_triage.actions:
+        return _merge_triage_action_findings(result)
+    return list(result.findings.findings)
+
+
+def _report_focus_test_items(result: PipelineResult):
+    if result.analysis_scope != "full_fallback" or not result.merge_triage.actions:
+        return list(result.test_plan.items)
+
+    action_finding_ids = {action.finding_id for action in result.merge_triage.actions}
+    return [item for item in result.test_plan.items if item.finding_id in action_finding_ids]
+
+
 def render_report_md(result: PipelineResult, notes: list[str]) -> str:
-    counts = _summary_counts(result.findings)
+    focus_findings = _report_focus_findings(result)
+    focus_test_items = _report_focus_test_items(result)
+    counts = _summary_counts(FindingsReport(findings=focus_findings, generated_without_llm=result.findings.generated_without_llm))
 
     lines: list[str] = []
     lines.append("# Risk Analysis Report")
@@ -248,6 +253,8 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
         f"`{len(result.deterministic_graph.nodes)} nodes`, `{len(result.deterministic_graph.edges)} edges`"
     )
     lines.append(f"- Suppressed findings: `{result.suppressed_count}`")
+    if len(focus_findings) != len(result.findings.findings):
+        lines.append(f"- Detailed findings listed: `{len(result.findings.findings)}`")
     lines.append(f"- Run metric (precision proxy): `{result.run_metrics.precision_proxy:.2%}`")
     lines.append(f"- Run metric (actionability proxy): `{result.run_metrics.actionability_proxy:.2%}`")
     lines.append(f"- Run metric (verification pass rate): `{result.summary.verification_pass_rate:.2%}`")
@@ -278,25 +285,26 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
     lines.append("")
     lines.append("## Why This Matters for Release Risk")
     lines.append("")
-    if not result.findings.findings:
-        lines.append("No high-signal release risks detected in current scope.")
+    if not focus_findings:
+        lines.append("No high-signal release risks detected in current triage scope.")
     else:
         top_severity = sorted(
-            result.findings.findings,
+            focus_findings,
             key=lambda f: SEVERITY_INDEX.get(f.severity, len(SEVERITY_ORDER)),
         )[0].severity
+        scope_label = "changed-file/PR-scoped" if result.analysis_scope == "full_fallback" else "active"
         lines.append(
-            f"Detected `{len(result.findings.findings)}` active risk(s). "
+            f"Detected `{len(focus_findings)}` {scope_label} risk(s). "
             f"Highest severity is `{top_severity}`, which can impact release confidence if ignored."
         )
 
     lines.append("")
     lines.append("## Top Actions for Next Sprint")
     lines.append("")
-    if not result.findings.findings:
+    if not focus_findings:
         lines.append("No immediate actions required.")
     else:
-        actions = _rank_findings(result.findings.findings)[:5]
+        actions = _rank_findings(focus_findings)[:5]
         for finding in actions:
             lines.append(f"- Action: {finding.recommendation}")
             lines.append(f"  Expected impact: reduce `{finding.rule_id}` risk around `{finding.source_ref}`.")
@@ -304,10 +312,10 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
     lines.append("")
     lines.append("## Top Risks")
     lines.append("")
-    if not result.findings.findings:
+    if not focus_findings:
         lines.append("No risks detected in current scope.")
     else:
-        top = _rank_findings(result.findings.findings)[:5]
+        top = _rank_findings(focus_findings)[:5]
         for finding in top:
             lines.append(f"### {finding.title}")
             lines.append(f"- Severity: `{finding.severity}`")
@@ -338,10 +346,10 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
     lines.append("")
     lines.append("## Recommended Test Strategy")
     lines.append("")
-    if not result.test_plan.items:
+    if not focus_test_items:
         lines.append("No additional test recommendations.")
     else:
-        for recommendation in result.test_plan.items:
+        for recommendation in focus_test_items:
             lines.append(
                 f"- [{recommendation.priority}] {recommendation.recommendation} "
                 f"(source: `{recommendation.source_ref}`)"
@@ -382,7 +390,8 @@ def build_pr_summary(
             for finding in top_candidates
             if finding.status == "new" and SEVERITY_INDEX.get(finding.severity, len(SEVERITY_ORDER)) <= min_rank
         ]
-    normalized_changed_files = {_normalize_path(path) for path in (changed_files or set())}
+        top_candidates = _dedupe_findings([*top_candidates, *_merge_triage_action_findings(result)])
+    normalized_changed_files = {normalize_path(path) for path in (changed_files or set())}
     ranked_top_candidates = _rank_findings(
         top_candidates,
         changed_files=normalized_changed_files,

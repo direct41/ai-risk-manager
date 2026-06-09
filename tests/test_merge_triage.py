@@ -127,6 +127,46 @@ def test_merge_triage_full_scan_requires_review_for_high_risk() -> None:
     assert any("Full repository scan" in reason for reason in triage.reasons)
 
 
+def test_merge_triage_full_fallback_focuses_changed_file_findings() -> None:
+    legacy_high = _finding(
+        "legacy_checkout",
+        severity="high",
+        status="unchanged",
+        rule_id="critical_path_no_tests",
+    )
+    unrelated_new_high = _finding(
+        "schema_fixture",
+        severity="high",
+        status="new",
+        rule_id="critical_path_no_tests",
+    )
+    changed_medium = _finding(
+        "app/service",
+        severity="medium",
+        status="new",
+        rule_id="pr_code_change_without_test_delta",
+    )
+    changed_medium.source_ref = "app/service.py"
+    changed_medium.evidence_refs = ["app/service.py"]
+
+    triage = build_merge_triage(
+        FindingsReport(
+            findings=[legacy_high, unrelated_new_high, changed_medium],
+            generated_without_llm=True,
+        ),
+        RiskTestPlan(generated_without_llm=True),
+        summary=RunSummary(verification_pass_rate=1.0, evidence_completeness=1.0),
+        analysis_scope="full_fallback",
+        changed_files={"app/service.py"},
+    )
+
+    assert triage.decision == "review_required"
+    assert triage.risk_score < 100
+    assert triage.new_high_or_critical_count == 0
+    assert [action.finding_id for action in triage.actions] == [changed_medium.id]
+    assert any("repo-wide finding(s) hidden" in reason for reason in triage.reasons)
+
+
 def test_merge_triage_markdown_explains_test_first_order() -> None:
     finding = _finding("create_order", severity="high", confidence="high")
     triage = build_merge_triage(
