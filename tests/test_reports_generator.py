@@ -41,7 +41,7 @@ def _finding(
     )
 
 
-def _result(findings: list[Finding]) -> PipelineResult:
+def _result(findings: list[Finding], *, analysis_scope: str = "full_fallback") -> PipelineResult:
     summary = RunSummary(
         new_count=len(findings),
         support_level_applied="l1",
@@ -50,7 +50,7 @@ def _result(findings: list[Finding]) -> PipelineResult:
     )
     return PipelineResult(
         preflight=PreflightResult(status="PASS"),
-        analysis_scope="full_fallback",
+        analysis_scope=analysis_scope,
         data_quality_low_confidence_ratio=0.0,
         suppressed_count=0,
         graph=Graph(),
@@ -79,7 +79,7 @@ def _result(findings: list[Finding]) -> PipelineResult:
             evidence_completeness=1.0,
             support_level_applied="l1",
             competitive_mode="deterministic",
-            analysis_scope="full_fallback",
+            analysis_scope=analysis_scope,
             duration_ms=1,
         ),
     )
@@ -117,7 +117,7 @@ def test_pr_summary_caps_repeated_repo_wide_noise_when_files_unchanged() -> None
     ]
 
     summary = build_pr_summary(
-        _result([changed_scope, *dependencies, *generated_test_quality]),
+        _result([changed_scope, *dependencies, *generated_test_quality], analysis_scope="impacted"),
         [],
         changed_files={"public/app.js"},
     )
@@ -187,6 +187,38 @@ def test_pr_summary_includes_merge_triage_action_when_only_new_hides_unchanged_f
 
     assert summary.top_findings[0].status == "unchanged"
     assert summary.top_actions[0].rule_id == "agent_generated_test_missing_negative_path"
+
+
+def test_pr_summary_full_fallback_only_new_hides_unscoped_new_high_findings() -> None:
+    repo_wide_new_high = _finding("critical_path_no_tests", "tests/schemas/views.py:237", severity="high")
+    changed_scope = _finding("pr_code_change_without_test_delta", "rest_framework/exceptions.py", severity="medium")
+    result = _result([repo_wide_new_high, changed_scope])
+    result.merge_triage.actions = [
+        MergeTriageAction(
+            id="merge-triage:1",
+            finding_id=changed_scope.id,
+            rule_id=changed_scope.rule_id,
+            title=changed_scope.title,
+            priority=changed_scope.severity,
+            confidence=changed_scope.confidence,
+            status=changed_scope.status,
+            source_ref=changed_scope.source_ref,
+            action=changed_scope.recommendation,
+            rationale="Changed application code has no test delta.",
+            estimated_minutes=3,
+        )
+    ]
+
+    summary = build_pr_summary(
+        result,
+        [],
+        only_new=True,
+        changed_files={"rest_framework/exceptions.py"},
+    )
+
+    assert [finding.rule_id for finding in summary.top_findings] == ["pr_code_change_without_test_delta"]
+    assert [action.rule_id for action in summary.top_actions] == ["pr_code_change_without_test_delta"]
+    assert summary.suppression_hints == ["pr_code_change_without_test_delta:rest_framework/exceptions.py"]
 
 
 def test_report_full_fallback_top_sections_follow_merge_triage_scope() -> None:
