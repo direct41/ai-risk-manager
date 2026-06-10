@@ -131,7 +131,12 @@
       "reason": "FastAPI OpenAPI example handling change with broad regression coverage.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "not_useful"
+      },
+      "label": {
+        "outcome": "false_positive",
+        "rationale": "The report's only high-severity action references a test and write endpoint that do not exist in the PR, while missing the changed OpenAPI traversal logic.",
+        "reviewed_at": "2026-06-10"
       }
     },
     {
