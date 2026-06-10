@@ -41,6 +41,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Removed the empty root `.gitkeep` placeholder.
 
 ### Fixed
+- PR comment delivery failures no longer mark an otherwise successful AI Risk Analysis workflow as failed.
 - Kept Gemini external-judge tool isolation compatible with Gemini CLI 0.46.0.
 - Full-fallback PR summaries now hide unscoped new high-severity repo-wide findings from top risks and test-first actions.
 - PR summaries now stay aligned with merge triage test-first actions, and full-fallback PR analysis hides repo-wide unchanged noise from merge triage scoring.
