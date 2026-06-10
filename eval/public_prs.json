@@ -81,15 +81,15 @@
       "expected": {
         "execution": "pass",
         "product": "useful",
-        "decision": "ready",
-        "required_rules": ["agent_generated_test_missing_negative_path"],
-        "required_paths": ["backend/tests/api/routes/test_private.py"],
+        "decision": "review_required",
+        "required_rules": ["pr_new_4xx_branch_without_negative_test_delta"],
+        "required_paths": ["backend/app/api/routes/private.py"],
         "max_top_findings": 1
       },
       "label": {
         "outcome": "good_signal",
-        "rationale": "The report identified the missing negative-path coverage in the changed API test.",
-        "reviewed_at": "2026-06-09"
+        "rationale": "The report identifies that the PR adds a new duplicate-email 400 branch while the test delta only updates the success status assertion.",
+        "reviewed_at": "2026-06-10"
       }
     },
     {
@@ -236,7 +236,14 @@
       "reason": "DRF OpenAPI schema numeric-bound fix with focused schema tests.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps a two-line falsy-bound fix ready after focused IntegerField and FloatField regression coverage and two maintainer approvals.",
+        "reviewed_at": "2026-06-10"
       }
     },
     {
@@ -246,7 +253,16 @@
       "reason": "DRF TemplateHTMLRenderer list-data fix with renderer tests.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "useful",
+        "decision": "review_required",
+        "required_rules": ["pr_documented_mapping_key_renamed_without_docs"],
+        "required_paths": ["rest_framework/renderers.py"],
+        "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report now catches the documented details-to-results contract rename and recommends a deprecation or compatibility path, matching the maintainer's compatibility concern.",
+        "reviewed_at": "2026-06-10"
       }
     },
     {
@@ -256,7 +272,19 @@
       "reason": "DRF uniqueness constraint behavior change without a test delta.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "useful",
+        "decision": "review_required",
+        "required_rules": [
+          "unique_constraint_constant_create_default",
+          "pr_code_change_without_test_delta"
+        ],
+        "required_paths": ["rest_framework/serializers.py"],
+        "max_top_findings": 2
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report identifies both the missing regression coverage requested by the maintainer and the shared create-time default that can collide with the uniqueness constraint.",
+        "reviewed_at": "2026-06-10"
       }
     },
     {

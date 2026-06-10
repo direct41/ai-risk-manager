@@ -333,6 +333,37 @@ def _run_write_contract_integrity_rule(signals: SignalBundle) -> list[Finding]:
             )
             continue
 
+        if issue_type == "unique_constraint_constant_create_default":
+            default_value = str(signal.attributes.get("default_value", ""))
+            finding_id = f"unique_constraint_constant_create_default:{signal.source_ref}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="unique_constraint_constant_create_default",
+                    title="Uniqueness logic injects the same create-time default",
+                    description=(
+                        "A constant create-time default is assigned inside uniqueness handling. Multiple objects that "
+                        "omit the field can receive the same value and collide with the constraint."
+                    ),
+                    severity="high",
+                    confidence=confidence,
+                    evidence=(
+                        f"Uniqueness owner '{owner_name}' assigns CreateOnlyDefault({default_value!r}) "
+                        f"at {signal.source_ref}."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Add regression tests for repeated creates with the field omitted and align the serializer "
+                        "default with the database constraint semantics instead of injecting one shared constant."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
         if issue_type == "char_split_normalization":
             field_name = str(signal.attributes.get("field_name", "")).strip() or "unknown"
             finding_id = f"input_normalization_char_split:{owner_name}:{field_name}:{signal.id}"
@@ -1025,6 +1056,70 @@ def _run_pr_change_risk_rule(signals: SignalBundle) -> list[Finding]:
                     suppression_key=finding_id,
                     recommendation=(
                         "Add or update at least one test that exercises the changed behavior before merge."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=list(signal.evidence_refs),
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "documented_mapping_key_renamed_without_docs":
+            old_key = str(signal.attributes.get("old_key", "")).strip()
+            new_key = str(signal.attributes.get("new_key", "")).strip()
+            documentation_files = str(signal.attributes.get("documentation_files", "")).strip()
+            finding_id = f"pr_documented_mapping_key_renamed_without_docs:{signal.source_ref}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="pr_documented_mapping_key_renamed_without_docs",
+                    title="PR renames a documented mapping key without updating its contract",
+                    description=(
+                        f"The changed code replaces the documented key '{old_key}' with '{new_key}', while existing "
+                        "documentation still references the old key. Consumers may silently receive a missing value."
+                    ),
+                    severity="high",
+                    confidence=confidence,
+                    evidence=(
+                        f"Changed mapping key in {signal.source_ref}; unchanged documentation references were found in "
+                        f"{documentation_files or 'repository documentation'}."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Preserve the old key during a deprecation window or document the breaking change, update the "
+                        "published contract, and add compatibility coverage for existing consumers."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=list(signal.evidence_refs),
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
+        if issue_type == "new_4xx_branch_without_negative_test_delta":
+            new_4xx_changed_test_count = str(signal.attributes.get("changed_test_count", "0")).strip() or "0"
+            finding_id = f"pr_new_4xx_branch_without_negative_test_delta:{signal.source_ref}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="pr_new_4xx_branch_without_negative_test_delta",
+                    title="PR adds a new 4xx branch without matching negative-path coverage",
+                    description=(
+                        "The changed source introduces a new client-error response path, but the test delta does not "
+                        "assert any 4xx or exception behavior. A success-path test cannot verify the new branch."
+                    ),
+                    severity="high",
+                    confidence=confidence,
+                    evidence=(
+                        f"Detected a new 4xx exception branch in {signal.source_ref}; "
+                        f"changed test files: {new_4xx_changed_test_count}, added negative assertions: 0."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Add a regression test that triggers the new error condition and asserts its status code and "
+                        "response contract."
                     ),
                     origin="deterministic",
                     evidence_refs=list(signal.evidence_refs),

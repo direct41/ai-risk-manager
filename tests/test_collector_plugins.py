@@ -967,3 +967,42 @@ def test_django_plugin_collects_dependency_specs_from_requirements(tmp_path: Pat
     assert ("django", None, "runtime") in violations
     assert ("requests", "range_not_pinned", "runtime") in violations
     assert ("pytest", "range_not_pinned", "development") in violations
+
+
+def test_django_plugin_extracts_constant_create_default_in_uniqueness_logic(tmp_path: Path, write_file) -> None:
+    write_file(tmp_path / "manage.py", "import django\n")
+    write_file(
+        tmp_path / "rest_framework" / "serializers.py",
+        "from rest_framework.fields import CreateOnlyDefault\n"
+        "\n"
+        "def get_uniqueness_extra_kwargs(field):\n"
+        "    return {'default': CreateOnlyDefault('')}\n",
+    )
+
+    plugin = get_plugin_for_stack("django_drf")
+    assert plugin is not None
+
+    bundle = plugin.collect(tmp_path)
+    issues = [issue for issue in bundle.write_contract_issues if issue[1] == "unique_constraint_constant_create_default"]
+
+    assert len(issues) == 1
+    assert issues[0][0] == "rest_framework/serializers.py"
+    assert issues[0][2] == "get_uniqueness_extra_kwargs"
+
+
+def test_django_plugin_ignores_create_default_outside_uniqueness_logic(tmp_path: Path, write_file) -> None:
+    write_file(tmp_path / "manage.py", "import django\n")
+    write_file(
+        tmp_path / "app" / "serializers.py",
+        "from rest_framework.fields import CreateOnlyDefault\n"
+        "\n"
+        "def get_regular_defaults():\n"
+        "    return {'default': CreateOnlyDefault('pending')}\n",
+    )
+
+    plugin = get_plugin_for_stack("django_drf")
+    assert plugin is not None
+
+    bundle = plugin.collect(tmp_path)
+
+    assert not any(issue[1] == "unique_constraint_constant_create_default" for issue in bundle.write_contract_issues)

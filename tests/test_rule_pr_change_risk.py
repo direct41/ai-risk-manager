@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from ai_risk_manager.pipeline.pr_change_signals import build_pr_change_signal_bundle
+from pathlib import Path
+
+from ai_risk_manager.pipeline.pr_change_signals import build_pr_change_signal_bundle, build_pr_diff_signal_bundle
 from ai_risk_manager.rules.engine import run_rules
 
 
@@ -102,3 +104,120 @@ def test_pr_change_signals_sensitive_paths_downgrade_when_tests_changed() -> Non
     auth = next(row for row in findings.findings if row.rule_id == "pr_auth_boundary_change_requires_review")
 
     assert auth.severity == "low"
+
+
+def test_pr_diff_signals_flag_documented_mapping_key_rename(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "renderers.md").write_text("Templates receive the `details` key.\n", encoding="utf-8")
+    diff = (
+        "diff --git a/rest_framework/renderers.py b/rest_framework/renderers.py\n"
+        "--- a/rest_framework/renderers.py\n"
+        "+++ b/rest_framework/renderers.py\n"
+        "@@ -171 +171 @@\n"
+        "-            return {'details': data, 'status_code': response.status_code}\n"
+        "+            return {'results': data, 'status_code': response.status_code}\n"
+    )
+
+    signals = build_pr_diff_signal_bundle(
+        tmp_path,
+        diff,
+        {"rest_framework/renderers.py", "tests/test_htmlrenderer.py"},
+    )
+    findings = run_rules(signals)
+
+    finding = next(row for row in findings.findings if row.rule_id == "pr_documented_mapping_key_renamed_without_docs")
+    assert finding.severity == "high"
+    assert "deprecation" in finding.recommendation
+    assert "docs/renderers.md" in finding.evidence_refs
+
+
+def test_pr_diff_signals_skip_mapping_key_rename_when_docs_change(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "renderers.md").write_text("Templates receive the `details` key.\n", encoding="utf-8")
+    diff = (
+        "diff --git a/app/renderers.py b/app/renderers.py\n"
+        "--- a/app/renderers.py\n"
+        "+++ b/app/renderers.py\n"
+        "@@ -1 +1 @@\n"
+        "-CONTEXT = {'details': []}\n"
+        "+CONTEXT = {'results': []}\n"
+    )
+
+    signals = build_pr_diff_signal_bundle(
+        tmp_path,
+        diff,
+        {"app/renderers.py", "docs/renderers.md"},
+    )
+
+    assert signals.signals == []
+
+
+def test_pr_diff_signals_ignore_documentation_in_dependency_trees(tmp_path: Path) -> None:
+    dependency_docs = tmp_path / ".venv" / "lib" / "package"
+    dependency_docs.mkdir(parents=True)
+    (dependency_docs / "README.md").write_text("Use the `details` key.\n", encoding="utf-8")
+    diff = (
+        "diff --git a/app/renderers.py b/app/renderers.py\n"
+        "--- a/app/renderers.py\n"
+        "+++ b/app/renderers.py\n"
+        "@@ -1 +1 @@\n"
+        "-CONTEXT = {'details': []}\n"
+        "+CONTEXT = {'results': []}\n"
+    )
+
+    signals = build_pr_diff_signal_bundle(tmp_path, diff, {"app/renderers.py"})
+
+    assert signals.signals == []
+
+
+def test_pr_diff_signals_flag_new_4xx_branch_without_negative_test(tmp_path: Path) -> None:
+    diff = (
+        "diff --git a/app/api.py b/app/api.py\n"
+        "--- a/app/api.py\n"
+        "+++ b/app/api.py\n"
+        "@@ -10,0 +11,5 @@\n"
+        "+    if existing:\n"
+        "+        raise HTTPException(\n"
+        "+            status_code=400,\n"
+        "+            detail='Already exists',\n"
+        "+        )\n"
+        "diff --git a/tests/test_api.py b/tests/test_api.py\n"
+        "--- a/tests/test_api.py\n"
+        "+++ b/tests/test_api.py\n"
+        "@@ -20 +20 @@\n"
+        "-    assert response.status_code == 200\n"
+        "+    assert response.status_code == 201\n"
+    )
+
+    signals = build_pr_diff_signal_bundle(tmp_path, diff, {"app/api.py", "tests/test_api.py"})
+    findings = run_rules(signals)
+
+    finding = next(row for row in findings.findings if row.rule_id == "pr_new_4xx_branch_without_negative_test_delta")
+    assert finding.severity == "high"
+    assert "status code" in finding.recommendation
+
+
+def test_pr_diff_signals_accept_new_4xx_branch_with_negative_test(tmp_path: Path) -> None:
+    diff = (
+        "diff --git a/app/api.py b/app/api.py\n"
+        "--- a/app/api.py\n"
+        "+++ b/app/api.py\n"
+        "@@ -10,0 +11,2 @@\n"
+        "+    if existing:\n"
+        "+        raise HTTPException(status_code=409, detail='Already exists')\n"
+        "diff --git a/tests/test_api.py b/tests/test_api.py\n"
+        "--- a/tests/test_api.py\n"
+        "+++ b/tests/test_api.py\n"
+        "@@ -20,0 +21,2 @@\n"
+        "+    response = client.post('/users', json=duplicate)\n"
+        "+    assert response.status_code == 409\n"
+    )
+
+    signals = build_pr_diff_signal_bundle(tmp_path, diff, {"app/api.py", "tests/test_api.py"})
+
+    assert not any(
+        signal.attributes.get("issue_type") == "new_4xx_branch_without_negative_test_delta"
+        for signal in signals.signals
+    )

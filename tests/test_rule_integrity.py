@@ -55,6 +55,32 @@ def test_write_contract_integrity_reports_lossy_decode_error_handling() -> None:
     assert "base64" in finding.recommendation
 
 
+def test_write_contract_integrity_reports_constant_uniqueness_create_default() -> None:
+    findings = run_rules(
+        SignalBundle(
+            signals=[
+                CapabilitySignal(
+                    id="sig-unique-default",
+                    kind="write_contract_integrity",
+                    source_ref="rest_framework/serializers.py:1538",
+                    confidence="medium",
+                    evidence_refs=["rest_framework/serializers.py:1538"],
+                    attributes={
+                        "issue_type": "unique_constraint_constant_create_default",
+                        "owner_name": "get_uniqueness_extra_kwargs",
+                        "default_value": "",
+                    },
+                )
+            ],
+            supported_kinds={"write_contract_integrity"},
+        )
+    )
+
+    finding = next(row for row in findings.findings if row.rule_id == "unique_constraint_constant_create_default")
+    assert finding.severity == "high"
+    assert "repeated creates" in finding.recommendation
+
+
 def test_write_contract_integrity_reports_write_scope_and_stale_write_issues() -> None:
     findings = run_rules(
         SignalBundle(

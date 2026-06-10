@@ -20,7 +20,7 @@ from ai_risk_manager.pipeline.merge_findings import (
     legacy_fingerprint,
     merge_findings,
 )
-from ai_risk_manager.pipeline.pr_change_signals import build_pr_change_signal_bundle
+from ai_risk_manager.pipeline.pr_change_signals import build_pr_change_signal_bundle, build_pr_diff_signal_bundle
 from ai_risk_manager.pipeline.sinks import PipelineSinks
 from ai_risk_manager.profiles.business_invariant import BusinessInvariantPreparedProfile, BusinessInvariantProfile
 from ai_risk_manager.profiles.code_risk import CodeRiskPreparedProfile, CodeRiskProfile
@@ -360,6 +360,7 @@ class _ScopeStage:
     analysis_signals: SignalBundle
     fallback_reason: str | None
     changed_files: set[str] | None
+    diff_text: str | None
 
 
 @dataclass
@@ -465,8 +466,10 @@ def _stage_resolve_scope(
     analysis_signals = signals
     fallback_reason: str | None = None
     changed_files: set[str] | None = None
+    diff_text: str | None = None
     if ctx.mode == "pr":
         changed_files = _resolve_changed_files(ctx.repo_path, ctx.base, sinks=sinks)
+        diff_text = sinks.diff.resolve(ctx.repo_path, ctx.base)
         if changed_files is None:
             notes.append("Could not resolve changed files for PR heuristics.")
         else:
@@ -503,6 +506,7 @@ def _stage_resolve_scope(
         analysis_signals=analysis_signals,
         fallback_reason=fallback_reason,
         changed_files=changed_files,
+        diff_text=diff_text,
     )
 
 
@@ -590,6 +594,10 @@ def _stage_analysis(
     deterministic_signals = scope.analysis_signals
     if ctx.mode == "pr":
         pr_change_signals = build_pr_change_signal_bundle(scope.changed_files)
+        pr_diff_signals = build_pr_diff_signal_bundle(ctx.repo_path, scope.diff_text, scope.changed_files)
+        if pr_diff_signals.signals:
+            notes.append(f"PR diff heuristics produced {len(pr_diff_signals.signals)} signal(s).")
+            pr_change_signals = merge_signal_bundles(pr_change_signals, pr_diff_signals, min_confidence="low")
         if pr_change_signals.signals:
             notes.append(f"Universal PR heuristics produced {len(pr_change_signals.signals)} signal(s).")
             deterministic_signals = merge_signal_bundles(deterministic_signals, pr_change_signals, min_confidence="low")

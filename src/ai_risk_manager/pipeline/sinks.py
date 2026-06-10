@@ -33,6 +33,11 @@ class ChangedFilesSink(Protocol):
         ...
 
 
+class DiffSink(Protocol):
+    def resolve(self, repo_path: Path, base: str | None) -> str | None:
+        ...
+
+
 class EnvironmentSink(Protocol):
     def is_ci(self) -> bool:
         ...
@@ -118,6 +123,33 @@ class GitChangedFilesSink:
         return None
 
 
+class GitDiffSink:
+    def resolve(self, repo_path: Path, base: str | None) -> str | None:
+        if not base:
+            return None
+
+        safe_base = _safe_diff_base(base)
+        git = _git_executable()
+        if safe_base is None or git is None:
+            return None
+
+        candidate_refs = [f"{safe_base}...HEAD", f"origin/{safe_base}...HEAD"]
+        for ref in candidate_refs:
+            try:
+                proc = subprocess.run(  # nosec B603
+                    [git, "-C", str(repo_path), "diff", "--unified=0", "--diff-filter=ACMRTUXB", ref, "--"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=20,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+            if proc.returncode == 0:
+                return proc.stdout
+        return None
+
+
 class OsEnvironmentSink:
     def is_ci(self) -> bool:
         return bool(os.getenv("CI") or os.getenv("GITHUB_ACTIONS"))
@@ -186,5 +218,6 @@ class LocalArtifactSink:
 class PipelineSinks:
     progress: ProgressSink = field(default_factory=ConsoleProgressSink)
     changed_files: ChangedFilesSink = field(default_factory=GitChangedFilesSink)
+    diff: DiffSink = field(default_factory=GitDiffSink)
     environment: EnvironmentSink = field(default_factory=OsEnvironmentSink)
     artifacts: ArtifactSink = field(default_factory=LocalArtifactSink)

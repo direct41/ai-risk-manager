@@ -188,6 +188,47 @@ def extract_python_lossy_decode_issues(
     return issues
 
 
+def extract_django_uniqueness_default_issues(
+    *,
+    tree: ast.AST,
+    source_lines: list[str],
+    relative_path: str,
+) -> list[tuple[str, str, str, int | None, str, dict[str, str]]]:
+    parents: dict[ast.AST, ast.AST] = {}
+    for parent in ast.walk(tree):
+        for child in ast.iter_child_nodes(parent):
+            parents[child] = parent
+
+    issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        if not isinstance(node.func, ast.Name) or node.func.id != "CreateOnlyDefault":
+            continue
+        default_value = _constant_str(node.args[0])
+        if default_value is None:
+            continue
+
+        owner: ast.AST | None = parents.get(node)
+        while owner is not None and not isinstance(owner, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            owner = parents.get(owner)
+        if not isinstance(owner, (ast.FunctionDef, ast.AsyncFunctionDef)) or "unique" not in owner.name.lower():
+            continue
+
+        line = getattr(node, "lineno", 1)
+        issues.append(
+            (
+                relative_path,
+                "unique_constraint_constant_create_default",
+                owner.name,
+                line,
+                _line_snippet(source_lines, line),
+                {"default_value": default_value},
+            )
+        )
+    return issues
+
+
 def extract_python_write_contract_issues(
     *,
     tree: ast.AST,

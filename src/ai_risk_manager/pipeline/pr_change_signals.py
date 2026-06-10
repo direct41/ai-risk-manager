@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import re
 
 from ai_risk_manager.signals.types import CapabilitySignal, SignalBundle, SignalKind
 
@@ -101,6 +103,27 @@ _SENSITIVE_AREAS: dict[str, tuple[str, ...]] = {
     "auth": ("auth", "login", "logout", "password", "token", "oauth", "saml", "session", "permission", "role", "acl"),
     "payment": ("payment", "payments", "billing", "invoice", "checkout", "charge", "refund", "payout", "wallet", "ledger", "subscription"),
     "admin": ("admin", "backoffice", "moderation", "operator", "staff", "superuser"),
+}
+_DIFF_FILE_RE = re.compile(r"^diff --git a/(.+?) b/(.+)$")
+_MAPPING_KEY_RE = re.compile(r"""['"](?P<key>[A-Za-z_][A-Za-z0-9_.-]{2,})['"]\s*:""")
+_ADDED_4XX_BRANCH_RE = re.compile(
+    r"raise\s+HTTPException[\s\S]*?status_code\s*=\s*(?:status\.HTTP_[A-Z_]*4\d\d|4\d\d)",
+    re.IGNORECASE,
+)
+_ADDED_NEGATIVE_TEST_RE = re.compile(
+    r"(?:status_code|status)\s*(?:==|in)\s*(?:\{[^}]*4\d\d|4\d\d)|"
+    r"pytest\.raises|assertRaises|assert[\s\S]{0,80}(?:error|detail|forbidden|unauthorized|conflict)",
+    re.IGNORECASE,
+)
+_DOC_SCAN_EXCLUDED_DIRS = {
+    ".git",
+    ".riskmap",
+    ".venv",
+    "build",
+    "dist",
+    "node_modules",
+    "vendor",
+    "venv",
 }
 
 
@@ -229,6 +252,140 @@ def _sensitive_area_matches(paths: list[str], area: str) -> list[str]:
         if _path_tokens(path) & keywords:
             matches.append(path)
     return matches
+
+
+def _diff_mapping_key_renames(diff_text: str) -> list[tuple[str, str, str]]:
+    current_file = ""
+    removed: set[str] = set()
+    added: set[str] = set()
+    renames: list[tuple[str, str, str]] = []
+
+    def flush() -> None:
+        if not current_file or not _is_source_file(current_file):
+            return
+        removed_only = removed - added
+        added_only = added - removed
+        if len(removed_only) != 1 or len(added_only) != 1:
+            return
+        old_key = next(iter(removed_only))
+        new_key = next(iter(added_only))
+        if old_key != new_key:
+            renames.append((current_file, old_key, new_key))
+
+    for line in diff_text.splitlines():
+        match = _DIFF_FILE_RE.match(line)
+        if match:
+            flush()
+            current_file = _normalize_path(match.group(2))
+            removed = set()
+            added = set()
+            continue
+        if line.startswith("---") or line.startswith("+++"):
+            continue
+        if line.startswith("-"):
+            removed.update(match.group("key") for match in _MAPPING_KEY_RE.finditer(line[1:]))
+        elif line.startswith("+"):
+            added.update(match.group("key") for match in _MAPPING_KEY_RE.finditer(line[1:]))
+    flush()
+    return renames
+
+
+def _diff_added_lines_by_file(diff_text: str) -> dict[str, str]:
+    current_file = ""
+    added_by_file: dict[str, list[str]] = {}
+    for line in diff_text.splitlines():
+        match = _DIFF_FILE_RE.match(line)
+        if match:
+            current_file = _normalize_path(match.group(2))
+            added_by_file.setdefault(current_file, [])
+            continue
+        if current_file and line.startswith("+") and not line.startswith("+++"):
+            added_by_file[current_file].append(line[1:])
+    return {path: "\n".join(lines) for path, lines in added_by_file.items()}
+
+
+def _documented_key_refs(repo_path: Path, key: str) -> list[str]:
+    escaped = re.escape(key)
+    pattern = re.compile(
+        rf"(?:[`'\"]{escaped}[`'\"]|\{{\{{\s*{escaped}\s*\}}\}}|\b{escaped}\b\s+(?:key|field|variable))",
+        re.IGNORECASE,
+    )
+    refs: list[str] = []
+    for root, dirs, filenames in os.walk(repo_path):
+        dirs[:] = [name for name in dirs if name not in _DOC_SCAN_EXCLUDED_DIRS]
+        root_path = Path(root)
+        for filename in filenames:
+            path = root_path / filename
+            if path.suffix.lower() not in _DOC_SUFFIXES:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if pattern.search(text):
+                refs.append(_normalize_path(str(path.relative_to(repo_path))))
+    return sorted(refs)
+
+
+def build_pr_diff_signal_bundle(
+    repo_path: Path,
+    diff_text: str | None,
+    changed_files: set[str] | None,
+) -> SignalBundle:
+    if not diff_text:
+        return SignalBundle()
+
+    changed = {_normalize_path(path) for path in changed_files or set()}
+    changed_docs = {path for path in changed if _is_doc_file(path)}
+    signals: list[CapabilitySignal] = []
+    for source_path, old_key, new_key in _diff_mapping_key_renames(diff_text):
+        doc_refs = [path for path in _documented_key_refs(repo_path, old_key) if path not in changed_docs]
+        if not doc_refs:
+            continue
+        evidence_refs = [source_path, *doc_refs[:4]]
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:pr-risk:documented-key-rename:{source_path}:{old_key}:{new_key}",
+                kind="pr_change_risk",
+                source_ref=source_path,
+                confidence="high",
+                evidence_refs=evidence_refs,
+                attributes={
+                    "issue_type": "documented_mapping_key_renamed_without_docs",
+                    "old_key": old_key,
+                    "new_key": new_key,
+                    "documentation_files": ", ".join(doc_refs[:4]),
+                },
+            )
+        )
+
+    added_by_file = _diff_added_lines_by_file(diff_text)
+    added_test_text = "\n".join(
+        text for path, text in added_by_file.items() if path in changed and _is_test_file(path)
+    )
+    has_added_negative_test = bool(_ADDED_NEGATIVE_TEST_RE.search(added_test_text))
+    if not has_added_negative_test:
+        for source_path, added_text in added_by_file.items():
+            if source_path not in changed or not _is_source_file(source_path):
+                continue
+            if not _ADDED_4XX_BRANCH_RE.search(added_text):
+                continue
+            signals.append(
+                CapabilitySignal(
+                    id=f"sig:pr-risk:new-4xx-without-negative-test:{source_path}",
+                    kind="pr_change_risk",
+                    source_ref=source_path,
+                    confidence="high",
+                    evidence_refs=[source_path],
+                    attributes={
+                        "issue_type": "new_4xx_branch_without_negative_test_delta",
+                        "changed_test_count": str(
+                            sum(1 for path in changed if _is_test_file(path))
+                        ),
+                    },
+                )
+            )
+    return SignalBundle(signals=signals, supported_kinds={"pr_change_risk"} if signals else set())
 
 
 def build_pr_change_signal_bundle(changed_files: set[str] | None) -> SignalBundle:
@@ -400,4 +557,4 @@ def build_pr_change_signal_bundle(changed_files: set[str] | None) -> SignalBundl
     )
 
 
-__all__ = ["build_pr_change_signal_bundle"]
+__all__ = ["build_pr_change_signal_bundle", "build_pr_diff_signal_bundle"]

@@ -13,6 +13,7 @@ from ai_risk_manager.collectors.plugins.generated_test_artifacts import (
     observe_python_test_quality,
 )
 from ai_risk_manager.collectors.plugins.python_write_contract_artifacts import (
+    extract_django_uniqueness_default_issues,
     extract_python_lossy_decode_issues,
     extract_python_session_lifecycle_issues,
     extract_python_write_contract_issues,
@@ -776,6 +777,13 @@ def collect_django_artifacts(repo_path: Path) -> ArtifactBundle:
         owner_names = {endpoint_name for file_ref, endpoint_name, *_ in bundle.write_endpoints if file_ref == relative}
         bundle.write_contract_issues.extend(
             extract_python_lossy_decode_issues(
+                tree=tree,
+                source_lines=source_lines,
+                relative_path=relative,
+            )
+        )
+        bundle.write_contract_issues.extend(
+            extract_django_uniqueness_default_issues(
                 tree=tree,
                 source_lines=source_lines,
                 relative_path=relative,
