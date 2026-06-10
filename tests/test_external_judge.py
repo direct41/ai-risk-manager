@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import asdict
 import json
 from pathlib import Path
+import subprocess
 
+import ai_risk_manager.external_judge as external_judge
 from ai_risk_manager.cli import main
 from ai_risk_manager.external_judge import (
     JudgeAssessment,
@@ -218,6 +220,108 @@ def test_run_external_judge_writes_blind_packet_raw_response_and_assessment(tmp_
     assert (output_dir / "fastapi-15676" / "packet.json").exists()
     assert (output_dir / "fastapi-15676" / "raw" / "claude.json").exists()
     assert (output_dir / "fastapi-15676" / "assessments" / "claude.json").exists()
+
+
+def test_run_external_judge_uses_gemini_default_model(tmp_path: Path) -> None:
+    corpus = tmp_path / "public_prs.json"
+    corpus.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "cases": [
+                    {
+                        "id": "fastapi-15676",
+                        "url": "https://github.com/fastapi/fastapi/pull/15676",
+                        "stack": "fastapi_pytest",
+                        "reason": "encoder regression",
+                        "expected": {"product": "needs_human_review"},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    benchmark_dir = tmp_path / "benchmark"
+    _write_benchmark_artifacts(benchmark_dir / "fastapi-15676")
+    models: list[str] = []
+
+    def _fake_fetch(*args, **kwargs) -> GitHubPREvidence:
+        return _evidence()
+
+    def _fake_runner(prompt: str, model: str, timeout_seconds: int, max_budget_usd: float) -> object:
+        models.append(model)
+        return {
+            "outcome": "good_signal",
+            "confidence": "high",
+            "correct_signals": ["Useful."],
+            "false_positives": [],
+            "missed_risks": [],
+            "rationale": "The report is useful.",
+        }
+
+    assessments = run_external_judge(
+        corpus,
+        benchmark_dir,
+        tmp_path / "judge",
+        options=JudgeRunOptions(case_ids=["fastapi-15676"], judge="gemini"),
+        judge_runner=_fake_runner,
+        evidence_fetcher=_fake_fetch,
+    )
+
+    assert models == ["gemini-2.5-pro"]
+    assert assessments[0].judge == "gemini"
+    assert assessments[0].model == "gemini-2.5-pro"
+
+
+def test_gemini_judge_normalizes_json_wrapper(monkeypatch) -> None:
+    def _fake_run(*args, **kwargs):
+        command = args[0]
+        policy_path = Path(command[command.index("--admin-policy") + 1])
+        assert 'toolName = "*"' in policy_path.read_text(encoding="utf-8")
+        assert 'decision = "deny"' in policy_path.read_text(encoding="utf-8")
+        assert "--skip-trust" in command
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "response": (
+                        "```json\n"
+                        '{"outcome":"noisy","confidence":"high","correct_signals":[],'
+                        '"false_positives":[],"missed_risks":[],"rationale":"Weak signal."}'
+                        "\n```"
+                    )
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr("ai_risk_manager.external_judge.subprocess.run", _fake_run)
+
+    payload = external_judge._run_gemini_judge("prompt", "gemini-2.5-pro", 30, 1.0)
+
+    assert payload["outcome"] == "noisy"
+    assert payload["rationale"] == "Weak signal."
+
+
+def test_gemini_judge_explains_unsupported_location(monkeypatch) -> None:
+    def _fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(
+            args=args[0],
+            returncode=55,
+            stdout="",
+            stderr="IneligibleTierError: UNSUPPORTED_LOCATION not currently available in your location",
+        )
+
+    monkeypatch.setattr("ai_risk_manager.external_judge.subprocess.run", _fake_run)
+
+    try:
+        external_judge._run_gemini_judge("prompt", "gemini-2.5-pro", 30, 1.0)
+    except ValueError as exc:
+        assert "Gemini CLI OAuth is unavailable" in str(exc)
+        assert "GEMINI_API_KEY" in str(exc)
+    else:
+        raise AssertionError("Expected unsupported Gemini location to be reported")
 
 
 def test_build_judge_consensus_confirms_matching_assessments(tmp_path: Path) -> None:

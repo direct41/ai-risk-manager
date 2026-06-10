@@ -105,7 +105,7 @@ class JudgeConsensusResult:
 class JudgeRunOptions:
     case_ids: list[str] = field(default_factory=list)
     judge: str = "claude"
-    model: str = "claude-sonnet-4-6"
+    model: str | None = None
     token_env: str = "GITHUB_TOKEN"
     api_base: str = "https://api.github.com"
     timeout_seconds: int = 300
@@ -126,10 +126,11 @@ def run_external_judge(
     evidence_fetcher: EvidenceFetcher = fetch_github_pr_evidence,
 ) -> list[JudgeAssessment]:
     resolved_options = options or JudgeRunOptions()
-    if resolved_options.judge != "claude":
+    if resolved_options.judge not in {"claude", "gemini"}:
         raise ValueError(f"unsupported external judge: {resolved_options.judge}")
     cases = _select_pending_cases(load_public_pr_corpus(corpus_path), resolved_options.case_ids)
-    runner = judge_runner or _run_claude_judge
+    model = resolved_options.model or _default_judge_model(resolved_options.judge)
+    runner = judge_runner or _judge_runner(resolved_options.judge)
     token = os.getenv(resolved_options.token_env, "")
     assessments: list[JudgeAssessment] = []
 
@@ -145,7 +146,7 @@ def run_external_judge(
 
         raw_response = runner(
             prompt,
-            resolved_options.model,
+            model,
             resolved_options.timeout_seconds,
             resolved_options.max_budget_usd,
         )
@@ -157,7 +158,7 @@ def run_external_judge(
             case_id=case.id,
             packet_hash=packet.packet_hash,
             judge=resolved_options.judge,
-            model=resolved_options.model,
+            model=model,
         )
         assessment_dir = case_dir / "assessments"
         assessment_dir.mkdir(parents=True, exist_ok=True)
@@ -389,6 +390,94 @@ def _run_claude_judge(prompt: str, model: str, timeout_seconds: int, max_budget_
         return json.loads(proc.stdout)
     except json.JSONDecodeError as exc:
         raise ValueError("Claude judge returned invalid JSON") from exc
+
+
+def _run_gemini_judge(prompt: str, model: str, timeout_seconds: int, max_budget_usd: float) -> object:
+    del max_budget_usd  # Gemini CLI OAuth mode does not expose a per-run budget control.
+    command = [
+        "gemini",
+        "--model",
+        model,
+        "--output-format",
+        "json",
+        "--approval-mode",
+        "default",
+        "--skip-trust",
+        "--prompt",
+        "",
+    ]
+    with tempfile.TemporaryDirectory(prefix="airisk-judge-") as temp_dir:
+        temp_path = Path(temp_dir)
+        policy_path = temp_path / "deny-tools.toml"
+        policy_path.write_text(
+            '[[rule]]\ntoolName = "*"\ndecision = "deny"\npriority = 999\ninteractive = false\n',
+            encoding="utf-8",
+        )
+        command.extend(["--admin-policy", str(policy_path)])
+        try:
+            proc = subprocess.run(  # nosec B603
+                command,
+                cwd=temp_path,
+                env=os.environ.copy(),
+                input=f"{_SYSTEM_PROMPT}\n\n{prompt}",
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+            )
+        except FileNotFoundError as exc:
+            raise ValueError("Gemini CLI is not installed or not available on PATH") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise ValueError(f"Gemini judge timed out after {timeout_seconds}s") from exc
+    if proc.returncode != 0:
+        detail = "\n".join(part for part in ((proc.stderr or "").strip(), (proc.stdout or "").strip()) if part)
+        if "UNSUPPORTED_LOCATION" in detail or "not currently available in your location" in detail:
+            raise ValueError(
+                "Gemini CLI OAuth is unavailable for the current account location. "
+                "Use a supported account/region or configure GEMINI_API_KEY through Google AI Studio."
+            )
+        raise ValueError(f"Gemini judge failed ({proc.returncode}): {detail}")
+    try:
+        wrapper = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Gemini judge returned invalid JSON") from exc
+    if not isinstance(wrapper, dict):
+        raise ValueError("Gemini judge JSON wrapper must be an object")
+    response = wrapper.get("response")
+    if not isinstance(response, str) or not response.strip():
+        raise ValueError("Gemini judge JSON wrapper has no response text")
+    return _extract_json_object(response)
+
+
+def _default_judge_model(judge: str) -> str:
+    return {
+        "claude": "claude-sonnet-4-6",
+        "gemini": "gemini-2.5-pro",
+    }[judge]
+
+
+def _judge_runner(judge: str) -> JudgeRunner:
+    return {
+        "claude": _run_claude_judge,
+        "gemini": _run_gemini_judge,
+    }[judge]
+
+
+def _extract_json_object(raw: str) -> dict[str, object]:
+    text = raw.strip()
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start == -1 or end <= start:
+            raise ValueError("Gemini judge response does not contain a JSON object") from None
+        try:
+            payload = json.loads(text[start : end + 1])
+        except json.JSONDecodeError as exc:
+            raise ValueError("Gemini judge response contains invalid JSON") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("Gemini judge response root must be an object")
+    return payload
 
 
 def _load_product_report(case_dir: Path) -> dict[str, object]:

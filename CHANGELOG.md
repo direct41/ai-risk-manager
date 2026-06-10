@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Added Gemini CLI as a second external-judge adapter with the same blind packet and consensus contracts as Claude.
 - Added a blind external-judge workflow with GitHub PR evidence packets, pinned Claude assessments, packet-hash provenance, and multi-judge consensus reporting.
 - Public PR reviews now write head-SHA metadata so downstream validation cannot combine stale reports with newer PR patches.
 - Added `riskmap corpus-status` with a human-review queue, label outcome metrics, and a strict corpus metadata gate.

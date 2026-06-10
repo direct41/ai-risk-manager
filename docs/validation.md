@@ -75,11 +75,24 @@ riskmap judge-prs eval/public_prs.json \
 
 This optional workflow requires an installed and authenticated Claude Code CLI. The model is invoked non-interactively with tools disabled, no session persistence, an explicit timeout, and a per-case budget.
 
+Run Gemini against the same packets as a second model family:
+
+```bash
+riskmap judge-prs eval/public_prs.json \
+  --benchmark-dir .riskmap/public-pr-corpus \
+  --output-dir .riskmap/external-judge \
+  --case-id fastapi-15676 \
+  --judge gemini \
+  --model gemini-2.5-pro
+```
+
+Gemini runs with a temporary wildcard-deny admin policy, so built-in, MCP, and extension tools are excluded from the model context. Gemini CLI OAuth availability depends on the Google account region. If OAuth is unavailable, configure `GEMINI_API_KEY` through Google AI Studio where supported. A Gemini web subscription alone does not guarantee CLI/API access.
+
 The workflow:
 
 1. Fetches public PR metadata and file patches from GitHub.
 2. Builds a packet without corpus reasons, expectations, or existing labels.
-3. Gives Claude no tools or repository access and treats PR text as untrusted data.
+3. Gives the selected judge no tools or repository access and treats PR text as untrusted data.
 4. Requires the benchmark's recorded PR head SHA to match the current GitHub head.
 5. Stores the raw response and a validated assessment separately.
 6. Pins the assessment to a SHA-256 packet hash so stale reviews cannot join consensus.

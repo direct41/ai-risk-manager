@@ -117,7 +117,9 @@ riskmap judge-prs eval/public_prs.json \
   --model claude-sonnet-4-6
 ```
 
-This optional workflow requires an installed and authenticated Claude Code CLI. Judge packets, raw responses, and normalized assessments stay under ignored `.riskmap/external-judge/`.
+This optional workflow requires the installed and authenticated CLI for the selected judge. Judge packets, raw responses, and normalized assessments stay under ignored `.riskmap/external-judge/`.
+
+Use `--judge gemini` for a second independent assessment. Gemini CLI OAuth availability depends on the account region; `GEMINI_API_KEY` is the supported alternative when Google AI Studio access is available.
 
 From the repository you want to inspect:
 

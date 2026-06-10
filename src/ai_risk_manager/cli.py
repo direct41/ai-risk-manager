@@ -278,8 +278,17 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Judge every pending case. Required when no --case-id is supplied.",
     )
-    judge_prs.add_argument("--judge", choices=["claude"], default="claude", help="External judge adapter.")
-    judge_prs.add_argument("--model", default="claude-sonnet-4-6", help="Pinned external judge model.")
+    judge_prs.add_argument(
+        "--judge",
+        choices=["claude", "gemini"],
+        default="claude",
+        help="External judge adapter.",
+    )
+    judge_prs.add_argument(
+        "--model",
+        default=None,
+        help="Pinned external judge model. Defaults per judge.",
+    )
     judge_prs.add_argument(
         "--token-env",
         default="GITHUB_TOKEN",
@@ -601,7 +610,9 @@ def _run_judge_prs(args: argparse.Namespace) -> int:
         return 2
     print(
         "External judge completed. "
-        f"judge={options.judge} model={options.model} cases={len(assessments)}"
+        f"judge={options.judge} "
+        f"model={assessments[0].model if assessments else options.model or 'default'} "
+        f"cases={len(assessments)}"
     )
     print(f"Artifacts: {output_dir}")
     return 0
