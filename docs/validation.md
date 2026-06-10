@@ -59,6 +59,69 @@ Label a reviewed case by changing `expected.product` and adding:
 
 Use `good_signal`, `noisy`, `false_positive`, or `missed_risk`. Pending cases keep `product=needs_human_review` and omit `label`. The strict gate allows pending cases but rejects resolved products without label metadata, labels attached to pending products, and inconsistent outcome/product pairs.
 
+## Independent Judge
+
+Use an external model as a blind second opinion, not as part of the product analysis. Generate benchmark artifacts first, then run only explicitly selected pending cases:
+
+```bash
+riskmap judge-prs eval/public_prs.json \
+  --benchmark-dir .riskmap/public-pr-corpus \
+  --output-dir .riskmap/external-judge \
+  --case-id fastapi-15676 \
+  --judge claude \
+  --model claude-sonnet-4-6 \
+  --max-budget-usd 1
+```
+
+This optional workflow requires an installed and authenticated Claude Code CLI. The model is invoked non-interactively with tools disabled, no session persistence, an explicit timeout, and a per-case budget.
+
+The workflow:
+
+1. Fetches public PR metadata and file patches from GitHub.
+2. Builds a packet without corpus reasons, expectations, or existing labels.
+3. Gives Claude no tools or repository access and treats PR text as untrusted data.
+4. Requires the benchmark's recorded PR head SHA to match the current GitHub head.
+5. Stores the raw response and a validated assessment separately.
+6. Pins the assessment to a SHA-256 packet hash so stale reviews cannot join consensus.
+
+The command requires at least one `--case-id`; use `--all-pending` only for an intentional full batch. Generated evidence and model responses remain under ignored `.riskmap/`.
+
+To compare assessments, place another normalized assessment under:
+
+```text
+.riskmap/external-judge/<case-id>/assessments/<judge-name>.json
+```
+
+Use the current packet's `case_id` and `packet_hash`:
+
+```json
+{
+  "schema_version": "1.0",
+  "case_id": "fastapi-15676",
+  "packet_hash": "<sha256-from-packet.json>",
+  "judge": "human-reviewer",
+  "model": "human",
+  "outcome": "noisy",
+  "confidence": "high",
+  "correct_signals": [],
+  "false_positives": [],
+  "missed_risks": [],
+  "rationale": "Concise evidence-based explanation.",
+  "generated_at_utc": "2026-06-10T00:00:00Z"
+}
+```
+
+Then run:
+
+```bash
+riskmap judge-consensus .riskmap/external-judge
+cat .riskmap/external-judge/consensus.md
+```
+
+Consensus requires at least two distinct judges with matching `case_id`, `packet_hash`, and outcome. Disagreement, stale assessments, and single-judge results stay in human review. Consensus never edits `eval/public_prs.json`; a maintainer must inspect the evidence and commit the final label separately.
+
+`judge-consensus` returns exit code `3` until every case has valid matching assessments from at least two judges.
+
 ## Public Request Path
 
 Ask people for one hard public PR, not for a star or a generic opinion.

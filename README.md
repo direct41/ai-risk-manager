@@ -108,6 +108,17 @@ riskmap corpus-status eval/public_prs.json --strict
 cat .riskmap/public-pr-corpus-status/corpus_status.md
 ```
 
+Run a blind Claude assessment against selected pending cases after producing benchmark artifacts:
+
+```bash
+riskmap judge-prs eval/public_prs.json \
+  --benchmark-dir .riskmap/public-pr-corpus \
+  --case-id fastapi-15676 \
+  --model claude-sonnet-4-6
+```
+
+This optional workflow requires an installed and authenticated Claude Code CLI. Judge packets, raw responses, and normalized assessments stay under ignored `.riskmap/external-judge/`.
+
 From the repository you want to inspect:
 
 ```bash

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from ai_risk_manager.cli import main
@@ -7,6 +8,7 @@ from ai_risk_manager.integrations.github_pr_review import (
     GitHubPRMetadata,
     GitHubPRReference,
     GitHubPRReviewError,
+    fetch_github_pr_evidence,
     parse_github_pr_url,
     prepare_github_pr_checkout,
 )
@@ -76,6 +78,48 @@ def test_prepare_github_pr_checkout_rejects_option_like_base(tmp_path: Path) -> 
         raise AssertionError("Expected GitHubPRReviewError")
 
 
+def test_fetch_github_pr_evidence_normalizes_files_and_marks_truncation(monkeypatch) -> None:
+    responses: list[object] = [
+        {
+            "title": "Fix behavior",
+            "body": "Details",
+            "state": "open",
+            "changed_files": 2,
+            "base": {"ref": "main"},
+            "head": {"sha": "abcdef"},
+        },
+        [
+            {
+                "filename": "app.py",
+                "status": "modified",
+                "additions": 3,
+                "deletions": 1,
+                "patch": "123456",
+            }
+        ],
+    ]
+
+    def _fake_read(url: str, *, headers: dict[str, str]) -> object:
+        assert headers["User-Agent"] == "ai-risk-manager"
+        return responses.pop(0)
+
+    monkeypatch.setattr("ai_risk_manager.integrations.github_pr_review._read_github_json", _fake_read)
+
+    evidence = fetch_github_pr_evidence(
+        GitHubPRReference(
+            repo_full_name="example/project",
+            pr_number=123,
+            clone_url="https://github.com/example/project.git",
+        ),
+        max_patch_chars=4,
+    )
+
+    assert evidence.title == "Fix behavior"
+    assert evidence.files[0].patch == "1234"
+    assert evidence.files_truncated is True
+    assert evidence.patches_truncated is True
+
+
 def test_cli_review_pr_builds_context_from_github_pr_url(
     tmp_path: Path,
     monkeypatch,
@@ -134,3 +178,9 @@ def test_cli_review_pr_builds_context_from_github_pr_url(
     output = capsys.readouterr().out
     assert "PR review completed." in output
     assert "merge_triage.md" in output
+    metadata = json.loads(
+        (tmp_path / ".riskmap" / "review-pr-example-project-123" / "review_pr_metadata.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert metadata["head_sha"] == "abcdef1234567890"

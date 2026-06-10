@@ -7,6 +7,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Added a blind external-judge workflow with GitHub PR evidence packets, pinned Claude assessments, packet-hash provenance, and multi-judge consensus reporting.
+- Public PR reviews now write head-SHA metadata so downstream validation cannot combine stale reports with newer PR patches.
 - Added `riskmap corpus-status` with a human-review queue, label outcome metrics, and a strict corpus metadata gate.
 - Added `riskmap benchmark-prs` with a public PR corpus runner, machine summary, and human-readable benchmark report for repeatable real-PR validation.
 - Added a public PR review request issue template and validation-results template to make external alpha feedback easier to collect.

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 import tempfile
 
+from ai_risk_manager.external_judge import JudgeRunOptions, build_judge_consensus, run_external_judge
 from ai_risk_manager.integrations.github_pr_comments import GitHubCommentError, load_pr_comment_body, upsert_pr_comment
 from ai_risk_manager.integrations.github_pr_review import (
     GitHubPRReviewError,
@@ -255,6 +257,54 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Return exit code 3 when labeling metadata has quality issues. Pending cases remain valid.",
     )
 
+    judge_prs = subparsers.add_parser(
+        "judge-prs",
+        help="Run a blind external judge against public PR evidence and benchmark artifacts.",
+    )
+    judge_prs.add_argument("corpus", nargs="?", default="eval/public_prs.json", help="Public PR corpus JSON.")
+    judge_prs.add_argument(
+        "--benchmark-dir",
+        required=True,
+        help="Directory containing per-case benchmark artifacts.",
+    )
+    judge_prs.add_argument(
+        "--output-dir",
+        default=".riskmap/external-judge",
+        help="Ignored output directory for judge packets and assessments.",
+    )
+    judge_prs.add_argument("--case-id", action="append", default=[], help="Pending case id. May be repeated.")
+    judge_prs.add_argument(
+        "--all-pending",
+        action="store_true",
+        help="Judge every pending case. Required when no --case-id is supplied.",
+    )
+    judge_prs.add_argument("--judge", choices=["claude"], default="claude", help="External judge adapter.")
+    judge_prs.add_argument("--model", default="claude-sonnet-4-6", help="Pinned external judge model.")
+    judge_prs.add_argument(
+        "--token-env",
+        default="GITHUB_TOKEN",
+        help="Environment variable containing an optional GitHub token.",
+    )
+    judge_prs.add_argument("--api-base", default="https://api.github.com", help="GitHub API base URL.")
+    judge_prs.add_argument("--timeout-seconds", type=int, default=300, help="Timeout per external judge case.")
+    judge_prs.add_argument(
+        "--max-budget-usd",
+        type=float,
+        default=1.0,
+        help="Maximum Claude API spend per case.",
+    )
+
+    judge_consensus = subparsers.add_parser(
+        "judge-consensus",
+        help="Compare normalized judge assessments and report agreement.",
+    )
+    judge_consensus.add_argument(
+        "output_dir",
+        nargs="?",
+        default=".riskmap/external-judge",
+        help="Directory containing judge packets and assessments.",
+    )
+
     return parser
 
 
@@ -405,6 +455,21 @@ def _run_review_pr(args: argparse.Namespace) -> int:
             print(f"- {note}")
         return 2
 
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "review_pr_metadata.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "url": args.url,
+                "repo_full_name": ref.repo_full_name,
+                "pr_number": ref.pr_number,
+                "base_ref": base_ref,
+                "head_sha": metadata.head_sha,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     print(
         f"PR review completed. repo={ref.repo_full_name} pr={ref.pr_number} "
         f"base={base_ref} head={metadata.head_sha[:12]} artifacts={output_dir}"
@@ -507,6 +572,58 @@ def _run_corpus_status(args: argparse.Namespace) -> int:
     return 3 if args.strict and result.issues else 0
 
 
+def _run_judge_prs(args: argparse.Namespace) -> int:
+    if args.case_id and args.all_pending:
+        print("External judge error: use --case-id or --all-pending, not both.")
+        return 2
+    if not args.case_id and not args.all_pending:
+        print("External judge error: pass at least one --case-id or explicitly use --all-pending.")
+        return 2
+    if args.timeout_seconds <= 0 or args.max_budget_usd <= 0:
+        print("External judge error: timeout and max budget must be positive.")
+        return 2
+    corpus_path = Path(args.corpus).resolve()
+    benchmark_dir = Path(args.benchmark_dir).resolve()
+    output_dir = Path(args.output_dir).resolve()
+    options = JudgeRunOptions(
+        case_ids=list(args.case_id),
+        judge=args.judge,
+        model=args.model,
+        token_env=args.token_env,
+        api_base=args.api_base,
+        timeout_seconds=args.timeout_seconds,
+        max_budget_usd=args.max_budget_usd,
+    )
+    try:
+        assessments = run_external_judge(corpus_path, benchmark_dir, output_dir, options=options)
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(f"External judge error: {exc}")
+        return 2
+    print(
+        "External judge completed. "
+        f"judge={options.judge} model={options.model} cases={len(assessments)}"
+    )
+    print(f"Artifacts: {output_dir}")
+    return 0
+
+
+def _run_judge_consensus(args: argparse.Namespace) -> int:
+    output_dir = Path(args.output_dir).resolve()
+    try:
+        result = build_judge_consensus(output_dir)
+    except (OSError, ValueError) as exc:
+        print(f"External judge consensus error: {exc}")
+        return 2
+    print(
+        "External judge consensus completed. "
+        f"cases={result.total_cases} confirmed={result.confirmed_cases} "
+        f"disagreement={result.disagreement_cases} insufficient={result.insufficient_cases} "
+        f"invalid={result.invalid_cases}"
+    )
+    print(f"Summary: {output_dir / 'consensus.md'}")
+    return 3 if result.disagreement_cases or result.insufficient_cases or result.invalid_cases else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -521,6 +638,10 @@ def main(argv: list[str] | None = None) -> int:
         return _run_benchmark_prs(args)
     if args.command == "corpus-status":
         return _run_corpus_status(args)
+    if args.command == "judge-prs":
+        return _run_judge_prs(args)
+    if args.command == "judge-consensus":
+        return _run_judge_consensus(args)
 
     parser.print_help()
     return 2

@@ -40,6 +40,7 @@ GENERATED_ARTIFACT_BASENAMES = {
     "merge_triage.md",
     "pr_summary.json",
     "pr_summary.md",
+    "review_pr_metadata.json",
     "report.md",
     "run_metrics.json",
     "test_plan.json",
