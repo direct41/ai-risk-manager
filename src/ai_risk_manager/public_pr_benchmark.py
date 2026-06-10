@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import json
 from pathlib import Path
 import re
@@ -16,6 +16,7 @@ from ai_risk_manager.pr_scope import normalize_path, source_ref_path
 ExecutionStatus = Literal["pass", "setup_fail", "provider_fail", "tool_fail", "artifact_fail", "timeout"]
 ProductVerdict = Literal["useful", "mixed", "not_useful", "needs_human_review"]
 EvaluationStatus = Literal["passed", "failed", "needs_human_review"]
+LabelOutcome = Literal["good_signal", "noisy", "false_positive", "missed_risk"]
 
 _SAFE_CASE_ID = re.compile(r"^[A-Za-z0-9_.-]+$")
 _SUCCESS_EXIT_CODES = {0, 3}
@@ -34,6 +35,13 @@ class PublicPRExpectation:
 
 
 @dataclass(frozen=True)
+class PublicPRLabel:
+    outcome: LabelOutcome
+    rationale: str
+    reviewed_at: str
+
+
+@dataclass(frozen=True)
 class PublicPRCase:
     id: str
     url: str
@@ -41,6 +49,7 @@ class PublicPRCase:
     reason: str
     expected: PublicPRExpectation
     base: str | None = None
+    label: PublicPRLabel | None = None
 
 
 @dataclass(frozen=True)
@@ -106,6 +115,18 @@ class PublicPRBenchmarkResult:
     cases: list[PublicPRCaseResult]
 
 
+@dataclass
+class PublicPRCorpusStatus:
+    generated_at_utc: str
+    corpus_path: str
+    total_cases: int
+    labeled_cases: int
+    pending_cases: int
+    outcome_counts: dict[str, int]
+    pending_case_ids: list[str]
+    issues: list[str]
+
+
 ReviewCommandRunner = Callable[[list[str], Path, dict[str, str], int], ReviewCommandResult]
 
 
@@ -125,7 +146,73 @@ def load_public_pr_corpus(path: Path) -> list[PublicPRCase]:
         if case.id in seen:
             raise ValueError(f"{path}: duplicate case id '{case.id}'")
         seen.add(case.id)
+    seen_urls: set[str] = set()
+    for case in cases:
+        if case.url in seen_urls:
+            raise ValueError(f"{path}: duplicate case URL '{case.url}'")
+        seen_urls.add(case.url)
     return cases
+
+
+def inspect_public_pr_corpus(path: Path, output_dir: Path) -> PublicPRCorpusStatus:
+    cases = load_public_pr_corpus(path)
+    pending_case_ids = [case.id for case in cases if case.label is None]
+    outcome_counts = {outcome: 0 for outcome in ("good_signal", "noisy", "false_positive", "missed_risk")}
+    for case in cases:
+        if case.label is not None:
+            outcome_counts[case.label.outcome] += 1
+
+    status = PublicPRCorpusStatus(
+        generated_at_utc=_utc_now_iso(),
+        corpus_path=str(path),
+        total_cases=len(cases),
+        labeled_cases=len(cases) - len(pending_case_ids),
+        pending_cases=len(pending_case_ids),
+        outcome_counts=outcome_counts,
+        pending_case_ids=pending_case_ids,
+        issues=_corpus_labeling_issues(cases),
+    )
+    write_public_pr_corpus_status(status, output_dir)
+    return status
+
+
+def write_public_pr_corpus_status(result: PublicPRCorpusStatus, output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "corpus_status.json").write_text(
+        json.dumps(asdict(result), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / "corpus_status.md").write_text(render_public_pr_corpus_status_md(result), encoding="utf-8")
+
+
+def render_public_pr_corpus_status_md(result: PublicPRCorpusStatus) -> str:
+    lines = [
+        "# Public PR Corpus Status",
+        "",
+        f"- Generated: `{result.generated_at_utc}`",
+        f"- Corpus: `{result.corpus_path}`",
+        f"- Cases: `{result.total_cases}`",
+        f"- Labeled: `{result.labeled_cases}`",
+        f"- Pending: `{result.pending_cases}`",
+        f"- Labeling issues: `{len(result.issues)}`",
+        "",
+        "## Outcomes",
+        "",
+    ]
+    for outcome, count in result.outcome_counts.items():
+        lines.append(f"- `{outcome}`: `{count}`")
+
+    lines.extend(["", "## Pending Queue", ""])
+    lines.extend(f"- `{case_id}`" for case_id in result.pending_case_ids)
+    if not result.pending_case_ids:
+        lines.append("- none")
+
+    lines.extend(["", "## Quality Issues", ""])
+    lines.extend(f"- {issue}" for issue in result.issues)
+    if not result.issues:
+        lines.append("- none")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def run_public_pr_benchmark(
@@ -438,6 +525,7 @@ def _parse_case(raw_case: object, *, index: int, path: Path) -> PublicPRCase:
         stack=_optional_str(raw_case.get("stack")) or "unknown",
         reason=_optional_str(raw_case.get("reason")) or "",
         base=_optional_str(raw_case.get("base")),
+        label=_parse_label(raw_case.get("label"), case_id=case_id, path=path),
         expected=PublicPRExpectation(
             execution=cast(
                 ExecutionStatus,
@@ -472,6 +560,66 @@ def _parse_case(raw_case: object, *, index: int, path: Path) -> PublicPRCase:
             ),
         ),
     )
+
+
+def _parse_label(value: object, *, case_id: str, path: Path) -> PublicPRLabel | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError(f"{path}: case '{case_id}' label must be an object")
+
+    rationale = _optional_str(value.get("rationale"))
+    if rationale is None:
+        raise ValueError(f"{path}: {case_id}.label.rationale must be a non-empty string")
+    reviewed_at = _optional_str(value.get("reviewed_at"))
+    if reviewed_at is None:
+        raise ValueError(f"{path}: {case_id}.label.reviewed_at must be an ISO date")
+    try:
+        date.fromisoformat(reviewed_at)
+    except ValueError as exc:
+        raise ValueError(f"{path}: {case_id}.label.reviewed_at must be an ISO date") from exc
+
+    return PublicPRLabel(
+        outcome=cast(
+            LabelOutcome,
+            _parse_literal(
+                value.get("outcome"),
+                {"good_signal", "noisy", "false_positive", "missed_risk"},
+                field_name=f"{case_id}.label.outcome",
+                path=path,
+            ),
+        ),
+        rationale=rationale,
+        reviewed_at=reviewed_at,
+    )
+
+
+def _corpus_labeling_issues(cases: list[PublicPRCase]) -> list[str]:
+    issues: list[str] = []
+    expected_products: dict[LabelOutcome, set[ProductVerdict]] = {
+        "good_signal": {"useful"},
+        "noisy": {"mixed"},
+        "false_positive": {"not_useful"},
+        "missed_risk": {"mixed", "not_useful"},
+    }
+    for case in cases:
+        if case.label is None:
+            if case.expected.product != "needs_human_review":
+                issues.append(
+                    f"`{case.id}` has product `{case.expected.product}` but no label metadata"
+                )
+            continue
+        if case.expected.product == "needs_human_review":
+            issues.append(f"`{case.id}` has label metadata but product is still `needs_human_review`")
+            continue
+        allowed_products = expected_products[case.label.outcome]
+        if case.expected.product not in allowed_products:
+            allowed = ", ".join(f"`{product}`" for product in sorted(allowed_products))
+            issues.append(
+                f"`{case.id}` outcome `{case.label.outcome}` requires product {allowed}, "
+                f"got `{case.expected.product}`"
+            )
+    return issues
 
 
 def _read_json_object(path: Path) -> dict[str, object]:

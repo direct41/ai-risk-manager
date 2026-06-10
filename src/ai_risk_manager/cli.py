@@ -15,7 +15,11 @@ from ai_risk_manager.integrations.github_pr_review import (
 )
 from ai_risk_manager.pipeline.context_builder import build_run_context, normalize_cli_choice
 from ai_risk_manager.pipeline.run import run_pipeline
-from ai_risk_manager.public_pr_benchmark import PublicPRBenchmarkOptions, run_public_pr_benchmark
+from ai_risk_manager.public_pr_benchmark import (
+    PublicPRBenchmarkOptions,
+    inspect_public_pr_corpus,
+    run_public_pr_benchmark,
+)
 from ai_risk_manager.sample_repo import resolve_sample_repo_path
 
 
@@ -203,6 +207,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default="low",
         help="Drop findings below confidence threshold.",
     )
+
     benchmark.add_argument(
         "--ci-mode",
         choices=["advisory", "soft", "block-new-critical"],
@@ -228,6 +233,27 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     benchmark.add_argument("--api-base", default="https://api.github.com", help="GitHub API base URL.")
     benchmark.add_argument("--timeout-seconds", type=int, default=900, help="Timeout per public PR case.")
+
+    corpus_status = subparsers.add_parser(
+        "corpus-status",
+        help="Validate public PR corpus labeling metadata and render the pending review queue.",
+    )
+    corpus_status.add_argument(
+        "corpus",
+        nargs="?",
+        default="eval/public_prs.json",
+        help="Path to public PR corpus JSON.",
+    )
+    corpus_status.add_argument(
+        "--output-dir",
+        default=".riskmap/public-pr-corpus-status",
+        help="Output directory for corpus status artifacts.",
+    )
+    corpus_status.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 3 when labeling metadata has quality issues. Pending cases remain valid.",
+    )
 
     return parser
 
@@ -462,6 +488,25 @@ def _run_benchmark_prs(args: argparse.Namespace) -> int:
     return 3 if result.failed_cases else 0
 
 
+def _run_corpus_status(args: argparse.Namespace) -> int:
+    corpus_path = Path(args.corpus).resolve()
+    output_dir = Path(args.output_dir).resolve()
+    try:
+        result = inspect_public_pr_corpus(corpus_path, output_dir)
+    except (OSError, ValueError) as exc:
+        print(f"Public PR corpus setup error: {exc}")
+        return 2
+
+    print(
+        "Public PR corpus status completed. "
+        f"cases={result.total_cases} labeled={result.labeled_cases} "
+        f"pending={result.pending_cases} issues={len(result.issues)}"
+    )
+    print(f"Status: {output_dir / 'corpus_status.md'}")
+    print(f"Machine status: {output_dir / 'corpus_status.json'}")
+    return 3 if args.strict and result.issues else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -474,6 +519,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_publish_pr_comment(args)
     if args.command == "benchmark-prs":
         return _run_benchmark_prs(args)
+    if args.command == "corpus-status":
+        return _run_corpus_status(args)
 
     parser.print_help()
     return 2

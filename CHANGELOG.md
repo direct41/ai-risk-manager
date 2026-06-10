@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Added `riskmap corpus-status` with a human-review queue, label outcome metrics, and a strict corpus metadata gate.
 - Added `riskmap benchmark-prs` with a public PR corpus runner, machine summary, and human-readable benchmark report for repeatable real-PR validation.
 - Added a public PR review request issue template and validation-results template to make external alpha feedback easier to collect.
 - Added `riskmap review-pr <github-pr-url>` to run deterministic PR risk triage on a public GitHub PR without manually checking out the branch, including automatic base-branch baseline generation.

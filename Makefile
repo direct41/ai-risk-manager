@@ -4,7 +4,7 @@ VENV_PYTHON := $(VENV)/bin/python
 VENV_RISKMAP := $(VENV)/bin/riskmap
 VENV_RISKMAP_API := $(VENV)/bin/riskmap-api
 
-.PHONY: install install-api test analyze-demo serve-api eval
+.PHONY: install install-api test analyze-demo serve-api eval corpus-status
 
 $(VENV_PYTHON):
 	$(PYTHON) -m venv $(VENV)
@@ -28,3 +28,6 @@ serve-api: install-api
 
 eval: install
 	$(VENV_PYTHON) scripts/run_eval_suite.py
+
+corpus-status: install
+	$(VENV_RISKMAP) corpus-status eval/public_prs.json --strict

@@ -40,6 +40,25 @@ cat .riskmap/public-pr-corpus/benchmark_summary.md
 
 The benchmark records two verdict layers per PR: execution status (`pass`, `setup_fail`, `provider_fail`, `tool_fail`, `artifact_fail`, or `timeout`) and product evaluation (`passed`, `failed`, or `needs_human_review`). Treat `needs_human_review` rows as labeling work, not as product success.
 
+Inspect the labeling queue and validate corpus metadata:
+
+```bash
+riskmap corpus-status eval/public_prs.json --strict
+cat .riskmap/public-pr-corpus-status/corpus_status.md
+```
+
+Label a reviewed case by changing `expected.product` and adding:
+
+```json
+"label": {
+  "outcome": "good_signal",
+  "rationale": "The report surfaced the changed-file risk and proposed the right regression test.",
+  "reviewed_at": "2026-06-10"
+}
+```
+
+Use `good_signal`, `noisy`, `false_positive`, or `missed_risk`. Pending cases keep `product=needs_human_review` and omit `label`. The strict gate allows pending cases but rejects resolved products without label metadata, labels attached to pending products, and inconsistent outcome/product pairs.
+
 ## Public Request Path
 
 Ask people for one hard public PR, not for a star or a generic opinion.

@@ -101,6 +101,13 @@ cat .riskmap/public-pr-corpus/benchmark_summary.md
 
 Use `--case-id express-7287` for a single regression case while tuning output quality.
 
+Inspect corpus labeling progress and validate label metadata:
+
+```bash
+riskmap corpus-status eval/public_prs.json --strict
+cat .riskmap/public-pr-corpus-status/corpus_status.md
+```
+
 From the repository you want to inspect:
 
 ```bash

@@ -11,6 +11,7 @@ from ai_risk_manager.public_pr_benchmark import (
     PublicPRBenchmarkResult,
     PublicPRCaseResult,
     ReviewCommandResult,
+    inspect_public_pr_corpus,
     load_public_pr_corpus,
     run_public_pr_benchmark,
 )
@@ -20,14 +21,23 @@ def _write_corpus(path: Path, cases: list[dict]) -> None:
     path.write_text(json.dumps({"version": 1, "cases": cases}), encoding="utf-8")
 
 
-def _case(expected: dict | None = None) -> dict:
-    return {
-        "id": "express-7287",
-        "url": "https://github.com/expressjs/express/pull/7287",
+def _case(
+    expected: dict | None = None,
+    *,
+    case_id: str = "express-7287",
+    url: str = "https://github.com/expressjs/express/pull/7287",
+    label: dict | None = None,
+) -> dict:
+    case = {
+        "id": case_id,
+        "url": url,
         "stack": "express_node",
         "reason": "regression corpus case",
         "expected": expected or {},
     }
+    if label is not None:
+        case["label"] = label
+    return case
 
 
 def _output_dir_from_command(command: list[str]) -> Path:
@@ -96,7 +106,12 @@ def test_load_public_pr_corpus_reads_expected_fields(tmp_path: Path) -> None:
                     "required_paths": ["lib/response.js"],
                     "forbidden_top_rules": ["critical_path_no_tests"],
                     "max_top_findings": 1,
-                }
+                },
+                label={
+                    "outcome": "good_signal",
+                    "rationale": "The report found the expected changed-file risk.",
+                    "reviewed_at": "2026-06-10",
+                },
             )
         ],
     )
@@ -106,6 +121,92 @@ def test_load_public_pr_corpus_reads_expected_fields(tmp_path: Path) -> None:
     assert cases[0].id == "express-7287"
     assert cases[0].expected.product == "useful"
     assert cases[0].expected.required_paths == ["lib/response.js"]
+    assert cases[0].label is not None
+    assert cases[0].label.outcome == "good_signal"
+
+
+def test_inspect_public_pr_corpus_renders_labeling_queue(tmp_path: Path) -> None:
+    corpus = tmp_path / "public_prs.json"
+    _write_corpus(
+        corpus,
+        [
+            _case(
+                {"product": "useful"},
+                label={
+                    "outcome": "good_signal",
+                    "rationale": "The report found the expected risk.",
+                    "reviewed_at": "2026-06-10",
+                },
+            ),
+            _case(
+                {"product": "needs_human_review"},
+                case_id="express-7291",
+                url="https://github.com/expressjs/express/pull/7291",
+            ),
+        ],
+    )
+
+    result = inspect_public_pr_corpus(corpus, tmp_path / "status")
+
+    assert result.total_cases == 2
+    assert result.labeled_cases == 1
+    assert result.pending_cases == 1
+    assert result.outcome_counts["good_signal"] == 1
+    assert result.pending_case_ids == ["express-7291"]
+    assert result.issues == []
+    assert (tmp_path / "status" / "corpus_status.json").exists()
+    assert "`express-7291`" in (tmp_path / "status" / "corpus_status.md").read_text(encoding="utf-8")
+
+
+def test_inspect_public_pr_corpus_reports_inconsistent_labels(tmp_path: Path) -> None:
+    corpus = tmp_path / "public_prs.json"
+    _write_corpus(
+        corpus,
+        [
+            _case({"product": "useful"}),
+            _case(
+                {"product": "useful"},
+                case_id="express-7291",
+                url="https://github.com/expressjs/express/pull/7291",
+                label={
+                    "outcome": "false_positive",
+                    "rationale": "The surfaced finding was incorrect.",
+                    "reviewed_at": "2026-06-10",
+                },
+            ),
+        ],
+    )
+
+    result = inspect_public_pr_corpus(corpus, tmp_path / "status")
+
+    assert result.pending_cases == 1
+    assert len(result.issues) == 2
+    assert "no label metadata" in result.issues[0]
+    assert "requires product `not_useful`" in result.issues[1]
+
+
+def test_load_public_pr_corpus_rejects_invalid_label_date(tmp_path: Path) -> None:
+    corpus = tmp_path / "public_prs.json"
+    _write_corpus(
+        corpus,
+        [
+            _case(
+                {"product": "useful"},
+                label={
+                    "outcome": "good_signal",
+                    "rationale": "The report found the expected risk.",
+                    "reviewed_at": "10/06/2026",
+                },
+            )
+        ],
+    )
+
+    try:
+        load_public_pr_corpus(corpus)
+    except ValueError as exc:
+        assert "label.reviewed_at must be an ISO date" in str(exc)
+    else:
+        raise AssertionError("Expected invalid label date to be rejected")
 
 
 def test_run_public_pr_benchmark_passes_when_expectations_match(tmp_path: Path) -> None:
@@ -333,3 +434,39 @@ def test_cli_benchmark_prs_wires_options(tmp_path: Path, monkeypatch, capsys) ->
     assert options.skip_baseline is True
     assert options.timeout_seconds == 123
     assert "Public PR benchmark completed" in capsys.readouterr().out
+
+
+def test_cli_corpus_status_strict_fails_on_labeling_issues(tmp_path: Path, capsys) -> None:
+    corpus = tmp_path / "public_prs.json"
+    _write_corpus(corpus, [_case({"product": "useful"})])
+
+    code = main(
+        [
+            "corpus-status",
+            str(corpus),
+            "--output-dir",
+            str(tmp_path / "status"),
+            "--strict",
+        ]
+    )
+
+    assert code == 3
+    assert "labeled=0 pending=1 issues=1" in capsys.readouterr().out
+
+
+def test_cli_corpus_status_strict_allows_pending_review_queue(tmp_path: Path, capsys) -> None:
+    corpus = tmp_path / "public_prs.json"
+    _write_corpus(corpus, [_case({"product": "needs_human_review"})])
+
+    code = main(
+        [
+            "corpus-status",
+            str(corpus),
+            "--output-dir",
+            str(tmp_path / "status"),
+            "--strict",
+        ]
+    )
+
+    assert code == 0
+    assert "labeled=0 pending=1 issues=0" in capsys.readouterr().out

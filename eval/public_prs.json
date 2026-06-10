@@ -15,6 +15,11 @@
         "required_paths": ["lib/response.js"],
         "forbidden_top_rules": ["critical_path_no_tests", "critical_write_missing_authz"],
         "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly surfaced missing changed-file regression coverage without old repo-wide fallback noise.",
+        "reviewed_at": "2026-06-09"
       }
     },
     {
@@ -29,6 +34,11 @@
         "required_rules": ["agent_generated_test_missing_negative_path"],
         "required_paths": ["tests/test_sse.py"],
         "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "noisy",
+        "rationale": "The test-quality warning was relevant but weaker than the PR's otherwise ready merge state.",
+        "reviewed_at": "2026-06-09"
       }
     },
     {
@@ -41,6 +51,11 @@
         "product": "useful",
         "decision": "ready",
         "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly kept a tested validator fix ready with no top release-risk findings.",
+        "reviewed_at": "2026-06-09"
       }
     },
     {
@@ -53,6 +68,11 @@
         "product": "useful",
         "decision": "ready",
         "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly kept a parsing change with matching regression coverage ready.",
+        "reviewed_at": "2026-06-09"
       }
     },
     {
@@ -67,6 +87,11 @@
         "required_rules": ["agent_generated_test_missing_negative_path"],
         "required_paths": ["backend/tests/api/routes/test_private.py"],
         "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report identified the missing negative-path coverage in the changed API test.",
+        "reviewed_at": "2026-06-09"
       }
     },
     {
@@ -82,6 +107,11 @@
         "required_paths": ["rest_framework/exceptions.py"],
         "forbidden_top_rules": ["critical_path_no_tests"],
         "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report requested focused regression coverage for the changed exception code without fallback noise.",
+        "reviewed_at": "2026-06-09"
       }
     },
     {
