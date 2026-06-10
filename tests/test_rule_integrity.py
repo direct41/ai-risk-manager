@@ -29,6 +29,32 @@ def test_write_contract_integrity_reports_db_insert_binding_mismatch() -> None:
     assert "db_insert_binding_mismatch" in rule_ids
 
 
+def test_write_contract_integrity_reports_lossy_decode_error_handling() -> None:
+    findings = run_rules(
+        SignalBundle(
+            signals=[
+                CapabilitySignal(
+                    id="sig-lossy-decode",
+                    kind="write_contract_integrity",
+                    source_ref="app/encoders.py:12",
+                    confidence="high",
+                    evidence_refs=["app/encoders.py:12"],
+                    attributes={
+                        "issue_type": "lossy_decode_error_handling",
+                        "owner_name": "decode",
+                        "error_mode": "replace",
+                    },
+                )
+            ],
+            supported_kinds={"write_contract_integrity"},
+        )
+    )
+
+    finding = next(row for row in findings.findings if row.rule_id == "lossy_decode_error_handling")
+    assert finding.severity == "medium"
+    assert "base64" in finding.recommendation
+
+
 def test_write_contract_integrity_reports_write_scope_and_stale_write_issues() -> None:
     findings = run_rules(
         SignalBundle(

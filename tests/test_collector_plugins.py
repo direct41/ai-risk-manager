@@ -335,6 +335,40 @@ def test_fastapi_plugin_collects_generated_test_quality_issues(tmp_path: Path, w
     assert "generated_test_quality" in kinds
 
 
+def test_fastapi_plugin_ignores_setup_write_and_captured_current_time(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/login')\n"
+        "def login():\n"
+        "    return {'token': 'x'}\n"
+        "@router.delete('/users/me')\n"
+        "def delete_user():\n"
+        "    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_api.py",
+        "from datetime import datetime\n\n"
+        "def test_delete_user(client):\n"
+        "    captured = datetime.now()\n"
+        "    token = client.post('/login')\n"
+        "    response = client.delete('/users/me')\n"
+        "    assert response.status_code == 200\n"
+        "    assert captured.isoformat()\n\n"
+        "def test_delete_user_forbidden(client):\n"
+        "    response = client.delete('/users/me')\n"
+        "    assert response.status_code == 403\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+
+    artifacts = plugin.collect(tmp_path)
+
+    assert artifacts.generated_test_issues == []
+
+
 def test_express_plugin_collects_generated_test_quality_issues(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "server" / "app.js",
@@ -453,6 +487,24 @@ def test_fastapi_plugin_extracts_write_contract_integrity_issues(tmp_path: Path,
     assert "stale_write_without_conflict_guard" in issue_types
     kinds = {signal.kind for signal in signals.signals}
     assert "write_contract_integrity" in kinds
+
+
+def test_fastapi_plugin_extracts_lossy_decode_issue(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "main.py",
+        "from fastapi import FastAPI\n"
+        "app = FastAPI()\n"
+        "ENCODERS = {bytes: lambda value: value.decode(errors='replace')}\n",
+    )
+    write_file(tmp_path / "tests" / "test_main.py", "def test_app_imports():\n    assert True\n")
+
+    plugin = get_signal_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+
+    artifacts = plugin.collect(tmp_path)
+    issue_types = {row[1] for row in artifacts.write_contract_issues}
+
+    assert "lossy_decode_error_handling" in issue_types
 
 
 def test_django_plugin_extracts_write_contract_integrity_issues(tmp_path: Path, write_file) -> None:

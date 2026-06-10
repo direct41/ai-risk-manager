@@ -149,11 +149,19 @@ def _triage_candidates(
     analysis_scope: AnalysisScope,
     changed_files: set[str] | None,
 ) -> list[Finding]:
+    candidates = [
+        finding
+        for finding in findings
+        if not (
+            finding.status == "unchanged"
+            and finding.rule_id.startswith("agent_generated_test_")
+        )
+    ]
     if analysis_scope != "full_fallback" or changed_files is None:
-        return list(findings)
+        return candidates
 
     normalized_changed_files = {normalize_path(path) for path in changed_files}
-    return [finding for finding in findings if is_pr_scoped_finding(finding, normalized_changed_files)]
+    return [finding for finding in candidates if is_pr_scoped_finding(finding, normalized_changed_files)]
 
 
 def _resolve_decision(

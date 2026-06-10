@@ -152,6 +152,42 @@ def extract_python_session_lifecycle_issues(
     return issues
 
 
+def extract_python_lossy_decode_issues(
+    *,
+    tree: ast.AST,
+    source_lines: list[str],
+    relative_path: str,
+) -> list[tuple[str, str, str, int | None, str, dict[str, str]]]:
+    issues: list[tuple[str, str, str, int | None, str, dict[str, str]]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != "decode":
+            continue
+        error_mode = next(
+            (
+                _constant_str(keyword.value)
+                for keyword in node.keywords
+                if keyword.arg == "errors"
+            ),
+            None,
+        )
+        if error_mode not in {"ignore", "replace"}:
+            continue
+        line = getattr(node, "lineno", 1)
+        issues.append(
+            (
+                relative_path,
+                "lossy_decode_error_handling",
+                "decode",
+                line,
+                _line_snippet(source_lines, line),
+                {"error_mode": error_mode},
+            )
+        )
+    return issues
+
+
 def extract_python_write_contract_issues(
     *,
     tree: ast.AST,

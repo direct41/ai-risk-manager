@@ -152,7 +152,7 @@ def test_pr_summary_keeps_repeated_findings_when_source_changed() -> None:
     assert top_dependency_count == 3
 
 
-def test_pr_summary_includes_merge_triage_action_when_only_new_hides_unchanged_findings() -> None:
+def test_pr_summary_hides_unchanged_generated_test_quality_when_only_new() -> None:
     unchanged = _finding(
         "agent_generated_test_missing_negative_path",
         "tests/test_sse.py:242",
@@ -162,21 +162,8 @@ def test_pr_summary_includes_merge_triage_action_when_only_new_hides_unchanged_f
     result = _result([unchanged])
     result.summary.new_count = 0
     result.summary.unchanged_count = 1
-    result.merge_triage.actions = [
-        MergeTriageAction(
-            id="merge-triage:1",
-            finding_id=unchanged.id,
-            rule_id=unchanged.rule_id,
-            title=unchanged.title,
-            priority=unchanged.severity,
-            confidence=unchanged.confidence,
-            status=unchanged.status,
-            source_ref=unchanged.source_ref,
-            action=unchanged.recommendation,
-            rationale="Optional cleanup remains in a changed test file.",
-            estimated_minutes=5,
-        )
-    ]
+    result.merge_triage.actions = []
+    result.merge_triage.risk_score = 0
 
     summary = build_pr_summary(
         result,
@@ -185,8 +172,8 @@ def test_pr_summary_includes_merge_triage_action_when_only_new_hides_unchanged_f
         changed_files={"tests/test_sse.py"},
     )
 
-    assert summary.top_findings[0].status == "unchanged"
-    assert summary.top_actions[0].rule_id == "agent_generated_test_missing_negative_path"
+    assert summary.top_findings == []
+    assert summary.top_actions == []
 
 
 def test_pr_summary_full_fallback_only_new_hides_unscoped_new_high_findings() -> None:

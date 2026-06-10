@@ -31,14 +31,12 @@
         "execution": "pass",
         "product": "mixed",
         "decision": "ready",
-        "required_rules": ["agent_generated_test_missing_negative_path"],
-        "required_paths": ["tests/test_sse.py"],
-        "max_top_findings": 1
+        "max_top_findings": 0
       },
       "label": {
-        "outcome": "noisy",
-        "rationale": "The test-quality warning was relevant but weaker than the PR's otherwise ready merge state.",
-        "reviewed_at": "2026-06-09"
+        "outcome": "missed_risk",
+        "rationale": "The clean report misses the user-visible alias compatibility change and inconsistent handling between Pydantic and fallback SSE serialization paths.",
+        "reviewed_at": "2026-06-10"
       }
     },
     {
@@ -121,7 +119,14 @@
       "reason": "FastAPI jsonable_encoder recursion fix with a focused regression test.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the focused exclude_defaults propagation fix ready after unrelated unchanged test-quality noise is removed.",
+        "reviewed_at": "2026-06-10"
       }
     },
     {
@@ -146,7 +151,16 @@
       "reason": "FastAPI jsonable_encoder invalid UTF-8 bytes crash fix with a regression test.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "useful",
+        "decision": "review_required",
+        "required_rules": ["lossy_decode_error_handling"],
+        "required_paths": ["fastapi/encoders.py"],
+        "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report now identifies the silent lossy-decoding contract change and recommends explicit failure or a lossless representation.",
+        "reviewed_at": "2026-06-10"
       }
     },
     {
@@ -156,7 +170,16 @@
       "reason": "FastAPI template DB session dependency cleanup without a matching test delta.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "mixed",
+        "decision": "review_required",
+        "required_rules": ["pr_code_change_without_test_delta"],
+        "required_paths": ["backend/app/api/deps.py"],
+        "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "missed_risk",
+        "rationale": "The missing-test signal is useful, but the report does not challenge a root-cause claim contradicted by FastAPI's deterministic dependency teardown and equivalent Session cleanup.",
+        "reviewed_at": "2026-06-10"
       }
     },
     {
@@ -166,7 +189,14 @@
       "reason": "FastAPI template users route cleanup with updated API tests.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the tested database-cascade cleanup ready after setup-login and unchanged test-quality findings are removed.",
+        "reviewed_at": "2026-06-10"
       }
     },
     {

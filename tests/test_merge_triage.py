@@ -127,6 +127,27 @@ def test_merge_triage_full_scan_requires_review_for_high_risk() -> None:
     assert any("Full repository scan" in reason for reason in triage.reasons)
 
 
+def test_merge_triage_hides_unchanged_generated_test_quality_debt() -> None:
+    finding = _finding(
+        "legacy_test_quality",
+        severity="high",
+        confidence="medium",
+        status="unchanged",
+        rule_id="agent_generated_test_missing_negative_path",
+    )
+
+    triage = build_merge_triage(
+        FindingsReport(findings=[finding], generated_without_llm=True),
+        RiskTestPlan(generated_without_llm=True),
+        summary=RunSummary(verification_pass_rate=1.0, evidence_completeness=1.0),
+        analysis_scope="impacted",
+    )
+
+    assert triage.decision == "ready"
+    assert triage.risk_score == 0
+    assert triage.actions == []
+
+
 def test_merge_triage_full_fallback_focuses_changed_file_findings() -> None:
     legacy_high = _finding(
         "legacy_checkout",

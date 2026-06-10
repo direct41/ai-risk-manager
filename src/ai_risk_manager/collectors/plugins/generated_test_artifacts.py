@@ -152,7 +152,7 @@ def _nondeterministic_kinds(node: ast.AST) -> set[str]:
 
         if func_name == "sleep":
             kinds.add("sleep")
-        if func_name in {"time", "time_ns", "monotonic", "perf_counter", "now", "utcnow", "today"}:
+        if func_name in {"time", "time_ns", "monotonic", "perf_counter"}:
             kinds.add("time")
         if func_name in {"random", "randint", "randrange", "choice", "choices", "shuffle", "uniform"}:
             kinds.add("random")
@@ -256,12 +256,12 @@ def collect_generated_test_issues(
         (method, path)
         for observation in observations
         if observation.has_negative_path
-        for method, path in observation.http_calls
+        for method, path in observation.http_calls[-1:]
         if path
     }
 
     for observation in observations:
-        for method, path in observation.http_calls:
+        for method, path in observation.http_calls[-1:]:
             if observation.has_negative_path:
                 continue
             if path and (method, path) in route_negative_coverage:

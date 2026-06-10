@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Added a Python integrity signal for lossy `decode(errors="replace"|"ignore")` transformations.
 - Added Gemini CLI as a second external-judge adapter with the same blind packet and consensus contracts as Claude.
 - Added a blind external-judge workflow with GitHub PR evidence packets, pinned Claude assessments, packet-hash provenance, and multi-judge consensus reporting.
 - Public PR reviews now write head-SHA metadata so downstream validation cannot combine stale reports with newer PR patches.
@@ -19,6 +20,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added a GitLab CI merge-request review example for advisory risk analysis.
 
 ### Changed
+- Generated-test analysis now focuses on the test's primary write call, avoids treating captured current time as standalone flakiness evidence, and keeps unchanged generated-test debt out of PR merge actions.
 - Public PR benchmark seed corpus now includes 15 additional unlabeled candidates from FastAPI, DRF, Express, and full-stack FastAPI template repositories.
 - Public PR benchmark seed corpus now labels all initial public PR cases with expected product outcomes.
 - Alpha feedback prompts now lead with public PR URL validation and safer output-snippet guidance.

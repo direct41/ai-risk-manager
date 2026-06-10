@@ -302,6 +302,37 @@ def _run_write_contract_integrity_rule(signals: SignalBundle) -> list[Finding]:
         snippet = str(signal.attributes.get("snippet", "")).strip()
         confidence = cast(Confidence, signal.confidence)
 
+        if issue_type == "lossy_decode_error_handling":
+            error_mode = str(signal.attributes.get("error_mode", "")).strip() or "replace"
+            finding_id = f"lossy_decode_error_handling:{owner_name}:{error_mode}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="lossy_decode_error_handling",
+                    title=f"Decode uses lossy '{error_mode}' error handling",
+                    description=(
+                        "Invalid byte sequences can be silently discarded or replaced, changing data "
+                        "instead of preserving it or failing explicitly."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Owner '{owner_name}' calls decode with errors='{error_mode}' "
+                        f"(evidence snippet: {snippet or 'n/a'})."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Confirm that lossy decoding is the intended public contract. Otherwise use a "
+                        "lossless representation such as base64 or retain explicit decode failure."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=[signal.source_ref],
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
         if issue_type == "char_split_normalization":
             field_name = str(signal.attributes.get("field_name", "")).strip() or "unknown"
             finding_id = f"input_normalization_char_split:{owner_name}:{field_name}:{signal.id}"
