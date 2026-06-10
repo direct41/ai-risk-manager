@@ -408,18 +408,40 @@ def _run_gemini_judge(prompt: str, model: str, timeout_seconds: int, max_budget_
     ]
     with tempfile.TemporaryDirectory(prefix="airisk-judge-") as temp_dir:
         temp_path = Path(temp_dir)
-        policy_path = temp_path / "deny-tools.toml"
+        policy_path = temp_path / "block-tools.toml"
         policy_path.write_text(
-            '[[rule]]\ntoolName = "*"\ndecision = "deny"\npriority = 999\ninteractive = false\n',
+            '[[rule]]\ntoolName = "read_file"\ndecision = "ask_user"\npriority = 999\n',
+            encoding="utf-8",
+        )
+        settings_path = temp_path / "system-settings.json"
+        settings_path.write_text(
+            json.dumps(
+                {
+                    "tools": {"core": ["read_file"]},
+                    "admin": {
+                        "secureModeEnabled": True,
+                        "extensions": {"enabled": False},
+                        "mcp": {"enabled": False},
+                        "skills": {"enabled": False},
+                    },
+                    "privacy": {"usageStatisticsEnabled": False},
+                }
+            ),
             encoding="utf-8",
         )
         command.extend(["--admin-policy", str(policy_path)])
+        env = os.environ.copy()
+        env["GEMINI_CLI_SYSTEM_SETTINGS_PATH"] = str(settings_path)
         try:
             proc = subprocess.run(  # nosec B603
                 command,
                 cwd=temp_path,
-                env=os.environ.copy(),
-                input=f"{_SYSTEM_PROMPT}\n\n{prompt}",
+                env=env,
+                input=(
+                    f"{_SYSTEM_PROMPT}\n\n"
+                    f"OUTPUT_JSON_SCHEMA:\n{json.dumps(_ASSESSMENT_SCHEMA, separators=(',', ':'))}\n\n"
+                    f"{prompt}"
+                ),
                 capture_output=True,
                 text=True,
                 timeout=timeout_seconds,

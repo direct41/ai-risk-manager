@@ -86,7 +86,7 @@ riskmap judge-prs eval/public_prs.json \
   --model gemini-2.5-pro
 ```
 
-Gemini runs with a temporary wildcard-deny admin policy, so built-in, MCP, and extension tools are excluded from the model context. Gemini CLI OAuth availability depends on the Google account region. If OAuth is unavailable, configure `GEMINI_API_KEY` through Google AI Studio where supported. A Gemini web subscription alone does not guarantee CLI/API access.
+Gemini runs with temporary system settings that disable MCP, extensions, and skills. Its only declared core tool is administratively set to `ask_user`, which Gemini CLI treats as `deny` in non-interactive mode. Gemini CLI OAuth availability depends on the Google account region. If OAuth is unavailable, configure `GEMINI_API_KEY` through Google AI Studio where supported. A Gemini web subscription alone does not guarantee CLI/API access.
 
 The workflow:
 

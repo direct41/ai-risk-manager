@@ -277,9 +277,18 @@ def test_gemini_judge_normalizes_json_wrapper(monkeypatch) -> None:
     def _fake_run(*args, **kwargs):
         command = args[0]
         policy_path = Path(command[command.index("--admin-policy") + 1])
-        assert 'toolName = "*"' in policy_path.read_text(encoding="utf-8")
-        assert 'decision = "deny"' in policy_path.read_text(encoding="utf-8")
+        assert 'toolName = "read_file"' in policy_path.read_text(encoding="utf-8")
+        assert 'decision = "ask_user"' in policy_path.read_text(encoding="utf-8")
+        settings_path = Path(kwargs["env"]["GEMINI_CLI_SYSTEM_SETTINGS_PATH"])
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        assert settings["tools"]["core"] == ["read_file"]
+        assert settings["admin"]["extensions"]["enabled"] is False
+        assert settings["admin"]["mcp"]["enabled"] is False
+        assert settings["admin"]["skills"]["enabled"] is False
         assert "--skip-trust" in command
+        assert '"outcome"' in kwargs["input"]
+        assert '"confidence"' in kwargs["input"]
+        assert "OUTPUT_JSON_SCHEMA:" in kwargs["input"]
         return subprocess.CompletedProcess(
             args=command,
             returncode=0,
