@@ -206,7 +206,16 @@
       "reason": "FastAPI template frontend sidebar interaction fix without a test delta.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "useful",
+        "decision": "review_required",
+        "required_rules": ["pr_code_change_without_test_delta"],
+        "required_paths": ["frontend/src/components/Sidebar/User.tsx"],
+        "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report appropriately requests automated coverage for the ordering-sensitive mobile logout flow, where dropdown state, sidebar animation completion, and navigation now interact.",
+        "reviewed_at": "2026-06-11"
       }
     },
     {
@@ -216,7 +225,16 @@
       "reason": "FastAPI template app startup diagnostics change without a test delta.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "useful",
+        "decision": "review_required",
+        "required_rules": ["pr_code_change_without_test_delta"],
+        "required_paths": ["backend/app/main.py"],
+        "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report appropriately requests a regression test for the new missing-tag failure contract, including the observable exception type and diagnostic message.",
+        "reviewed_at": "2026-06-11"
       }
     },
     {
@@ -226,7 +244,16 @@
       "reason": "DRF header parsing compatibility update without a matching test delta.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "useful",
+        "decision": "review_required",
+        "required_rules": ["pr_code_change_without_test_delta"],
+        "required_paths": ["rest_framework/compat.py"],
+        "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report matches the maintainer-requested regression coverage for Vary header splitting across Django versions without repeating the reviewer's rejected fallback-API claim.",
+        "reviewed_at": "2026-06-11"
       }
     },
     {
