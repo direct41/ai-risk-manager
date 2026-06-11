@@ -5,7 +5,7 @@ import json
 import os
 
 from ai_risk_manager.agents.llm_runtime import LLMRuntimeError, call_llm_json
-from ai_risk_manager.schemas.types import FindingsReport, Graph, TestPlan, TestRecommendation, to_dict
+from ai_risk_manager.schemas.types import Finding, FindingsReport, Graph, TestPlan, TestRecommendation, TestType, to_dict
 
 
 def _qa_llm_timeout_seconds() -> float:
@@ -29,6 +29,7 @@ def _qa_llm_max_retries() -> int:
 def _deterministic_test_plan(findings: FindingsReport, *, generated_without_llm: bool) -> TestPlan:
     items: list[TestRecommendation] = []
     for finding in findings.findings:
+        test_type, assertions = _deterministic_test_guidance(finding)
         items.append(
             TestRecommendation(
                 id=f"test-plan:{finding.id}",
@@ -37,17 +38,48 @@ def _deterministic_test_plan(findings: FindingsReport, *, generated_without_llm:
                 finding_id=finding.id,
                 source_ref=finding.source_ref,
                 recommendation=finding.recommendation,
-                test_type="api",
+                test_type=test_type,
                 test_target=finding.source_ref,
-                assertions=[
-                    "Validate success response path.",
-                    "Validate failure/validation response path.",
-                ],
+                assertions=assertions,
                 confidence="medium",
                 generated_without_llm=generated_without_llm,
             )
         )
     return TestPlan(items=items, generated_without_llm=generated_without_llm)
+
+
+def _deterministic_test_guidance(finding: Finding) -> tuple[TestType, list[str]]:
+    if finding.rule_id == "pr_dependency_change_without_test_delta":
+        return (
+            "integration",
+            [
+                "Confirm the resolver selects the intended dependency version.",
+                "Run the package vulnerability audit and the integration tests affected by the dependency.",
+            ],
+        )
+    if finding.rule_id == "pr_code_change_without_test_delta":
+        return (
+            "unit",
+            [
+                "Exercise the changed behavior with a focused regression test.",
+                "Cover the relevant edge or failure path for the changed code.",
+            ],
+        )
+    if finding.rule_id == "pr_query_array_limit_without_indexed_compat_test":
+        return (
+            "integration",
+            [
+                "Assert indexed bracket keys below, at, and above the old and new array limits.",
+                "Verify the resulting object or array shape and direct numeric-key access behavior.",
+            ],
+        )
+    return (
+        "api",
+        [
+            "Validate success response path.",
+            "Validate failure/validation response path.",
+        ],
+    )
 
 
 def _low_confidence_plan(plan: TestPlan) -> TestPlan:

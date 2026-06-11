@@ -1128,6 +1128,38 @@ def _run_pr_change_risk_rule(signals: SignalBundle) -> list[Finding]:
             )
             continue
 
+        if issue_type == "query_array_limit_without_indexed_compat_test":
+            query_array_limit = str(signal.attributes.get("array_limit", "")).strip() or "changed"
+            query_changed_test_count = str(signal.attributes.get("changed_test_count", "0")).strip() or "0"
+            finding_id = f"pr_query_array_limit_without_indexed_compat_test:{signal.source_ref}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="pr_query_array_limit_without_indexed_compat_test",
+                    title="Query parser array limit changes without indexed-key compatibility coverage",
+                    description=(
+                        "Changing a query parser's array limit can alter indexed bracket parameters from object-like "
+                        "data to arrays, or change sparse-index behavior, even when repeated-key parsing is covered."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Detected arrayLimit={query_array_limit} in {signal.source_ref}; changed test files: "
+                        f"{query_changed_test_count}, added indexed-bracket compatibility assertions: 0."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Add compatibility tests for indexed bracket keys below, at, and above the old and new limits, "
+                        "and assert both the resulting value shape and indexed-key access behavior."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=list(signal.evidence_refs),
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
         if issue_type == "dynamic_gettext_message":
             dynamic_message_count = str(signal.attributes.get("dynamic_message_count", "")).strip() or "1"
             line_numbers = str(signal.attributes.get("line_numbers", "")).strip()
@@ -1181,7 +1213,8 @@ def _run_pr_change_risk_rule(signals: SignalBundle) -> list[Finding]:
                     source_ref=signal.source_ref,
                     suppression_key=finding_id,
                     recommendation=(
-                        "Run or add focused regression coverage for the dependency change and capture the expected behavior in tests."
+                        "Resolve the dependency set, run the package vulnerability audit, and execute focused compatibility "
+                        "tests for the affected integration."
                     ),
                     origin="deterministic",
                     evidence_refs=list(signal.evidence_refs),

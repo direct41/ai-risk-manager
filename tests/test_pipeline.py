@@ -1353,8 +1353,10 @@ def test_pr_baseline_status_and_only_new_summary(tmp_path: Path, write_file) -> 
     assert result.summary.resolved_count == 1
     assert result.summary.unchanged_count == 1
     pr_summary = (ctx.output_dir / "pr_summary.md").read_text(encoding="utf-8")
-    assert "[high] [unchanged] `critical_path_no_tests`" in pr_summary
-    assert "- [high] `critical_path_no_tests` at `app/api.py:1`" in pr_summary
+    assert "[high] [unchanged] `critical_path_no_tests`" not in pr_summary
+    assert "- [high] `critical_path_no_tests` at `app/api.py:1`" not in pr_summary
+    assert result.merge_triage.decision == "ready"
+    assert result.merge_triage.actions == []
 
 
 def test_pr_baseline_matches_legacy_sha1_fingerprint_after_hash_migration(tmp_path: Path, write_file) -> None:

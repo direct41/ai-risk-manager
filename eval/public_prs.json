@@ -429,6 +429,184 @@
         "rationale": "The report appropriately requests regression coverage for a security-sensitive path containment change with relative, sibling-prefix, absolute, and platform-separator edge cases.",
         "reviewed_at": "2026-06-11"
       }
+    },
+    {
+      "id": "fastapi-15038",
+      "url": "https://github.com/fastapi/fastapi/pull/15038",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI request dependency lifecycle fix changes TaskGroup and async exit-stack behavior without a regression test delta.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "review_required",
+        "required_rules": ["pr_code_change_without_test_delta"],
+        "required_paths": ["fastapi/routing.py"],
+        "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report requests focused regression coverage for a request-lifecycle change involving TaskGroup cancellation and async exit-stack cleanup.",
+        "reviewed_at": "2026-06-11"
+      }
+    },
+    {
+      "id": "fastapi-14786",
+      "url": "https://github.com/fastapi/fastapi/pull/14786",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI Authorization credential whitespace fix with focused HTTP and OAuth2 regression tests plus maintainer standards review.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the standards-backed credential parsing fix ready after focused regression coverage for multiple and trailing spaces.",
+        "reviewed_at": "2026-06-11"
+      }
+    },
+    {
+      "id": "fastapi-13786",
+      "url": "https://github.com/fastapi/fastapi/pull/13786",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI authentication status-code contract change with broad security tests, compatibility docs, and maintainer review.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the 401 and WWW-Authenticate contract update ready after broad scheme coverage and explicit backward-compatibility documentation.",
+        "reviewed_at": "2026-06-11"
+      }
+    },
+    {
+      "id": "drf-9902",
+      "url": "https://github.com/encode/django-rest-framework/pull/9902",
+      "stack": "django_drf",
+      "reason": "DRF partial ListField form parsing fix whose review requested backward-compatibility coverage before the final tested implementation.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the final implementation ready after indexed, non-indexed, partial, ordering, and compatibility cases were added.",
+        "reviewed_at": "2026-06-11"
+      }
+    },
+    {
+      "id": "drf-9928",
+      "url": "https://github.com/encode/django-rest-framework/pull/9928",
+      "stack": "django_drf",
+      "reason": "DRF HTMLFormRenderer empty datetime crash fix with a focused regression test and maintainer approval.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the guarded empty-datetime renderer fix ready with its focused crash regression test.",
+        "reviewed_at": "2026-06-11"
+      }
+    },
+    {
+      "id": "drf-9929",
+      "url": "https://github.com/encode/django-rest-framework/pull/9929",
+      "stack": "django_drf",
+      "reason": "DRF non-editable choices mapping fix with a focused serializer regression test and maintainer approvals.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the field-mapping fix ready after coverage proves non-editable choices still produce a ChoiceField.",
+        "reviewed_at": "2026-06-11"
+      }
+    },
+    {
+      "id": "express-7181",
+      "url": "https://github.com/expressjs/express/pull/7181",
+      "stack": "express_node",
+      "reason": "Express repeated-key query parsing regression fix with a known indexed-bracket compatibility side effect discussed in review.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "review_required",
+        "required_rules": ["pr_query_array_limit_without_indexed_compat_test"],
+        "required_paths": ["lib/utils.js"],
+        "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report now catches the untested indexed-key shape change introduced by arrayLimit and requests compatibility coverage around both thresholds.",
+        "reviewed_at": "2026-06-11"
+      }
+    },
+    {
+      "id": "express-7057",
+      "url": "https://github.com/expressjs/express/pull/7057",
+      "stack": "express_node",
+      "reason": "Express raises the minimum qs version for a public denial-of-service advisory without a test or lockfile delta.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "review_required",
+        "required_rules": ["pr_dependency_change_without_test_delta"],
+        "required_paths": ["package.json"],
+        "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report keeps review focused on dependency resolution, vulnerability audit, and compatibility checks without surfacing unrelated unchanged dependency-policy findings.",
+        "reviewed_at": "2026-06-11"
+      }
+    },
+    {
+      "id": "full-stack-fastapi-template-1396",
+      "url": "https://github.com/fastapi/full-stack-fastapi-template/pull/1396",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI template user lookup fix with explicit 404 and permission-preserving 403 regression tests requested by the maintainer.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the route fix ready after separate superuser 404 and regular-user 403 cases preserve the authorization boundary.",
+        "reviewed_at": "2026-06-11"
+      }
+    },
+    {
+      "id": "full-stack-fastapi-template-1940",
+      "url": "https://github.com/fastapi/full-stack-fastapi-template/pull/1940",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI template settings type fix changes startup validation behavior without a regression test delta.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "review_required",
+        "required_rules": ["pr_code_change_without_test_delta"],
+        "required_paths": ["backend/app/core/config.py"],
+        "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report requests a focused settings regression test proving the default project name is accepted while sender-address validation remains intact.",
+        "reviewed_at": "2026-06-11"
+      }
     }
   ]
 }

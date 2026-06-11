@@ -279,6 +279,80 @@ def test_pr_diff_signals_accept_new_4xx_branch_with_negative_test(tmp_path: Path
     )
 
 
+def test_pr_diff_signals_flag_query_array_limit_without_indexed_compat_test(tmp_path: Path) -> None:
+    diff = (
+        "diff --git a/lib/utils.js b/lib/utils.js\n"
+        "--- a/lib/utils.js\n"
+        "+++ b/lib/utils.js\n"
+        "@@ -10,2 +10,3 @@\n"
+        "   return qs.parse(str, {\n"
+        "-    allowPrototypes: true\n"
+        "+    allowPrototypes: true,\n"
+        "+    arrayLimit: 1000\n"
+        "diff --git a/test/req.query.js b/test/req.query.js\n"
+        "--- a/test/req.query.js\n"
+        "+++ b/test/req.query.js\n"
+        "@@ -20,0 +21,2 @@\n"
+        "+  var ids = ['ids=1', 'ids=2'];\n"
+        "+  request(app).get('/?' + ids.join('&')).expect(200, done);\n"
+    )
+
+    signals = build_pr_diff_signal_bundle(tmp_path, diff, {"lib/utils.js", "test/req.query.js"})
+    findings = run_rules(signals)
+
+    finding = next(
+        row for row in findings.findings if row.rule_id == "pr_query_array_limit_without_indexed_compat_test"
+    )
+    assert finding.severity == "medium"
+    assert "below, at, and above" in finding.recommendation
+    assert "arrayLimit=1000" in finding.evidence
+    assert "test/req.query.js" in finding.evidence_refs
+
+
+def test_pr_diff_signals_accept_query_array_limit_with_indexed_compat_test(tmp_path: Path) -> None:
+    diff = (
+        "diff --git a/lib/utils.js b/lib/utils.js\n"
+        "--- a/lib/utils.js\n"
+        "+++ b/lib/utils.js\n"
+        "@@ -10,2 +10,3 @@\n"
+        "   return qs.parse(str, {\n"
+        "-    allowPrototypes: true\n"
+        "+    allowPrototypes: true,\n"
+        "+    arrayLimit: 1000\n"
+        "diff --git a/test/req.query.js b/test/req.query.js\n"
+        "--- a/test/req.query.js\n"
+        "+++ b/test/req.query.js\n"
+        "@@ -20,0 +21,2 @@\n"
+        "+  request(app).get('/?items[1000]=value').expect(200, done);\n"
+        "+  request(app).get('/?items[1001]=value').expect(200, done);\n"
+    )
+
+    signals = build_pr_diff_signal_bundle(tmp_path, diff, {"lib/utils.js", "test/req.query.js"})
+
+    assert not any(
+        signal.attributes.get("issue_type") == "query_array_limit_without_indexed_compat_test"
+        for signal in signals.signals
+    )
+
+
+def test_pr_diff_signals_ignore_query_array_limit_inside_test_file(tmp_path: Path) -> None:
+    diff = (
+        "diff --git a/test/req.query.js b/test/req.query.js\n"
+        "--- a/test/req.query.js\n"
+        "+++ b/test/req.query.js\n"
+        "@@ -20,0 +21,2 @@\n"
+        "+  var parsed = qs.parse(value, { arrayLimit: 1000 });\n"
+        "+  assert.deepEqual(parsed, expected);\n"
+    )
+
+    signals = build_pr_diff_signal_bundle(tmp_path, diff, {"test/req.query.js"})
+
+    assert not any(
+        signal.attributes.get("issue_type") == "query_array_limit_without_indexed_compat_test"
+        for signal in signals.signals
+    )
+
+
 def test_pr_diff_signals_flag_dynamic_gettext_messages(tmp_path: Path) -> None:
     source = tmp_path / "app" / "messages.py"
     source.parent.mkdir()

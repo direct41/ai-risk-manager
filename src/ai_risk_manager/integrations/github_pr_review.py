@@ -22,6 +22,7 @@ class GitHubPRReference:
 @dataclass(frozen=True)
 class GitHubPRMetadata:
     base_ref: str
+    base_sha: str
     head_sha: str
 
 
@@ -47,6 +48,7 @@ class GitHubPREvidence:
 
 
 _SAFE_REF_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
+_COMMIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 def parse_github_pr_url(raw_url: str) -> GitHubPRReference:
@@ -82,6 +84,13 @@ def _safe_ref(ref: str) -> str:
     return normalized
 
 
+def _safe_commit_sha(sha: str) -> str:
+    normalized = sha.strip()
+    if not _COMMIT_SHA_RE.fullmatch(normalized):
+        raise GitHubPRReviewError(f"Invalid commit SHA returned by GitHub API: {sha!r}")
+    return normalized.lower()
+
+
 def fetch_github_pr_metadata(
     ref: GitHubPRReference,
     *,
@@ -111,11 +120,16 @@ def fetch_github_pr_metadata(
         raise GitHubPRReviewError("GitHub PR metadata response is missing base/head fields.")
 
     base_ref = base.get("ref")
+    base_sha = base.get("sha")
     head_sha = head.get("sha")
-    if not isinstance(base_ref, str) or not isinstance(head_sha, str):
-        raise GitHubPRReviewError("GitHub PR metadata response is missing base ref or head SHA.")
+    if not isinstance(base_ref, str) or not isinstance(base_sha, str) or not isinstance(head_sha, str):
+        raise GitHubPRReviewError("GitHub PR metadata response is missing base ref, base SHA, or head SHA.")
 
-    return GitHubPRMetadata(base_ref=_safe_ref(base_ref), head_sha=head_sha)
+    return GitHubPRMetadata(
+        base_ref=_safe_ref(base_ref),
+        base_sha=_safe_commit_sha(base_sha),
+        head_sha=_safe_commit_sha(head_sha),
+    )
 
 
 def fetch_github_pr_evidence(
@@ -243,20 +257,27 @@ def prepare_github_pr_checkout(
     ref: GitHubPRReference,
     *,
     base_ref: str,
+    base_sha: str | None = None,
     workspace: Path,
 ) -> Path:
     safe_base = _safe_ref(base_ref)
+    safe_base_sha = _safe_commit_sha(base_sha) if base_sha is not None else None
     checkout_path = workspace / f"{ref.repo_full_name.replace('/', '-')}-pull-{ref.pr_number}"
     pr_branch = f"airisk-pr-{ref.pr_number}"
 
     _run_git(["clone", "--no-tags", "--depth=100", "--no-checkout", ref.clone_url, str(checkout_path)], timeout=180)
+    fetch_refs = [
+        f"refs/heads/{safe_base}:refs/remotes/origin/{safe_base}",
+        f"refs/pull/{ref.pr_number}/head:refs/heads/{pr_branch}",
+    ]
+    if safe_base_sha is not None:
+        fetch_refs.append(safe_base_sha)
     _run_git(
         [
             "fetch",
             "--depth=100",
             "origin",
-            f"refs/heads/{safe_base}:refs/remotes/origin/{safe_base}",
-            f"refs/pull/{ref.pr_number}/head:refs/heads/{pr_branch}",
+            *fetch_refs,
         ],
         cwd=checkout_path,
         timeout=180,

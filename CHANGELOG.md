@@ -6,6 +6,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- Added 10 evidence-backed public PR cases from FastAPI, Django REST framework, Express, and the full-stack FastAPI template, including reviewer-impact notes and a confirmed compatibility false negative.
+- Added a PR diff signal for query parser `arrayLimit` changes without indexed-bracket compatibility coverage.
+
+### Changed
+- Deterministic test plans now use dependency and regression-specific assertions for generic PR delta findings instead of API response boilerplate.
+- Public PR validation now uses the historical base commit reported by GitHub for reproducible merged-PR baselines and diffs.
+
+### Fixed
+- Old merged PRs in high-velocity repositories no longer fall back to noisy full-repository analysis when their merge base is outside the shallow branch history.
+- Unchanged baseline findings no longer affect default `review-pr` decisions, risk scores, or test-first actions.
+
 ## [0.2.0] - 2026-06-11
 
 ### Added

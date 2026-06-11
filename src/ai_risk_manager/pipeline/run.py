@@ -731,6 +731,7 @@ def _stage_analysis(
         summary=summary,
         analysis_scope=scope.analysis_scope,
         changed_files=scope.changed_files,
+        only_new=ctx.only_new,
     )
     sinks.progress.finish(6, total_steps, "QA strategy agent", t)
 

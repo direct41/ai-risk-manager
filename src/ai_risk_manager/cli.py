@@ -389,6 +389,8 @@ def _run_review_pr(args: argparse.Namespace) -> int:
         return 2
 
     base_ref = args.base or metadata.base_ref
+    historical_base_sha = None if args.base else metadata.base_sha
+    diff_base = historical_base_sha or base_ref
     owner, repo = ref.repo_full_name.split("/", 1)
     output_dir = (
         Path(args.output_dir).resolve()
@@ -398,12 +400,17 @@ def _run_review_pr(args: argparse.Namespace) -> int:
 
     try:
         with tempfile.TemporaryDirectory(prefix="riskmap-pr-") as tmp:
-            repo_path = prepare_github_pr_checkout(ref, base_ref=base_ref, workspace=Path(tmp))
+            repo_path = prepare_github_pr_checkout(
+                ref,
+                base_ref=base_ref,
+                base_sha=historical_base_sha,
+                workspace=Path(tmp),
+            )
             baseline_graph = None
             baseline_notes: list[str] = []
             if not args.skip_baseline:
                 baseline_output_dir = output_dir / "baseline"
-                checkout_git_ref(repo_path, f"origin/{base_ref}")
+                checkout_git_ref(repo_path, historical_base_sha or f"origin/{base_ref}")
                 baseline_ctx = build_run_context(
                     repo_path=repo_path,
                     mode="full",
@@ -432,7 +439,7 @@ def _run_review_pr(args: argparse.Namespace) -> int:
             ctx = build_run_context(
                 repo_path=repo_path,
                 mode="pr",
-                base=base_ref,
+                base=diff_base,
                 output_dir=output_dir,
                 provider=args.provider,
                 no_llm=not args.enable_llm,
@@ -473,6 +480,7 @@ def _run_review_pr(args: argparse.Namespace) -> int:
                 "repo_full_name": ref.repo_full_name,
                 "pr_number": ref.pr_number,
                 "base_ref": base_ref,
+                "base_sha": historical_base_sha,
                 "head_sha": metadata.head_sha,
             },
             indent=2,

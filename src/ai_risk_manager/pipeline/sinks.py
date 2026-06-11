@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import os
 from pathlib import Path
+import re
 from shutil import which
 import subprocess  # nosec B404
 import time
@@ -79,6 +80,16 @@ def _safe_diff_base(base: str) -> str | None:
     return normalized
 
 
+def _is_commit_sha(value: str) -> bool:
+    return bool(re.fullmatch(r"[0-9a-fA-F]{40}", value))
+
+
+def _candidate_diff_refs(base: str) -> list[str]:
+    if _is_commit_sha(base):
+        return [f"{base}...HEAD", f"{base}..HEAD"]
+    return [f"{base}...HEAD", f"origin/{base}...HEAD"]
+
+
 class ConsoleProgressSink:
     def start(self, step: int, total: int, label: str) -> float:
         print(f"[{step}/{total}] {label} ...", flush=True)
@@ -104,7 +115,7 @@ class GitChangedFilesSink:
         if safe_base is None or git is None:
             return None
 
-        candidate_refs = [f"{safe_base}...HEAD", f"origin/{safe_base}...HEAD"]
+        candidate_refs = _candidate_diff_refs(safe_base)
         for ref in candidate_refs:
             try:
                 # Git path is resolved and shell=False; ref is sanitized.
@@ -133,7 +144,7 @@ class GitDiffSink:
         if safe_base is None or git is None:
             return None
 
-        candidate_refs = [f"{safe_base}...HEAD", f"origin/{safe_base}...HEAD"]
+        candidate_refs = _candidate_diff_refs(safe_base)
         for ref in candidate_refs:
             try:
                 proc = subprocess.run(  # nosec B603

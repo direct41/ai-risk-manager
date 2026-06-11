@@ -119,6 +119,12 @@ _ADDED_NEGATIVE_TEST_RE = re.compile(
     r"pytest\.raises|assertRaises|assert[\s\S]{0,80}(?:error|detail|forbidden|unauthorized|conflict)",
     re.IGNORECASE,
 )
+_QUERY_ARRAY_LIMIT_RE = re.compile(r"\barrayLimit\s*:\s*(?P<limit>Infinity|\d+)\b")
+_INDEXED_QUERY_TEST_RE = re.compile(
+    r"(?:\[\s*\d+\s*\]|%5B\s*\d+\s*%5D|"
+    r"(?:query|search|url|path|param)[\s\S]{0,120}(?:\[\s*['\"]?\s*\+|%5B\s*['\"]?\s*\+))",
+    re.IGNORECASE,
+)
 _DOC_SCAN_EXCLUDED_DIRS = {
     ".git",
     ".riskmap",
@@ -544,6 +550,36 @@ def build_pr_diff_signal_bundle(
                         "changed_test_count": str(
                             sum(1 for path in changed if _is_test_file(path))
                         ),
+                    },
+                )
+            )
+
+    has_indexed_query_test = bool(_INDEXED_QUERY_TEST_RE.search(added_test_text))
+    if not has_indexed_query_test:
+        for source_path, added_text in added_by_file.items():
+            if (
+                source_path not in changed
+                or not _is_source_file(source_path)
+                or Path(source_path).suffix.lower() not in _JS_SOURCE_SUFFIXES
+            ):
+                continue
+            limits = [match.group("limit") for match in _QUERY_ARRAY_LIMIT_RE.finditer(added_text)]
+            if not limits:
+                continue
+            signals.append(
+                CapabilitySignal(
+                    id=f"sig:pr-risk:query-array-limit-without-indexed-test:{source_path}",
+                    kind="pr_change_risk",
+                    source_ref=source_path,
+                    confidence="high",
+                    evidence_refs=[
+                        source_path,
+                        *sorted(path for path in changed if _is_test_file(path))[:4],
+                    ],
+                    attributes={
+                        "issue_type": "query_array_limit_without_indexed_compat_test",
+                        "array_limit": limits[-1],
+                        "changed_test_count": str(sum(1 for path in changed if _is_test_file(path))),
                     },
                 )
             )

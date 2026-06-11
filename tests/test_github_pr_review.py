@@ -47,7 +47,12 @@ def test_prepare_github_pr_checkout_uses_explicit_pull_and_base_refs(
         clone_url="https://github.com/example/project.git",
     )
 
-    checkout = prepare_github_pr_checkout(ref, base_ref="release/v1", workspace=tmp_path)
+    checkout = prepare_github_pr_checkout(
+        ref,
+        base_ref="release/v1",
+        base_sha="a" * 40,
+        workspace=tmp_path,
+    )
 
     assert checkout == tmp_path / "example-project-pull-123"
     assert calls[0][0] == [
@@ -60,6 +65,7 @@ def test_prepare_github_pr_checkout_uses_explicit_pull_and_base_refs(
     ]
     assert "refs/heads/release/v1:refs/remotes/origin/release/v1" in calls[1][0]
     assert "refs/pull/123/head:refs/heads/airisk-pr-123" in calls[1][0]
+    assert "a" * 40 in calls[1][0]
     assert calls[2][0] == ["checkout", "--detach", "airisk-pr-123"]
 
 
@@ -135,11 +141,18 @@ def test_cli_review_pr_builds_context_from_github_pr_url(
         captured["metadata_ref"] = ref
         captured["token"] = token
         captured["api_base"] = api_base
-        return GitHubPRMetadata(base_ref="develop", head_sha="abcdef1234567890")
+        return GitHubPRMetadata(base_ref="develop", base_sha="a" * 40, head_sha="b" * 40)
 
-    def _fake_prepare(ref: GitHubPRReference, *, base_ref: str, workspace: Path) -> Path:
+    def _fake_prepare(
+        ref: GitHubPRReference,
+        *,
+        base_ref: str,
+        base_sha: str | None = None,
+        workspace: Path,
+    ) -> Path:
         captured["checkout_ref"] = ref
         captured["base_ref"] = base_ref
+        captured["base_sha"] = base_sha
         captured["workspace_exists"] = workspace.exists()
         return checkout
 
@@ -168,13 +181,14 @@ def test_cli_review_pr_builds_context_from_github_pr_url(
     assert baseline_ctx.output_dir == tmp_path / ".riskmap" / "review-pr-example-project-123" / "baseline"
     assert ctx.repo_path == checkout
     assert ctx.mode == "pr"
-    assert ctx.base == "develop"
+    assert ctx.base == "a" * 40
     assert ctx.baseline_graph == tmp_path / ".riskmap" / "review-pr-example-project-123" / "baseline" / "graph.json"
     assert ctx.no_llm is True
     assert ctx.output_dir == tmp_path / ".riskmap" / "review-pr-example-project-123"
     assert captured["token"] == "secret"
+    assert captured["base_sha"] == "a" * 40
     assert captured["workspace_exists"] is True
-    assert checkout_refs == ["origin/develop", "airisk-pr-123"]
+    assert checkout_refs == ["a" * 40, "airisk-pr-123"]
     output = capsys.readouterr().out
     assert "PR review completed." in output
     assert "merge_triage.md" in output
@@ -183,4 +197,5 @@ def test_cli_review_pr_builds_context_from_github_pr_url(
             encoding="utf-8"
         )
     )
-    assert metadata["head_sha"] == "abcdef1234567890"
+    assert metadata["base_sha"] == "a" * 40
+    assert metadata["head_sha"] == "b" * 40

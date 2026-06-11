@@ -60,6 +60,84 @@ def test_qa_agent_degrades_to_deterministic_on_llm_failure() -> None:
     assert all(item.confidence == "low" for item in plan.items)
 
 
+def test_qa_agent_uses_dependency_guidance_for_dependency_pr_delta() -> None:
+    finding = Finding(
+        id="dependency-delta",
+        rule_id="pr_dependency_change_without_test_delta",
+        title="Dependency changed",
+        description="desc",
+        severity="medium",
+        confidence="medium",
+        evidence="e",
+        source_ref="package.json",
+        suppression_key="dependency-delta",
+        recommendation="review dependency",
+    )
+
+    plan = generate_test_plan(
+        FindingsReport(findings=[finding], generated_without_llm=True),
+        _sample_graph(),
+        provider="none",
+        generated_without_llm=True,
+    )
+
+    assert plan.items[0].test_type == "integration"
+    assert "resolver" in plan.items[0].assertions[0]
+    assert "vulnerability audit" in plan.items[0].assertions[1]
+
+
+def test_qa_agent_uses_regression_guidance_for_generic_code_pr_delta() -> None:
+    finding = Finding(
+        id="code-delta",
+        rule_id="pr_code_change_without_test_delta",
+        title="Code changed",
+        description="desc",
+        severity="medium",
+        confidence="medium",
+        evidence="e",
+        source_ref="app/service.py",
+        suppression_key="code-delta",
+        recommendation="add regression test",
+    )
+
+    plan = generate_test_plan(
+        FindingsReport(findings=[finding], generated_without_llm=True),
+        _sample_graph(),
+        provider="none",
+        generated_without_llm=True,
+    )
+
+    assert plan.items[0].test_type == "unit"
+    assert "changed behavior" in plan.items[0].assertions[0]
+    assert "edge or failure path" in plan.items[0].assertions[1]
+
+
+def test_qa_agent_uses_indexed_query_guidance_for_array_limit_change() -> None:
+    finding = Finding(
+        id="query-limit",
+        rule_id="pr_query_array_limit_without_indexed_compat_test",
+        title="Query limit changed",
+        description="desc",
+        severity="medium",
+        confidence="high",
+        evidence="e",
+        source_ref="lib/utils.js",
+        suppression_key="query-limit",
+        recommendation="add compatibility tests",
+    )
+
+    plan = generate_test_plan(
+        FindingsReport(findings=[finding], generated_without_llm=True),
+        _sample_graph(),
+        provider="none",
+        generated_without_llm=True,
+    )
+
+    assert plan.items[0].test_type == "integration"
+    assert "old and new array limits" in plan.items[0].assertions[0]
+    assert "numeric-key access" in plan.items[0].assertions[1]
+
+
 def test_qa_agent_uses_valid_ai_payload() -> None:
     findings = _sample_findings_raw()
     graph = _sample_graph()

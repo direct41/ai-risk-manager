@@ -13,6 +13,9 @@ missing-test reminder only for exact `trimRight` to `trimEnd` or `trimLeft` to `
 The suppression requires `package.json` to prove Node 10+ compatibility. Any additional source edit or missing
 runtime evidence keeps the normal test-delta review signal.
 
+JavaScript query-parser changes that add or change `arrayLimit` now require indexed-bracket compatibility coverage.
+Repeated-key tests alone do not prove whether numeric keys keep their object/array shape around the old and new limits.
+
 ## Status Legend
 
 - `implemented`: extracted and used in deterministic rules.

@@ -14,6 +14,59 @@ Target command:
 riskmap review-pr https://github.com/OWNER/REPO/pull/123
 ```
 
+## Validation Sprint 2 - 2026-06-11
+
+All runs used deterministic, no-LLM `riskmap review-pr` analysis in isolated temporary checkouts. Evidence came only from public diffs, tests, issue links, and review threads.
+
+| Case | Decision | Top finding | False positive | Missed risk | Reviewer/test impact |
+|---|---|---|---|---|---|
+| [FastAPI #15038](https://github.com/fastapi/fastapi/pull/15038) | `review_required` | `pr_code_change_without_test_delta` | none | none | Add a focused TaskGroup cancellation and async exit-stack cleanup regression test. |
+| [FastAPI #14786](https://github.com/fastapi/fastapi/pull/14786) | `ready` | none | none | none | No change; focused Authorization whitespace tests cover the changed contract. |
+| [FastAPI #13786](https://github.com/fastapi/fastapi/pull/13786) | `ready` | none | none | none | No change; broad scheme tests and compatibility docs cover the 401 contract migration. |
+| [DRF #9902](https://github.com/encode/django-rest-framework/pull/9902) | `ready` | none | none | none | No change; final tests cover indexed, non-indexed, partial, and ordering behavior. |
+| [DRF #9928](https://github.com/encode/django-rest-framework/pull/9928) | `ready` | none | none | none | No change; the empty-datetime crash has a focused renderer regression test. |
+| [DRF #9929](https://github.com/encode/django-rest-framework/pull/9929) | `ready` | none | none | none | No change; the non-editable choices mapping is covered directly. |
+| [Express #7181](https://github.com/expressjs/express/pull/7181) | `review_required` | `pr_query_array_limit_without_indexed_compat_test` | none | none after compatibility-rule fix | Test indexed keys below, at, and above the old and new limits and assert object/array shape. |
+| [Express #7057](https://github.com/expressjs/express/pull/7057) | `review_required` | `pr_dependency_change_without_test_delta` | none after unchanged-finding fix | none | Verify resolved `qs` version, run the package audit, then execute query-parser compatibility tests. |
+| [Full-stack FastAPI #1396](https://github.com/fastapi/full-stack-fastapi-template/pull/1396) | `ready` | none | none | none | No change; separate superuser 404 and regular-user 403 tests preserve the auth boundary. |
+| [Full-stack FastAPI #1940](https://github.com/fastapi/full-stack-fastapi-template/pull/1940) | `review_required` | `pr_code_change_without_test_delta` | none | none | Add a settings startup test for a display-name sender plus valid sender-address validation. |
+
+Initial sprint result:
+
+- 10 isolated public runs completed.
+- 9 useful outcomes and 1 mixed outcome.
+- 0 remaining false positives in top findings.
+- 1 confirmed false negative: Express indexed-query compatibility.
+
+Post-improvement result:
+
+- 10 useful outcomes and 0 mixed or not-useful outcomes.
+- 0 open false positives and 0 open false negatives in this sprint.
+- Express #7181 now returns `review_required`, risk score `46`, and one focused compatibility action.
+- Repeated checkout noise was fixed by using each PR's historical public base SHA.
+- Unchanged baseline findings no longer affect default PR decision, score, or actions.
+- Next workflow decision: keep deterministic `review-pr` as the default advisory path and prioritize diff-level compatibility heuristics over stack expansion.
+
+## Required Improvements
+
+| Priority | Improvement | Evidence | Acceptance criterion | Status |
+|---|---|---|---|---|
+| P0 | Reproduce merged PRs from their historical base commit. | Older FastAPI PRs lost changed-file scope outside shallow default-branch history. | Historical merged PR resolves its exact changed files without unrelated repository findings. | completed |
+| P0 | Keep unchanged baseline findings out of default PR decisions. | Express #7057 initially inherited unrelated dependency-policy actions. | `only_new` excludes unchanged findings from decision, score, and test-first actions while retaining them in audit artifacts. | completed |
+| P0 | Detect query-parser array-limit compatibility gaps. | Express #7181 changed indexed-key object/array behavior while only testing repeated keys. | An `arrayLimit` diff without indexed-bracket tests produces one focused `review_required` finding. | completed |
+| P1 | Make deterministic test guidance match the changed artifact. | Dependency and internal-code findings previously received generic API response assertions. | Dependency changes request resolver/audit/integration checks; source deltas request focused regression coverage. | completed |
+| P1 | Keep the public corpus executable as a regression contract. | Validation conclusions must survive future rule and scoring changes. | All 33 cases are labeled, strict corpus validation passes, and sprint-2 benchmark expectations are machine checked. | completed |
+
+## Deferred By Evidence
+
+- Do not ingest maintainer review comments into normal product analysis yet. Public comments were used to label the corpus, but runtime dependence on review text would weaken deterministic isolation and reproducibility.
+- Do not add broad query-parser option scanning yet. Extend beyond `arrayLimit` only after another confirmed case demonstrates a repeated option family such as `allowSparse`, `parseArrays`, or `comma`.
+- Do not expand stack support from this sprint. All confirmed cases were in already supported stacks; the remaining defect was diff semantics, not stack extraction.
+
+## Next Validation Gate
+
+Run the next validation batch against public parser, serialization, and compatibility PRs. Promote another diff heuristic only when at least one confirmed miss is reproducible and the rule has a clean control case.
+
 ## Result Row Template
 
 | Field | Value |

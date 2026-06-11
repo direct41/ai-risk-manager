@@ -148,13 +148,15 @@ def _triage_candidates(
     *,
     analysis_scope: AnalysisScope,
     changed_files: set[str] | None,
+    only_new: bool,
 ) -> list[Finding]:
     candidates = [
         finding
         for finding in findings
-        if not (
-            finding.status == "unchanged"
-            and finding.rule_id.startswith("agent_generated_test_")
+        if finding.status != "unchanged"
+        or (
+            not only_new
+            and not finding.rule_id.startswith("agent_generated_test_")
         )
     ]
     if analysis_scope != "full_fallback" or changed_files is None:
@@ -253,8 +255,14 @@ def build_merge_triage(
     summary: RunSummary,
     analysis_scope: AnalysisScope,
     changed_files: set[str] | None = None,
+    only_new: bool = False,
 ) -> MergeTriage:
-    candidates = _triage_candidates(findings.findings, analysis_scope=analysis_scope, changed_files=changed_files)
+    candidates = _triage_candidates(
+        findings.findings,
+        analysis_scope=analysis_scope,
+        changed_files=changed_files,
+        only_new=only_new,
+    )
     hidden_fallback_finding_count = len(findings.findings) - len(candidates)
     ranked = _rank_findings(candidates)
     actions = _budgeted_actions(ranked, test_plan)
