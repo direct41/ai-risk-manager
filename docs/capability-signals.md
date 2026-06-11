@@ -8,6 +8,11 @@ This document now describes the current `code_risk` profile signal surface and s
 The goal is still to avoid `framework x scenario` explosion, but these signals no longer define the whole product.
 Profiles such as `ui_flow_risk` and `business_invariant_risk` now attach their own narrow signal surfaces through the shared pipeline.
 
+Universal PR diff heuristics also detect newly added dynamic Python gettext messages and suppress the generic
+missing-test reminder only for exact `trimRight` to `trimEnd` or `trimLeft` to `trimStart` source-only rewrites.
+The suppression requires `package.json` to prove Node 10+ compatibility. Any additional source edit or missing
+runtime evidence keeps the normal test-delta review signal.
+
 ## Status Legend
 
 - `implemented`: extracted and used in deterministic rules.

@@ -22,6 +22,62 @@ def test_pr_change_signals_skip_code_delta_when_tests_changed() -> None:
     assert not any(row.rule_id == "pr_code_change_without_test_delta" for row in findings.findings)
 
 
+def test_pr_change_signals_skip_exact_equivalent_js_alias_rewrite(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"engines": {"node": ">= 18"}}\n',
+        encoding="utf-8",
+    )
+    diff = (
+        "diff --git a/lib/request.js b/lib/request.js\n"
+        "--- a/lib/request.js\n"
+        "+++ b/lib/request.js\n"
+        "@@ -1 +1 @@\n"
+        "-const value = header.trimRight()\n"
+        "+const value = header.trimEnd()\n"
+    )
+
+    signals = build_pr_change_signal_bundle({"lib/request.js"}, diff, tmp_path)
+    findings = run_rules(signals)
+
+    assert not any(row.rule_id == "pr_code_change_without_test_delta" for row in findings.findings)
+
+
+def test_pr_change_signals_keep_mixed_js_alias_rewrite() -> None:
+    diff = (
+        "diff --git a/lib/request.js b/lib/request.js\n"
+        "--- a/lib/request.js\n"
+        "+++ b/lib/request.js\n"
+        "@@ -1 +1 @@\n"
+        "-const value = header.substring(0, header.indexOf(',')).trimRight()\n"
+        "+const value = header.split(',', 1)[0].trimEnd();\n"
+    )
+
+    signals = build_pr_change_signal_bundle({"lib/request.js"}, diff)
+    findings = run_rules(signals)
+
+    assert any(row.rule_id == "pr_code_change_without_test_delta" for row in findings.findings)
+
+
+def test_pr_change_signals_keep_alias_rewrite_without_supported_runtime(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"engines": {"node": ">= 8"}}\n',
+        encoding="utf-8",
+    )
+    diff = (
+        "diff --git a/lib/request.js b/lib/request.js\n"
+        "--- a/lib/request.js\n"
+        "+++ b/lib/request.js\n"
+        "@@ -1 +1 @@\n"
+        "-const value = header.trimRight()\n"
+        "+const value = header.trimEnd()\n"
+    )
+
+    signals = build_pr_change_signal_bundle({"lib/request.js"}, diff, tmp_path)
+    findings = run_rules(signals)
+
+    assert any(row.rule_id == "pr_code_change_without_test_delta" for row in findings.findings)
+
+
 def test_pr_change_signals_skip_low_signal_source_paths() -> None:
     signals = build_pr_change_signal_bundle({"scripts/reindex.py", "examples/demo.ts"})
 
@@ -221,3 +277,63 @@ def test_pr_diff_signals_accept_new_4xx_branch_with_negative_test(tmp_path: Path
         signal.attributes.get("issue_type") == "new_4xx_branch_without_negative_test_delta"
         for signal in signals.signals
     )
+
+
+def test_pr_diff_signals_flag_dynamic_gettext_messages(tmp_path: Path) -> None:
+    source = tmp_path / "app" / "messages.py"
+    source.parent.mkdir()
+    source.write_text(
+        "from django.utils.translation import gettext_lazy as _\n"
+        "\n"
+        "def messages(field_name):\n"
+        "    label = _(field_name.title())\n"
+        "    error = _(f'Must include {field_name}.')\n"
+        "    return label, error\n",
+        encoding="utf-8",
+    )
+    diff = (
+        "diff --git a/app/messages.py b/app/messages.py\n"
+        "--- a/app/messages.py\n"
+        "+++ b/app/messages.py\n"
+        "@@ -1,3 +1,6 @@\n"
+        " from django.utils.translation import gettext_lazy as _\n"
+        " \n"
+        " def messages(field_name):\n"
+        "+    label = _(field_name.title())\n"
+        "+    error = _(f'Must include {field_name}.')\n"
+        "+    return label, error\n"
+    )
+
+    signals = build_pr_diff_signal_bundle(tmp_path, diff, {"app/messages.py"})
+    findings = run_rules(signals)
+
+    finding = next(row for row in findings.findings if row.rule_id == "pr_dynamic_gettext_message")
+    assert finding.severity == "medium"
+    assert "named placeholders" in finding.recommendation
+    assert "line(s) 4, 5" in finding.evidence
+
+
+def test_pr_diff_signals_accept_literal_gettext_message(tmp_path: Path) -> None:
+    source = tmp_path / "app" / "messages.py"
+    source.parent.mkdir()
+    source.write_text(
+        "from django.utils.translation import gettext as _\n"
+        "\n"
+        "def message(field_name):\n"
+        "    return _('Must include %(field_name)s.') % {'field_name': field_name}\n",
+        encoding="utf-8",
+    )
+    diff = (
+        "diff --git a/app/messages.py b/app/messages.py\n"
+        "--- a/app/messages.py\n"
+        "+++ b/app/messages.py\n"
+        "@@ -1,3 +1,4 @@\n"
+        " from django.utils.translation import gettext as _\n"
+        " \n"
+        " def message(field_name):\n"
+        "+    return _('Must include %(field_name)s.') % {'field_name': field_name}\n"
+    )
+
+    signals = build_pr_diff_signal_bundle(tmp_path, diff, {"app/messages.py"})
+
+    assert not any(signal.attributes.get("issue_type") == "dynamic_gettext_message" for signal in signals.signals)

@@ -315,6 +315,28 @@
       }
     },
     {
+      "id": "drf-9674",
+      "url": "https://github.com/encode/django-rest-framework/pull/9674",
+      "stack": "django_drf",
+      "reason": "Independent DRF custom-user authentication change with dynamic gettext messages and no regression tests.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "review_required",
+        "required_rules": [
+          "pr_dynamic_gettext_message",
+          "pr_code_change_without_test_delta"
+        ],
+        "required_paths": ["rest_framework/authtoken/serializers.py"],
+        "max_top_findings": 2
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report identifies both the missing custom-user regression coverage and the dynamic gettext message identifiers that cannot be extracted reliably.",
+        "reviewed_at": "2026-06-11"
+      }
+    },
+    {
       "id": "drf-9932",
       "url": "https://github.com/encode/django-rest-framework/pull/9932",
       "stack": "django_drf",
@@ -323,13 +345,16 @@
         "execution": "pass",
         "product": "mixed",
         "decision": "review_required",
-        "required_rules": ["pr_code_change_without_test_delta"],
+        "required_rules": [
+          "pr_dynamic_gettext_message",
+          "pr_code_change_without_test_delta"
+        ],
         "required_paths": ["rest_framework/authtoken/serializers.py"],
-        "max_top_findings": 1
+        "max_top_findings": 2
       },
       "label": {
         "outcome": "missed_risk",
-        "rationale": "The missing-test signal matches the maintainer's blocking request, but the report misses the required documentation update and the dynamic gettext strings that break translation extraction.",
+        "rationale": "The report now catches the missing tests and dynamic gettext strings, but it still cannot infer the maintainer-required documentation update from the source-only delta.",
         "reviewed_at": "2026-06-11"
       }
     },
@@ -351,21 +376,38 @@
       }
     },
     {
-      "id": "express-7265",
-      "url": "https://github.com/expressjs/express/pull/7265",
+      "id": "express-7047",
+      "url": "https://github.com/expressjs/express/pull/7047",
       "stack": "express_node",
-      "reason": "Express tiny request parsing maintenance change without a test delta.",
+      "reason": "Independent Express control where a trimRight-to-trimEnd change also alters host extraction behavior.",
       "expected": {
         "execution": "pass",
-        "product": "mixed",
+        "product": "useful",
         "decision": "review_required",
         "required_rules": ["pr_code_change_without_test_delta"],
         "required_paths": ["lib/request.js"],
         "max_top_findings": 1
       },
       "label": {
-        "outcome": "noisy",
-        "rationale": "The generic missing-test reminder is technically grounded but disproportionate for the standardized trimRight-to-trimEnd alias replacement with green CI and two approvals.",
+        "outcome": "good_signal",
+        "rationale": "The report retains the regression-test request because the PR changes substring extraction to split in addition to replacing the deprecated alias.",
+        "reviewed_at": "2026-06-11"
+      }
+    },
+    {
+      "id": "express-7265",
+      "url": "https://github.com/expressjs/express/pull/7265",
+      "stack": "express_node",
+      "reason": "Express tiny request parsing maintenance change without a test delta.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report now suppresses the disproportionate generic reminder for an exact standardized trimRight-to-trimEnd alias replacement while preserving mixed-change coverage elsewhere.",
         "reviewed_at": "2026-06-11"
       }
     },

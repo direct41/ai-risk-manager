@@ -6,7 +6,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-11
+
 ### Added
+- Added PR diff detection for dynamic Python gettext message identifiers that cannot be extracted reliably.
 - Added PR diff detection for newly introduced 4xx branches without matching negative-path test assertions.
 - Added PR diff detection for documented mapping-key renames that leave stale public contracts.
 - Added a Django integrity signal for shared constant create defaults inside uniqueness handling.
@@ -23,7 +26,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added a GitLab CI merge-request review example for advisory risk analysis.
 
 ### Changed
-- Public PR corpus manual review is complete with all 21 cases carrying evidence-backed product outcomes.
+- Exact source-only `trimRight` to `trimEnd` and `trimLeft` to `trimStart` rewrites no longer trigger a disproportionate generic missing-test reminder when `package.json` proves Node 10+ compatibility; mixed changes or unknown runtimes remain review-required.
+- Public PR corpus manual review is complete with all 23 cases carrying evidence-backed product outcomes.
+- Public PR corpus now includes independent controls for exact JavaScript alias rewrites, mixed host-extraction changes, and dynamic gettext messages.
 - Public PR corpus now includes verified UI interaction, startup diagnostics, and Django header-compatibility outcomes.
 - Public PR corpus now includes verified DRF compatibility, uniqueness, and clean-control outcomes from retrospective review.
 - Generated-test analysis now focuses on the test's primary write call, avoids treating captured current time as standalone flakiness evidence, and keeps unchanged generated-test debt out of PR merge actions.

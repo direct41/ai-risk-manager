@@ -593,7 +593,7 @@ def _stage_analysis(
 ) -> tuple[_AnalysisStage | None, int | None]:
     deterministic_signals = scope.analysis_signals
     if ctx.mode == "pr":
-        pr_change_signals = build_pr_change_signal_bundle(scope.changed_files)
+        pr_change_signals = build_pr_change_signal_bundle(scope.changed_files, scope.diff_text, ctx.repo_path)
         pr_diff_signals = build_pr_diff_signal_bundle(ctx.repo_path, scope.diff_text, scope.changed_files)
         if pr_diff_signals.signals:
             notes.append(f"PR diff heuristics produced {len(pr_diff_signals.signals)} signal(s).")

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import json
 import os
 from pathlib import Path
 import re
@@ -23,6 +25,7 @@ _SOURCE_SUFFIXES = {
     ".kt",
     ".swift",
 }
+_JS_SOURCE_SUFFIXES = {".js", ".jsx", ".cjs", ".mjs", ".ts", ".tsx"}
 _DOC_SUFFIXES = {".md", ".rst", ".adoc", ".txt"}
 _DEPENDENCY_FILENAMES = {
     "pyproject.toml",
@@ -105,6 +108,7 @@ _SENSITIVE_AREAS: dict[str, tuple[str, ...]] = {
     "admin": ("admin", "backoffice", "moderation", "operator", "staff", "superuser"),
 }
 _DIFF_FILE_RE = re.compile(r"^diff --git a/(.+?) b/(.+)$")
+_DIFF_HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(?P<start>\d+)(?:,\d+)? @@")
 _MAPPING_KEY_RE = re.compile(r"""['"](?P<key>[A-Za-z_][A-Za-z0-9_.-]{2,})['"]\s*:""")
 _ADDED_4XX_BRANCH_RE = re.compile(
     r"raise\s+HTTPException[\s\S]*?status_code\s*=\s*(?:status\.HTTP_[A-Z_]*4\d\d|4\d\d)",
@@ -125,6 +129,18 @@ _DOC_SCAN_EXCLUDED_DIRS = {
     "vendor",
     "venv",
 }
+_GETTEXT_MODULES = {"django.utils.translation", "gettext"}
+_GETTEXT_FUNCTIONS = {
+    "gettext",
+    "gettext_lazy",
+    "ugettext",
+    "ugettext_lazy",
+}
+_EQUIVALENT_JS_METHOD_ALIASES = (
+    (".trimRight(", ".trimEnd("),
+    (".trimLeft(", ".trimStart("),
+)
+_NODE_MINIMUM_RE = re.compile(r"(?:^|\s)>=\s*(?P<major>\d+)")
 
 
 def _normalize_path(path: str) -> str:
@@ -304,6 +320,152 @@ def _diff_added_lines_by_file(diff_text: str) -> dict[str, str]:
     return {path: "\n".join(lines) for path, lines in added_by_file.items()}
 
 
+def _diff_added_line_numbers_by_file(diff_text: str) -> dict[str, set[int]]:
+    current_file = ""
+    current_line: int | None = None
+    added_by_file: dict[str, set[int]] = {}
+    for line in diff_text.splitlines():
+        match = _DIFF_FILE_RE.match(line)
+        if match:
+            current_file = _normalize_path(match.group(2))
+            current_line = None
+            added_by_file.setdefault(current_file, set())
+            continue
+
+        hunk = _DIFF_HUNK_RE.match(line)
+        if hunk:
+            current_line = int(hunk.group("start"))
+            continue
+        if not current_file or current_line is None:
+            continue
+        if line.startswith("+") and not line.startswith("+++"):
+            added_by_file[current_file].add(current_line)
+            current_line += 1
+        elif line.startswith("-") and not line.startswith("---"):
+            continue
+        elif not line.startswith("\\"):
+            current_line += 1
+    return added_by_file
+
+
+def _diff_changed_lines_by_file(diff_text: str) -> dict[str, tuple[list[str], list[str]]]:
+    current_file = ""
+    changed_by_file: dict[str, tuple[list[str], list[str]]] = {}
+    for line in diff_text.splitlines():
+        match = _DIFF_FILE_RE.match(line)
+        if match:
+            current_file = _normalize_path(match.group(2))
+            changed_by_file.setdefault(current_file, ([], []))
+            continue
+        if not current_file or line.startswith("---") or line.startswith("+++"):
+            continue
+        removed, added = changed_by_file[current_file]
+        if line.startswith("-"):
+            removed.append(line[1:])
+        elif line.startswith("+"):
+            added.append(line[1:])
+    return changed_by_file
+
+
+def _is_equivalent_js_method_alias_rewrite(removed: str, added: str) -> bool:
+    rewritten = removed
+    replacement_count = 0
+    for legacy, standard in _EQUIVALENT_JS_METHOD_ALIASES:
+        count = rewritten.count(legacy)
+        if count:
+            replacement_count += count
+            rewritten = rewritten.replace(legacy, standard)
+    return replacement_count > 0 and rewritten == added
+
+
+def _node_runtime_supports_standard_trim_aliases(repo_path: Path | None) -> bool:
+    if repo_path is None:
+        return False
+    try:
+        payload = json.loads((repo_path / "package.json").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return False
+
+    engines = payload.get("engines")
+    node_constraint = engines.get("node") if isinstance(engines, dict) else None
+    if not isinstance(node_constraint, str):
+        return False
+
+    alternatives = [part.strip() for part in node_constraint.split("||") if part.strip()]
+    if not alternatives:
+        return False
+    minimums = [_NODE_MINIMUM_RE.search(alternative) for alternative in alternatives]
+    return all(match is not None and int(match.group("major")) >= 10 for match in minimums)
+
+
+def _all_source_changes_are_equivalent_alias_rewrites(
+    changed_sources: list[str],
+    diff_text: str | None,
+    repo_path: Path | None,
+) -> bool:
+    if (
+        not diff_text
+        or not _node_runtime_supports_standard_trim_aliases(repo_path)
+        or any(Path(path).suffix.lower() not in _JS_SOURCE_SUFFIXES for path in changed_sources)
+    ):
+        return False
+
+    changed_lines = _diff_changed_lines_by_file(diff_text)
+    for source_path in changed_sources:
+        removed, added = changed_lines.get(source_path, ([], []))
+        if not removed or len(removed) != len(added):
+            return False
+        if not all(
+            _is_equivalent_js_method_alias_rewrite(old_line, new_line)
+            for old_line, new_line in zip(removed, added, strict=True)
+        ):
+            return False
+    return bool(changed_sources)
+
+
+def _gettext_aliases(tree: ast.AST) -> set[str]:
+    aliases: set[str] = set()
+    if not isinstance(tree, ast.Module):
+        return aliases
+    for node in tree.body:
+        if not isinstance(node, ast.ImportFrom) or node.module not in _GETTEXT_MODULES:
+            continue
+        for imported in node.names:
+            if imported.name in _GETTEXT_FUNCTIONS:
+                aliases.add(imported.asname or imported.name)
+    return aliases
+
+
+def _dynamic_gettext_lines(
+    repo_path: Path,
+    source_path: str,
+    added_lines: set[int],
+) -> list[int]:
+    if Path(source_path).suffix.lower() != ".py" or not added_lines:
+        return []
+
+    try:
+        source = (repo_path / source_path).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+    except (OSError, UnicodeDecodeError, SyntaxError):
+        return []
+
+    aliases = _gettext_aliases(tree)
+    if not aliases:
+        return []
+
+    dynamic_lines: set[int] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+            continue
+        if node.func.id not in aliases or not node.args or node.lineno not in added_lines:
+            continue
+        message = node.args[0]
+        if not (isinstance(message, ast.Constant) and isinstance(message.value, str)):
+            dynamic_lines.add(node.lineno)
+    return sorted(dynamic_lines)
+
+
 def _documented_key_refs(repo_path: Path, key: str) -> list[str]:
     escaped = re.escape(key)
     pattern = re.compile(
@@ -385,10 +547,40 @@ def build_pr_diff_signal_bundle(
                     },
                 )
             )
+
+    added_line_numbers = _diff_added_line_numbers_by_file(diff_text)
+    for source_path in sorted(changed):
+        if not _is_source_file(source_path):
+            continue
+        dynamic_lines = _dynamic_gettext_lines(
+            repo_path,
+            source_path,
+            added_line_numbers.get(source_path, set()),
+        )
+        if not dynamic_lines:
+            continue
+        signals.append(
+            CapabilitySignal(
+                id=f"sig:pr-risk:dynamic-gettext-message:{source_path}:{dynamic_lines[0]}",
+                kind="pr_change_risk",
+                source_ref=source_path,
+                confidence="high",
+                evidence_refs=[source_path],
+                attributes={
+                    "issue_type": "dynamic_gettext_message",
+                    "dynamic_message_count": str(len(dynamic_lines)),
+                    "line_numbers": ", ".join(str(line) for line in dynamic_lines[:5]),
+                },
+            )
+        )
     return SignalBundle(signals=signals, supported_kinds={"pr_change_risk"} if signals else set())
 
 
-def build_pr_change_signal_bundle(changed_files: set[str] | None) -> SignalBundle:
+def build_pr_change_signal_bundle(
+    changed_files: set[str] | None,
+    diff_text: str | None = None,
+    repo_path: Path | None = None,
+) -> SignalBundle:
     empty_supported_kinds: set[SignalKind] = set()
     if not changed_files:
         return SignalBundle(signals=[], supported_kinds=empty_supported_kinds)
@@ -417,7 +609,17 @@ def build_pr_change_signal_bundle(changed_files: set[str] | None) -> SignalBundl
     signals: list[CapabilitySignal] = []
     supported_kinds: set[SignalKind] = {"pr_change_risk"}
 
-    if changed_sources and not changed_tests and not set(changed_sources).issubset(sensitive_source_paths):
+    equivalent_alias_only = _all_source_changes_are_equivalent_alias_rewrites(
+        changed_sources,
+        diff_text,
+        repo_path,
+    )
+    if (
+        changed_sources
+        and not changed_tests
+        and not equivalent_alias_only
+        and not set(changed_sources).issubset(sensitive_source_paths)
+    ):
         evidence_refs = _example_refs(changed_sources)
         primary = evidence_refs[0]
         signals.append(

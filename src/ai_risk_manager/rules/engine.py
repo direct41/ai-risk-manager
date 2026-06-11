@@ -1128,6 +1128,38 @@ def _run_pr_change_risk_rule(signals: SignalBundle) -> list[Finding]:
             )
             continue
 
+        if issue_type == "dynamic_gettext_message":
+            dynamic_message_count = str(signal.attributes.get("dynamic_message_count", "")).strip() or "1"
+            line_numbers = str(signal.attributes.get("line_numbers", "")).strip()
+            finding_id = f"pr_dynamic_gettext_message:{signal.source_ref}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="pr_dynamic_gettext_message",
+                    title="PR adds a dynamic gettext message that cannot be extracted reliably",
+                    description=(
+                        "The changed Python code passes a computed value or f-string directly to gettext. "
+                        "Translation catalogs require stable literal message identifiers."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Detected {dynamic_message_count} newly added dynamic gettext call(s) in "
+                        f"{signal.source_ref}{f' at line(s) {line_numbers}' if line_numbers else ''}."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Use a constant translatable message with named placeholders, then interpolate values "
+                        "after gettext returns the translated string."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=list(signal.evidence_refs),
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
         if issue_type == "dependency_change_without_test_delta":
             changed_dependency_count = str(signal.attributes.get("changed_dependency_count", "")).strip() or "1"
             finding_id = f"pr_dependency_change_without_test_delta:{signal.source_ref}:{signal.id}"
