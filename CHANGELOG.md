@@ -23,6 +23,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added a GitLab CI merge-request review example for advisory risk analysis.
 
 ### Changed
+- Public PR corpus manual review is complete with all 21 cases carrying evidence-backed product outcomes.
 - Public PR corpus now includes verified UI interaction, startup diagnostics, and Django header-compatibility outcomes.
 - Public PR corpus now includes verified DRF compatibility, uniqueness, and clean-control outcomes from retrospective review.
 - Generated-test analysis now focuses on the test's primary write call, avoids treating captured current time as standalone flakiness evidence, and keeps unchanged generated-test debt out of PR merge actions.

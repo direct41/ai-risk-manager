@@ -321,7 +321,16 @@
       "reason": "DRF AuthTokenSerializer user-field behavior change without a test delta.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "mixed",
+        "decision": "review_required",
+        "required_rules": ["pr_code_change_without_test_delta"],
+        "required_paths": ["rest_framework/authtoken/serializers.py"],
+        "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "missed_risk",
+        "rationale": "The missing-test signal matches the maintainer's blocking request, but the report misses the required documentation update and the dynamic gettext strings that break translation extraction.",
+        "reviewed_at": "2026-06-11"
       }
     },
     {
@@ -331,7 +340,14 @@
       "reason": "Express error logging change with dedicated app logging tests.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the one-line logging fix ready after focused Error.cause coverage and reliable console.error cleanup were added.",
+        "reviewed_at": "2026-06-11"
       }
     },
     {
@@ -341,7 +357,16 @@
       "reason": "Express tiny request parsing maintenance change without a test delta.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "mixed",
+        "decision": "review_required",
+        "required_rules": ["pr_code_change_without_test_delta"],
+        "required_paths": ["lib/request.js"],
+        "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "noisy",
+        "rationale": "The generic missing-test reminder is technically grounded but disproportionate for the standardized trimRight-to-trimEnd alias replacement with green CI and two approvals.",
+        "reviewed_at": "2026-06-11"
       }
     },
     {
@@ -351,7 +376,16 @@
       "reason": "Express view lookup path containment change without a test delta.",
       "expected": {
         "execution": "pass",
-        "product": "needs_human_review"
+        "product": "useful",
+        "decision": "review_required",
+        "required_rules": ["pr_code_change_without_test_delta"],
+        "required_paths": ["lib/view.js"],
+        "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report appropriately requests regression coverage for a security-sensitive path containment change with relative, sibling-prefix, absolute, and platform-separator edge cases.",
+        "reviewed_at": "2026-06-11"
       }
     }
   ]
