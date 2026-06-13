@@ -125,6 +125,45 @@ _INDEXED_QUERY_TEST_RE = re.compile(
     r"(?:query|search|url|path|param)[\s\S]{0,120}(?:\[\s*['\"]?\s*\+|%5B\s*['\"]?\s*\+))",
     re.IGNORECASE,
 )
+_FIELD_VALUE_ALIAS_RE = re.compile(
+    r"(?<!\.)\b(?P<alias>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*[A-Za-z_][A-Za-z0-9_]*\.value\b"
+)
+_STRICT_DATETIME_PARSE_RE = re.compile(
+    r"\b(?:datetime\.)?(?:datetime|date)\.(?P<method>fromisoformat|strptime)"
+    r"\(\s*(?P<argument>[A-Za-z_][A-Za-z0-9_]*(?:\.value)?)"
+)
+_EMPTY_VALUE_TEST_NAME_RE = re.compile(
+    r"\btest_[A-Za-z0-9_]*(?:empty_string|none_value|null_value|blank_value|missing_value)\b",
+    re.IGNORECASE,
+)
+_EMPTY_VALUE_CALL_RE = re.compile(
+    r"\b[A-Za-z_][A-Za-z0-9_]*\(\s*(?:None|['\"]{2})\s*[,)]"
+)
+_EMPTY_MAPPING_VALUE_RE = re.compile(
+    r"['\"](?P<key>[^'\"]+)['\"]\s*:\s*(?:None|['\"]{2})"
+)
+_NON_VALUE_MAPPING_TOKENS = {
+    "config",
+    "configs",
+    "format",
+    "formats",
+    "option",
+    "options",
+    "setting",
+    "settings",
+}
+_PARSER_BOUNDARY_PATH_TOKENS = {
+    "field",
+    "fields",
+    "form",
+    "forms",
+    "parser",
+    "parsers",
+    "renderer",
+    "renderers",
+    "serializer",
+    "serializers",
+}
 _DOC_SCAN_EXCLUDED_DIRS = {
     ".git",
     ".riskmap",
@@ -472,6 +511,35 @@ def _dynamic_gettext_lines(
     return sorted(dynamic_lines)
 
 
+def _strict_field_value_datetime_parsers(source_path: str, added_text: str) -> list[str]:
+    if Path(source_path).suffix.lower() != ".py":
+        return []
+    if not (_path_tokens(source_path) & _PARSER_BOUNDARY_PATH_TOKENS):
+        return []
+
+    aliases = {match.group("alias") for match in _FIELD_VALUE_ALIAS_RE.finditer(added_text)}
+    methods: list[str] = []
+    for match in _STRICT_DATETIME_PARSE_RE.finditer(added_text):
+        argument = match.group("argument")
+        if argument.endswith(".value") or argument in aliases:
+            methods.append(match.group("method"))
+    return sorted(set(methods))
+
+
+def _has_empty_value_test(added_test_text: str) -> bool:
+    if _EMPTY_VALUE_TEST_NAME_RE.search(added_test_text) or _EMPTY_VALUE_CALL_RE.search(added_test_text):
+        return True
+    for match in _EMPTY_MAPPING_VALUE_RE.finditer(added_test_text):
+        key_tokens = {
+            token
+            for chunk in re.split(r"[^A-Za-z0-9]+", match.group("key").lower())
+            for token in re.findall(r"[a-z]+|\d+", chunk)
+        }
+        if not (key_tokens & _NON_VALUE_MAPPING_TOKENS):
+            return True
+    return False
+
+
 def _documented_key_refs(repo_path: Path, key: str) -> list[str]:
     escaped = re.escape(key)
     pattern = re.compile(
@@ -579,6 +647,31 @@ def build_pr_diff_signal_bundle(
                     attributes={
                         "issue_type": "query_array_limit_without_indexed_compat_test",
                         "array_limit": limits[-1],
+                        "changed_test_count": str(sum(1 for path in changed if _is_test_file(path))),
+                    },
+                )
+            )
+
+    if not _has_empty_value_test(added_test_text):
+        for source_path, added_text in added_by_file.items():
+            if source_path not in changed or not _is_source_file(source_path):
+                continue
+            parser_methods = _strict_field_value_datetime_parsers(source_path, added_text)
+            if not parser_methods:
+                continue
+            signals.append(
+                CapabilitySignal(
+                    id=f"sig:pr-risk:strict-field-datetime-parse-without-empty-test:{source_path}",
+                    kind="pr_change_risk",
+                    source_ref=source_path,
+                    confidence="high",
+                    evidence_refs=[
+                        source_path,
+                        *sorted(path for path in changed if _is_test_file(path))[:4],
+                    ],
+                    attributes={
+                        "issue_type": "strict_field_datetime_parse_without_empty_test",
+                        "parser_methods": ", ".join(parser_methods),
                         "changed_test_count": str(sum(1 for path in changed if _is_test_file(path))),
                     },
                 )

@@ -73,6 +73,14 @@ def _deterministic_test_guidance(finding: Finding) -> tuple[TestType, list[str]]
                 "Verify the resulting object or array shape and direct numeric-key access behavior.",
             ],
         )
+    if finding.rule_id == "pr_strict_field_datetime_parse_without_empty_test":
+        return (
+            "integration",
+            [
+                "Render or serialize the field with an empty string and a None/null value without an exception.",
+                "Confirm valid datetime values still preserve the expected format, precision, and timezone behavior.",
+            ],
+        )
     return (
         "api",
         [

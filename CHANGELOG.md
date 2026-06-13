@@ -9,6 +9,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Added
 - Added 10 evidence-backed public PR cases from FastAPI, Django REST framework, Express, and the full-stack FastAPI template, including reviewer-impact notes and a confirmed compatibility false negative.
 - Added a PR diff signal for query parser `arrayLimit` changes without indexed-bracket compatibility coverage.
+- Added 8 parser and serialization validation cases, including the confirmed DRF empty-datetime renderer regression and seven clean controls.
+- Added a narrow PR diff signal for strict datetime parsing of field-derived values without empty-string or null regression coverage.
 
 ### Changed
 - Deterministic test plans now use dependency and regression-specific assertions for generic PR delta findings instead of API response boilerplate.

@@ -63,9 +63,41 @@ Post-improvement result:
 - Do not add broad query-parser option scanning yet. Extend beyond `arrayLimit` only after another confirmed case demonstrates a repeated option family such as `allowSparse`, `parseArrays`, or `comma`.
 - Do not expand stack support from this sprint. All confirmed cases were in already supported stacks; the remaining defect was diff semantics, not stack extraction.
 
+## Validation Sprint 3 - 2026-06-13
+
+This sprint reviewed parser, renderer, serializer, and compatibility changes with public regression or maintainer evidence.
+
+| Case | Decision | Top finding | False positive | Missed risk | Reviewer/test impact |
+|---|---|---|---|---|---|
+| [DRF #9365](https://github.com/encode/django-rest-framework/pull/9365) | `review_required` | `pr_strict_field_datetime_parse_without_empty_test` | none | none after empty-value rule | Add empty-string and `None` rendering cases before introducing strict datetime parsing. |
+| [DRF #9735](https://github.com/encode/django-rest-framework/pull/9735) | `ready` | none | none | none | No change; ordering, deduplication, nested serialization, and JSON compatibility are covered. |
+| [DRF #9973](https://github.com/encode/django-rest-framework/pull/9973) | `ready` | none | none | none | No change; empty and non-empty unhashable values cover the BooleanField fallback. |
+| [DRF #9775](https://github.com/encode/django-rest-framework/pull/9775) | `ready` | none | none | none | No change; field mapping, bounds, settings, and string coercion are covered. |
+| [FastAPI #12935](https://github.com/fastapi/fastapi/pull/12935) | `ready` | none | none | none | No change; Decimal `NaN` and Infinity crash variants have focused tests. |
+| [FastAPI #13207](https://github.com/fastapi/fastapi/pull/13207) | `ready` | none | none | none | No change; computed-field schema behavior is covered in the affected mode. |
+| [FastAPI #4972](https://github.com/fastapi/fastapi/pull/4972) | `ready` | none | none | none | No change; repeated encoding proves model configuration is not mutated. |
+| [Express #6088](https://github.com/expressjs/express/pull/6088) | `ready` | none | none | none | No change; single, variadic, and comma-delimited charset inputs are covered. |
+
+Sprint result:
+
+- 8 isolated public runs completed.
+- 7 clean parser/serialization controls remained `ready`.
+- 1 confirmed false negative reproduced: DRF #9365 later crashed on empty datetime values despite broad valid-value coverage.
+- The promoted rule is limited to newly added strict datetime parsing of form, field, parser, renderer, or serializer values without an empty-value regression test.
+- DRF #9365 now returns `review_required`, risk score `46`, and one focused integration action.
+- DRF #9928 remains the real-world clean control for the guarded empty-value fix.
+
+## Sprint 3 Improvement
+
+| Priority | Improvement | Evidence | Acceptance criterion | Status |
+|---|---|---|---|---|
+| P0 | Detect strict datetime parsing of optional field values without empty-value coverage. | DRF #9365 introduced `fromisoformat`/`strptime` handling, then DRF #9928 fixed the resulting empty-string and `None` crash. | The original PR produces one focused finding; the guarded fix and unrelated datetime parsing remain clean. | completed |
+| P1 | Preserve parser and serializer clean controls. | Seven public PRs changed output shape, coercion, schema generation, encoder state, or argument parsing with focused tests. | All seven remain `ready` with zero top findings. | completed |
+| P1 | Keep the public corpus executable after adding the new evidence. | Sprint conclusions must survive future signal and scoring changes. | All 41 cases are labeled and strict corpus validation passes. | completed |
+
 ## Next Validation Gate
 
-Run the next validation batch against public parser, serialization, and compatibility PRs. Promote another diff heuristic only when at least one confirmed miss is reproducible and the rule has a clean control case.
+Review another batch of boundary conversions and optional-value handling. Promote broader parser rules only after a second independent confirmed regression; do not generalize this rule to arbitrary `fromisoformat` or `strptime` calls.
 
 ## Result Row Template
 

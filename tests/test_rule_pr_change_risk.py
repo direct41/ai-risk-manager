@@ -353,6 +353,92 @@ def test_pr_diff_signals_ignore_query_array_limit_inside_test_file(tmp_path: Pat
     )
 
 
+def test_pr_diff_signals_flag_strict_field_datetime_parse_without_empty_test(tmp_path: Path) -> None:
+    diff = (
+        "diff --git a/rest_framework/renderers.py b/rest_framework/renderers.py\n"
+        "--- a/rest_framework/renderers.py\n"
+        "+++ b/rest_framework/renderers.py\n"
+        "@@ -340,0 +341,5 @@\n"
+        "+    field_value = field.value\n"
+        "+    field.value = (\n"
+        "+        datetime.datetime.fromisoformat(field_value)\n"
+        "+        if format_ == ISO_8601 else datetime.datetime.strptime(field_value, format_)\n"
+        "+    )\n"
+        "diff --git a/tests/test_renderers.py b/tests/test_renderers.py\n"
+        "--- a/tests/test_renderers.py\n"
+        "+++ b/tests/test_renderers.py\n"
+        "@@ -490,0 +491,4 @@\n"
+        "+def test_datetime_field_rendering_milliseconds():\n"
+        "+    settings = {'DATETIME_FORMAT': None}\n"
+        "+    field_options = {'format': None}\n"
+        "+    assert render(datetime(2024, 12, 24)) == '2024-12-24T00:00:00.000'\n"
+    )
+
+    signals = build_pr_diff_signal_bundle(
+        tmp_path,
+        diff,
+        {"rest_framework/renderers.py", "tests/test_renderers.py"},
+    )
+    findings = run_rules(signals)
+
+    finding = next(
+        row
+        for row in findings.findings
+        if row.rule_id == "pr_strict_field_datetime_parse_without_empty_test"
+    )
+    assert finding.severity == "medium"
+    assert "fromisoformat, strptime" in finding.evidence
+    assert "empty string and None/null" in finding.recommendation
+    assert "tests/test_renderers.py" in finding.evidence_refs
+
+
+def test_pr_diff_signals_accept_strict_field_datetime_parse_with_empty_test(tmp_path: Path) -> None:
+    diff = (
+        "diff --git a/app/serializers.py b/app/serializers.py\n"
+        "--- a/app/serializers.py\n"
+        "+++ b/app/serializers.py\n"
+        "@@ -10,0 +11,2 @@\n"
+        "+    raw_value = field.value\n"
+        "+    return datetime.fromisoformat(raw_value)\n"
+        "diff --git a/tests/test_serializers.py b/tests/test_serializers.py\n"
+        "--- a/tests/test_serializers.py\n"
+        "+++ b/tests/test_serializers.py\n"
+        "@@ -20,0 +21,3 @@\n"
+        "+def test_datetime_none_value():\n"
+        "+    assert serialize(None) == ''\n"
+        "+    assert serialize('') == ''\n"
+    )
+
+    signals = build_pr_diff_signal_bundle(
+        tmp_path,
+        diff,
+        {"app/serializers.py", "tests/test_serializers.py"},
+    )
+
+    assert not any(
+        signal.attributes.get("issue_type") == "strict_field_datetime_parse_without_empty_test"
+        for signal in signals.signals
+    )
+
+
+def test_pr_diff_signals_ignore_strict_datetime_parse_outside_field_boundaries(tmp_path: Path) -> None:
+    diff = (
+        "diff --git a/app/scheduler.py b/app/scheduler.py\n"
+        "--- a/app/scheduler.py\n"
+        "+++ b/app/scheduler.py\n"
+        "@@ -10,0 +11,2 @@\n"
+        "+    raw_value = job.value\n"
+        "+    return datetime.fromisoformat(raw_value)\n"
+    )
+
+    signals = build_pr_diff_signal_bundle(tmp_path, diff, {"app/scheduler.py"})
+
+    assert not any(
+        signal.attributes.get("issue_type") == "strict_field_datetime_parse_without_empty_test"
+        for signal in signals.signals
+    )
+
+
 def test_pr_diff_signals_flag_dynamic_gettext_messages(tmp_path: Path) -> None:
     source = tmp_path / "app" / "messages.py"
     source.parent.mkdir()

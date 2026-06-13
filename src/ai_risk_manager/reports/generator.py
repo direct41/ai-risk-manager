@@ -26,6 +26,7 @@ _REVIEW_FOCUS_BY_RULE = {
     "dependency_risk_policy_violation": "Review dependency pinning and runtime drift before merge.",
     "pr_code_change_without_test_delta": "Expand regression coverage for the changed application code before merge.",
     "pr_dynamic_gettext_message": "Replace dynamic gettext message identifiers with constant templates and named placeholders.",
+    "pr_strict_field_datetime_parse_without_empty_test": "Cover empty and null field values before merging strict datetime parsing.",
     "pr_dependency_change_without_test_delta": "Review dependency drift and validate changed runtime behavior with focused tests.",
     "pr_contract_change_without_test_delta": "Check schema compatibility and update consumer or integration coverage around contract changes.",
     "pr_migration_change_without_test_delta": "Review migration compatibility, rollback path, and data safety before merge.",

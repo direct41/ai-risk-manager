@@ -138,6 +138,32 @@ def test_qa_agent_uses_indexed_query_guidance_for_array_limit_change() -> None:
     assert "numeric-key access" in plan.items[0].assertions[1]
 
 
+def test_qa_agent_uses_empty_value_guidance_for_strict_datetime_parse() -> None:
+    finding = Finding(
+        id="datetime-parse",
+        rule_id="pr_strict_field_datetime_parse_without_empty_test",
+        title="Datetime parsing changed",
+        description="desc",
+        severity="medium",
+        confidence="high",
+        evidence="e",
+        source_ref="rest_framework/renderers.py",
+        suppression_key="datetime-parse",
+        recommendation="add empty-value regression tests",
+    )
+
+    plan = generate_test_plan(
+        FindingsReport(findings=[finding], generated_without_llm=True),
+        _sample_graph(),
+        provider="none",
+        generated_without_llm=True,
+    )
+
+    assert plan.items[0].test_type == "integration"
+    assert "empty string" in plan.items[0].assertions[0]
+    assert "format, precision, and timezone" in plan.items[0].assertions[1]
+
+
 def test_qa_agent_uses_valid_ai_payload() -> None:
     findings = _sample_findings_raw()
     graph = _sample_graph()

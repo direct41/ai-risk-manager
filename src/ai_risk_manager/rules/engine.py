@@ -1160,6 +1160,39 @@ def _run_pr_change_risk_rule(signals: SignalBundle) -> list[Finding]:
             )
             continue
 
+        if issue_type == "strict_field_datetime_parse_without_empty_test":
+            parser_methods = str(signal.attributes.get("parser_methods", "")).strip() or "datetime parser"
+            parser_changed_test_count = str(signal.attributes.get("changed_test_count", "0")).strip() or "0"
+            finding_id = f"pr_strict_field_datetime_parse_without_empty_test:{signal.source_ref}:{signal.id}"
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    rule_id="pr_strict_field_datetime_parse_without_empty_test",
+                    title="PR strictly parses a field datetime without empty-value coverage",
+                    description=(
+                        "The changed renderer, serializer, parser, or form code sends a field value through a strict "
+                        "datetime parser. Optional, blank, or missing field values can fail before normal rendering "
+                        "or validation unless their contract is covered explicitly."
+                    ),
+                    severity="medium",
+                    confidence=confidence,
+                    evidence=(
+                        f"Detected added {parser_methods} parsing of a field value in {signal.source_ref}; "
+                        f"changed test files: {parser_changed_test_count}, added empty-value cases: 0."
+                    ),
+                    source_ref=signal.source_ref,
+                    suppression_key=finding_id,
+                    recommendation=(
+                        "Add regression tests for an empty string and None/null field value, then assert valid "
+                        "formatted values still preserve the expected rendering or serialization contract."
+                    ),
+                    origin="deterministic",
+                    evidence_refs=list(signal.evidence_refs),
+                    generated_without_llm=True,
+                )
+            )
+            continue
+
         if issue_type == "dynamic_gettext_message":
             dynamic_message_count = str(signal.attributes.get("dynamic_message_count", "")).strip() or "1"
             line_numbers = str(signal.attributes.get("line_numbers", "")).strip()

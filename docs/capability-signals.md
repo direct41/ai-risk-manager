@@ -16,6 +16,10 @@ runtime evidence keeps the normal test-delta review signal.
 JavaScript query-parser changes that add or change `arrayLimit` now require indexed-bracket compatibility coverage.
 Repeated-key tests alone do not prove whether numeric keys keep their object/array shape around the old and new limits.
 
+Python form, field, parser, renderer, and serializer changes that newly pass a field value through strict datetime
+parsing now require an explicit empty-value regression case. The signal stays limited to boundary modules and
+field-derived values; unrelated application datetime parsing remains outside its scope.
+
 ## Status Legend
 
 - `implemented`: extracted and used in deterministic rules.

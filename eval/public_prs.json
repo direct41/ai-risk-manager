@@ -607,6 +607,144 @@
         "rationale": "The report requests a focused settings regression test proving the default project name is accepted while sender-address validation remains intact.",
         "reviewed_at": "2026-06-11"
       }
+    },
+    {
+      "id": "drf-9365",
+      "url": "https://github.com/encode/django-rest-framework/pull/9365",
+      "stack": "django_drf",
+      "reason": "DRF introduced strict datetime parsing in HTMLFormRenderer with broad format coverage but no empty-value case; the merged change later caused a confirmed crash fixed by #9928.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "review_required",
+        "required_rules": ["pr_strict_field_datetime_parse_without_empty_test"],
+        "required_paths": ["rest_framework/renderers.py"],
+        "max_top_findings": 1
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report now catches the missing empty-string and None coverage before strict field datetime parsing, matching the later public regression and its focused fix.",
+        "reviewed_at": "2026-06-13"
+      }
+    },
+    {
+      "id": "drf-9735",
+      "url": "https://github.com/encode/django-rest-framework/pull/9735",
+      "stack": "django_drf",
+      "reason": "DRF MultipleChoiceField changes output type and ordering with explicit downstream compatibility, ordering, deduplication, and JSON serialization tests.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the disruptive but comprehensively tested set-to-list serialization contract change ready.",
+        "reviewed_at": "2026-06-13"
+      }
+    },
+    {
+      "id": "drf-9973",
+      "url": "https://github.com/encode/django-rest-framework/pull/9973",
+      "stack": "django_drf",
+      "reason": "DRF BooleanField representation changes unhashable-value fallback behavior with focused empty and non-empty collection coverage.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the reviewed BooleanField fallback fix ready after focused unhashable input coverage.",
+        "reviewed_at": "2026-06-13"
+      }
+    },
+    {
+      "id": "drf-9775",
+      "url": "https://github.com/encode/django-rest-framework/pull/9775",
+      "stack": "django_drf",
+      "reason": "DRF adds optional BigInteger string serialization with settings, documentation, field mapping, bounds, and output-format tests.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the new opt-in BigInteger output contract ready after broad field, mapping, and coercion coverage.",
+        "reviewed_at": "2026-06-13"
+      }
+    },
+    {
+      "id": "fastapi-12935",
+      "url": "https://github.com/fastapi/fastapi/pull/12935",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI fixes Decimal NaN and Infinity encoding with focused tests for each failing value and maintainer verification against the prior release.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the Decimal special-value encoder fix ready after all reproduced crash variants receive focused tests.",
+        "reviewed_at": "2026-06-13"
+      }
+    },
+    {
+      "id": "fastapi-13207",
+      "url": "https://github.com/fastapi/fastapi/pull/13207",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI changes OpenAPI input/output schema compatibility for computed fields with focused mode-specific regression coverage and maintainer review.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the computed-field schema compatibility fix ready after the affected separate-schema mode is covered directly.",
+        "reviewed_at": "2026-06-13"
+      }
+    },
+    {
+      "id": "fastapi-4972",
+      "url": "https://github.com/fastapi/fastapi/pull/4972",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI removes jsonable_encoder mutation of Pydantic model configuration with a focused repeated custom-encoder side-effect regression test.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the side-effect removal ready after repeated encoding proves model configuration is no longer mutated.",
+        "reviewed_at": "2026-06-13"
+      }
+    },
+    {
+      "id": "express-6088",
+      "url": "https://github.com/expressjs/express/pull/6088",
+      "stack": "express_node",
+      "reason": "Express broadens acceptsCharsets argument parsing with single, variadic, and comma-delimited input tests while preserving existing behavior.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the backwards-compatible charset parser expansion ready after each supported input form is covered.",
+        "reviewed_at": "2026-06-13"
+      }
     }
   ]
 }
