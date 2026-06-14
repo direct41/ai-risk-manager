@@ -369,6 +369,60 @@ def test_fastapi_plugin_ignores_setup_write_and_captured_current_time(tmp_path: 
     assert artifacts.generated_test_issues == []
 
 
+def test_fastapi_plugin_ignores_positive_boundary_regression_tests(tmp_path: Path, write_file) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/forms')\n"
+        "def submit_form():\n"
+        "    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_forms.py",
+        "def test_form_default_url_encoded(client):\n"
+        "    response = client.post('/forms', data={})\n"
+        "    assert response.status_code == 200\n\n"
+        "def test_empty_request_content_type(client):\n"
+        "    response = client.post('/forms', data=None)\n"
+        "    assert response.status_code == 200\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+
+    artifacts = plugin.collect(tmp_path)
+
+    assert artifacts.generated_test_issues == []
+
+
+def test_fastapi_plugin_keeps_missing_negative_path_for_ambiguous_missing_test_name(
+    tmp_path: Path,
+    write_file,
+) -> None:
+    write_file(
+        tmp_path / "app" / "api.py",
+        "from fastapi import APIRouter\n"
+        "router = APIRouter()\n"
+        "@router.post('/orders')\n"
+        "def create_order():\n"
+        "    return {'ok': True}\n",
+    )
+    write_file(
+        tmp_path / "tests" / "test_api.py",
+        "def test_missing_authorization(client):\n"
+        "    response = client.post('/orders')\n"
+        "    assert response.status_code == 200\n",
+    )
+
+    plugin = get_signal_plugin_for_stack("fastapi_pytest")
+    assert plugin is not None
+
+    artifacts = plugin.collect(tmp_path)
+
+    assert {row[1] for row in artifacts.generated_test_issues} == {"missing_negative_path"}
+
+
 def test_express_plugin_collects_generated_test_quality_issues(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "server" / "app.js",

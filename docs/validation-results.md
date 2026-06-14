@@ -99,6 +99,44 @@ Sprint result:
 
 Review another batch of boundary conversions and optional-value handling. Promote broader parser rules only after a second independent confirmed regression; do not generalize this rule to arbitrary `fromisoformat` or `strptime` calls.
 
+## Validation Sprint 4 - 2026-06-14
+
+This sprint reviewed empty, null, missing, and default-value behavior at form, serializer, renderer, pagination, and request-factory boundaries.
+
+| Case | Decision | Top finding | False positive | Missed risk | Reviewer/test impact |
+|---|---|---|---|---|---|
+| [FastAPI #12134](https://github.com/fastapi/fastapi/pull/12134) | `ready` | none | none | optional form value re-insertion regression | Add empty-string coverage for optional form fields with a `None` default before merging raw form completion logic. |
+| [FastAPI #13537](https://github.com/fastapi/fastapi/pull/13537) | `ready` | none | none after boundary-test fix | none | No change; urlencoded and multipart tests reproduce the confirmed regression. |
+| [DRF #7718](https://github.com/encode/django-rest-framework/pull/7718) | `ready` | none | none | empty-to-null conversion with min/max validators | Combine new empty/null conversion behavior with configured validators. |
+| [DRF #8067](https://github.com/encode/django-rest-framework/pull/8067) | `ready` | none | none | none | No change; constrained DecimalField empty values are covered directly. |
+| [DRF #3731](https://github.com/encode/django-rest-framework/pull/3731) | `ready` | none | none | none | No change; empty temporal-field representation is covered. |
+| [DRF #3677](https://github.com/encode/django-rest-framework/pull/3677) | `ready` | none | none | none | No change; nested empty-value rendering is covered. |
+| [DRF #4260](https://github.com/encode/django-rest-framework/pull/4260) | `ready` | none | none | none | No change; empty pagination query values are preserved by focused tests. |
+| [DRF #5351](https://github.com/encode/django-rest-framework/pull/5351) | `ready` | none | none after boundary-test fix | none | No change; empty-body content-type metadata is covered directly. |
+
+Sprint result:
+
+- 8 isolated public runs completed.
+- 6 fix/control PRs remain clean.
+- 2 confirmed false negatives were reproduced, but their mechanisms differ:
+  - raw form values reinserted after optional/default normalization;
+  - empty-to-null conversion interacting with field validators.
+- No broad boundary rule was promoted because there is not yet a second independent confirmed regression in either mechanism family.
+- Focused positive boundary regression tests named for empty, blank, null, default, or content-type behavior no longer receive unrelated missing-negative-path findings.
+- Historical PRs remain reproducible when their old base branch name has been deleted because checkout now fetches the exact public base SHA.
+
+## Sprint 4 Improvements
+
+| Priority | Improvement | Evidence | Acceptance criterion | Status |
+|---|---|---|---|---|
+| P0 | Reproduce historical PRs after base branch deletion. | Older DRF PRs referenced `master`, which no longer exists as a remote branch even though the exact base SHA remains public. | `review-pr` fetches the exact base SHA without requiring the historical branch ref. | completed |
+| P0 | Avoid negative-path noise on positive boundary regression tests. | FastAPI #13537 and DRF #5351 test successful empty/default compatibility, not endpoint failure semantics. | Explicit empty/null/missing/default/content-type regression tests remain `ready` without suppressing ordinary write-path checks. | completed |
+| P1 | Preserve evidence gates for new boundary rules. | FastAPI #12134 and DRF #7718 are real misses with different mechanisms. | Both are executable `missed_risk` corpus cases, and no unsupported general rule is introduced. | completed |
+
+## Next Validation Gate
+
+Find a second independent confirmed regression matching either raw-value re-insertion after normalization or empty-to-null conversion with validators. Promote only that repeated mechanism, with the current fix PRs as clean controls.
+
 ## Result Row Template
 
 | Field | Value |

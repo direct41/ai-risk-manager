@@ -27,6 +27,10 @@ _JS_NONDETERMINISTIC_PATTERNS: dict[str, re.Pattern[str]] = {
     "random": re.compile(r"\bMath\.random\s*\(", re.IGNORECASE),
     "network": re.compile(r"\b(?:fetch|axios\.(?:get|post|put|patch|delete)|httpx?\.)", re.IGNORECASE),
 }
+_POSITIVE_BOUNDARY_TEST_TOKEN_RE = re.compile(
+    r"(?:^|_)(?:blank|content_type|default|empty|none|null)(?:_|$)",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -263,6 +267,8 @@ def collect_generated_test_issues(
     for observation in observations:
         for method, path in observation.http_calls[-1:]:
             if observation.has_negative_path:
+                continue
+            if _POSITIVE_BOUNDARY_TEST_TOKEN_RE.search(observation.test_name):
                 continue
             if path and (method, path) in route_negative_coverage:
                 continue
