@@ -20,6 +20,10 @@ Python form, field, parser, renderer, and serializer changes that newly pass a f
 parsing now require an explicit empty-value regression case. The signal stays limited to boundary modules and
 field-derived values; unrelated application datetime parsing remains outside its scope.
 
+Generated-test quality analysis does not require negative-path assertions from tests explicitly named for positive
+empty, blank, null, default, or content-type boundary compatibility. Ordinary write-path tests still require
+negative-path coverage, and nondeterministic dependency checks remain active for all test names.
+
 ## Status Legend
 
 - `implemented`: extracted and used in deterministic rules.
