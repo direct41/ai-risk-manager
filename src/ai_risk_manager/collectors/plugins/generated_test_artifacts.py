@@ -28,7 +28,8 @@ _JS_NONDETERMINISTIC_PATTERNS: dict[str, re.Pattern[str]] = {
     "network": re.compile(r"\b(?:fetch|axios\.(?:get|post|put|patch|delete)|httpx?\.)", re.IGNORECASE),
 }
 _POSITIVE_BOUNDARY_TEST_TOKEN_RE = re.compile(
-    r"(?:^|_)(?:blank|content_type|default|empty|none|null)(?:_|$)",
+    r"^test_(?:(?:body|field|form|request|value)_)?"
+    r"(?:blank|content_type|default|empty|none|null)(?:_|$)",
     re.IGNORECASE,
 )
 

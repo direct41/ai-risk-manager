@@ -396,7 +396,7 @@ def test_fastapi_plugin_ignores_positive_boundary_regression_tests(tmp_path: Pat
     assert artifacts.generated_test_issues == []
 
 
-def test_fastapi_plugin_keeps_missing_negative_path_for_ambiguous_missing_test_name(
+def test_fastapi_plugin_keeps_missing_negative_path_for_ordinary_boundary_token_name(
     tmp_path: Path,
     write_file,
 ) -> None:
@@ -410,7 +410,7 @@ def test_fastapi_plugin_keeps_missing_negative_path_for_ambiguous_missing_test_n
     )
     write_file(
         tmp_path / "tests" / "test_api.py",
-        "def test_missing_authorization(client):\n"
+        "def test_create_user_default_role(client):\n"
         "    response = client.post('/orders')\n"
         "    assert response.status_code == 200\n",
     )
