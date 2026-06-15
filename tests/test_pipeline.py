@@ -468,6 +468,49 @@ def test_pr_mode_ui_flow_smoke_skips_commands_by_default(tmp_path: Path, write_f
     assert any("skipped declared browser smoke command execution" in note for note in notes)
 
 
+def test_pr_mode_ui_flow_component_change_runs_declared_smoke(tmp_path: Path, write_file, monkeypatch) -> None:
+    write_file(
+        tmp_path / "package.json",
+        '{"dependencies":{"nuxt":"4.2.0","vue":"3.5.0"}}',
+    )
+    write_file(
+        tmp_path / "app" / "components" / "cart" / "CartDrawer.vue",
+        "<template><aside>cart</aside></template>\n",
+    )
+    write_file(
+        tmp_path / ".riskmap-ui.toml",
+        '[[journeys]]\n'
+        'id = "cart"\n'
+        'match = ["cart", "cartdrawer"]\n'
+        f'command = ["{sys.executable}", "-c", "import sys; sys.exit(2)"]\n',
+    )
+
+    ctx = RunContext(
+        repo_path=tmp_path,
+        mode="pr",
+        base="main",
+        output_dir=tmp_path / ".riskmap",
+        provider="auto",
+        no_llm=True,
+    )
+    monkeypatch.setenv("AIRISK_UI_SMOKE_ENABLE_COMMANDS", "1")
+
+    with patch(
+        "ai_risk_manager.pipeline.run._resolve_changed_files",
+        return_value={"app/components/cart/CartDrawer.vue"},
+    ):
+        result, code, notes = run_pipeline(ctx)
+
+    assert code == 0
+    assert result is not None
+    finding = next(f for f in result.findings.findings if f.rule_id == "ui_journey_smoke_failed")
+    assert finding.evidence_refs == [
+        "app/components/cart/CartDrawer.vue",
+        ".riskmap-ui.toml",
+    ]
+    assert any("smoke failed for journey 'cart'" in note for note in notes)
+
+
 def test_pr_mode_business_invariant_flow_without_check_delta_produces_finding(tmp_path: Path, write_file) -> None:
     write_file(
         tmp_path / "app" / "api.py",
