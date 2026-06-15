@@ -249,7 +249,7 @@ def test_ui_flow_labels_nuxt_app_pages_without_vue_suffix(tmp_path: Path, write_
     )
 
     assert prepared.applicability == "partial"
-    assert assessment.changed_journeys == ["checkout"]
+    assert assessment.changed_journeys == ["checkout", "product/productgallery"]
     assert "Review changed UI journeys: `checkout`." in assessment.review_focus
     assert "Review shared UI components affecting: `product/productgallery`." in assessment.review_focus
 
@@ -272,6 +272,6 @@ def test_ui_flow_labels_nuxt_pages_and_components_without_extension_tokens(tmp_p
         },
     )
 
-    assert assessment.changed_journeys == ["product/[slug]"]
+    assert assessment.changed_journeys == ["product/[slug]", "cartmodal"]
     assert "Review changed UI journeys: `product/[slug]`." in assessment.review_focus
     assert "Review shared UI components affecting: `cartmodal`." in assessment.review_focus

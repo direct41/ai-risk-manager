@@ -137,6 +137,28 @@ Sprint result:
 
 Find a second independent confirmed regression matching either raw-value re-insertion after normalization or empty-to-null conversion with validators. Promote only that repeated mechanism, with the current fix PRs as clean controls.
 
+## Targeted UI Smoke Validation - 2026-06-15
+
+Three changed journeys were validated across a vanilla Express `public/` shell and a Nuxt app-dir frontend.
+
+| Layout | Changed journey | Result | Runtime and setup |
+|---|---|---|---|
+| Express with vanilla `public/` shell | `app_shell` | Passed login and note creation in Chromium | About 5 seconds after the existing local server started |
+| Nuxt app-dir route | `checkout` | Failed because the local commerce backend on port `9000` was unavailable | About 4 seconds; frontend dependencies were already installed |
+| Nuxt app-dir shared component | `cart/cartdrawer` | Passed Nuxt shell launch after the selection fix; initially no command ran | About 3 seconds |
+
+The component pilot exposed a correctness defect: component targets appeared in review focus but only route journeys reached the declared smoke runner. Route and component journeys now use the same opt-in selection path, with the changed component retained as failure evidence.
+
+Command behavior was verified end to end:
+
+- without `AIRISK_UI_SMOKE_ENABLE_COMMANDS=1`, mapped commands are reported as skipped and are not executed
+- successful commands add a journey-specific note without a finding
+- non-zero commands produce `ui_journey_smoke_failed` with the changed UI file, manifest, command, exit code, and output excerpt
+
+No false-positive journey selection was observed. One component-only journey was missed before the fix. Real browser checks require a separately managed application server, and framework journeys may depend on backend services and seeded state outside the frontend package.
+
+Decision: keep targeted declared smoke execution opt-in and limited to changed journeys. Do not add screenshot diffing, whole-site snapshots, automatic dev-server lifecycle management, or a cross-browser matrix until repositories repeatedly adopt stable journey commands in their own browser-test setup.
+
 ## Result Row Template
 
 | Field | Value |

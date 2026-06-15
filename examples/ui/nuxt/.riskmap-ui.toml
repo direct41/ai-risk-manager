@@ -5,10 +5,12 @@ command = ["pnpm", "exec", "playwright", "test", "--grep", "@checkout"]
 
 [[journeys]]
 id = "product"
+# Shared component changes such as ProductGallery.vue select this journey too.
 match = ["product", "product/[slug]", "productgallery", "gallery"]
 command = ["pnpm", "exec", "playwright", "test", "--grep", "@product"]
 
 [[journeys]]
 id = "cart"
+# Component-only changes such as CartDrawer.vue select the declared cart smoke.
 match = ["cart", "cartmodal", "usecart", "mini-cart"]
 command = ["pnpm", "exec", "playwright", "test", "--grep", "@cart"]

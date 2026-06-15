@@ -24,6 +24,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Historical PR checkout no longer requires a deleted base branch when GitHub provides the exact public base commit SHA.
 - Unchanged baseline findings no longer affect default `review-pr` decisions, risk scores, or test-first actions.
 - Business invariant flow matching now treats snake_case, kebab-case, and camelCase path terms consistently.
+- Declared UI smoke selection now includes affected shared components as well as route files, preserving the changed component as failure evidence.
 
 ## [0.2.0] - 2026-06-11
 

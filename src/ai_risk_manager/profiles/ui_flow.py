@@ -312,12 +312,16 @@ class UiFlowProfile:
         manifest, manifest_notes = load_ui_smoke_manifest(repo_path)
         notes.extend(manifest_notes)
         smoke_signals = SignalBundle()
-        if scope.route_journeys:
+        changed_journeys = _dedupe([*scope.route_journeys, *scope.component_targets], limit=8)
+        if changed_journeys:
             smoke_result = run_ui_smoke(
                 repo_path=repo_path,
                 manifest=manifest,
-                changed_journeys=scope.route_journeys,
-                evidence_refs={journey: [path for path in scope.changed_ui_files if _derive_journey(path) == journey] for journey in scope.route_journeys},
+                changed_journeys=changed_journeys,
+                evidence_refs={
+                    journey: [path for path in scope.changed_ui_files if _derive_journey(path) == journey]
+                    for journey in changed_journeys
+                },
             )
             notes.extend(smoke_result.notes)
             smoke_signals = smoke_result.signals
@@ -325,7 +329,7 @@ class UiFlowProfile:
         return UiFlowScopeAssessment(
             review_focus=_dedupe(focus, limit=3),
             notes=notes,
-            changed_journeys=list(scope.route_journeys),
+            changed_journeys=changed_journeys,
             smoke_signals=smoke_signals,
         )
 
