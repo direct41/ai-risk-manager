@@ -31,7 +31,7 @@ def test_parse_github_pr_url_rejects_non_github_url() -> None:
         raise AssertionError("Expected GitHubPRReviewError")
 
 
-def test_prepare_github_pr_checkout_uses_explicit_pull_and_base_refs(
+def test_prepare_github_pr_checkout_uses_explicit_pull_and_base_sha(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -63,10 +63,36 @@ def test_prepare_github_pr_checkout_uses_explicit_pull_and_base_refs(
         "https://github.com/example/project.git",
         str(checkout),
     ]
-    assert "refs/heads/release/v1:refs/remotes/origin/release/v1" in calls[1][0]
     assert "refs/pull/123/head:refs/heads/airisk-pr-123" in calls[1][0]
     assert "a" * 40 in calls[1][0]
+    assert "refs/heads/release/v1:refs/remotes/origin/release/v1" not in calls[1][0]
     assert calls[2][0] == ["checkout", "--detach", "airisk-pr-123"]
+
+
+def test_prepare_github_pr_checkout_uses_base_ref_without_base_sha(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls: list[tuple[list[str], Path | None]] = []
+
+    def _fake_run_git(args: list[str], *, cwd: Path | None = None, timeout: int = 120) -> None:
+        calls.append((args, cwd))
+
+    monkeypatch.setattr("ai_risk_manager.integrations.github_pr_review._run_git", _fake_run_git)
+    ref = GitHubPRReference(
+        repo_full_name="example/project",
+        pr_number=123,
+        clone_url="https://github.com/example/project.git",
+    )
+
+    prepare_github_pr_checkout(
+        ref,
+        base_ref="release/v1",
+        workspace=tmp_path,
+    )
+
+    assert "refs/heads/release/v1:refs/remotes/origin/release/v1" in calls[1][0]
+    assert "refs/pull/123/head:refs/heads/airisk-pr-123" in calls[1][0]
 
 
 def test_prepare_github_pr_checkout_rejects_option_like_base(tmp_path: Path) -> None:
