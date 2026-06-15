@@ -745,6 +745,142 @@
         "rationale": "The report correctly keeps the backwards-compatible charset parser expansion ready after each supported input form is covered.",
         "reviewed_at": "2026-06-13"
       }
+    },
+    {
+      "id": "fastapi-12134",
+      "url": "https://github.com/fastapi/fastapi/pull/12134",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI added raw form-value completion after filtered field extraction; the change later caused empty optional fields with a None default to be reinserted as empty strings and fail validation.",
+      "expected": {
+        "execution": "pass",
+        "product": "mixed",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "missed_risk",
+        "rationale": "The clean report misses the optional-form regression later confirmed and fixed by FastAPI #13537. The mechanism is specific to raw value re-insertion and is not yet repeated enough for a general boundary rule.",
+        "reviewed_at": "2026-06-14"
+      }
+    },
+    {
+      "id": "fastapi-13537",
+      "url": "https://github.com/fastapi/fastapi/pull/13537",
+      "stack": "fastapi_pytest",
+      "reason": "FastAPI fixes empty form values being reinserted after resolving an optional field to its None default, with focused urlencoded and multipart regression tests.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report keeps the focused boundary fix ready and no longer demands unrelated negative-path assertions from successful empty/default compatibility tests.",
+        "reviewed_at": "2026-06-14"
+      }
+    },
+    {
+      "id": "drf-7718",
+      "url": "https://github.com/encode/django-rest-framework/pull/7718",
+      "stack": "django_drf",
+      "reason": "DRF converted empty DecimalField input to None for allow_null fields but did not combine the new behavior with min/max validators; that interaction later raised TypeError and was fixed by #8067.",
+      "expected": {
+        "execution": "pass",
+        "product": "mixed",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "missed_risk",
+        "rationale": "The clean report misses the constrained-field interaction later confirmed by DRF #8064 and fixed by #8067. This conversion-plus-validator mechanism is distinct from the FastAPI form-value regression.",
+        "reviewed_at": "2026-06-14"
+      }
+    },
+    {
+      "id": "drf-8067",
+      "url": "https://github.com/encode/django-rest-framework/pull/8067",
+      "stack": "django_drf",
+      "reason": "DRF fixes empty allow-null DecimalField input with min/max validators by short-circuiting validation and adds focused constrained-field regression tests.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the constrained DecimalField empty-value fix ready with focused regression coverage.",
+        "reviewed_at": "2026-06-14"
+      }
+    },
+    {
+      "id": "drf-3731",
+      "url": "https://github.com/encode/django-rest-framework/pull/3731",
+      "stack": "django_drf",
+      "reason": "DRF fixes DateTimeField and TimeField representation of None and empty values with focused output cases.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the guarded empty temporal-field representation fix ready.",
+        "reviewed_at": "2026-06-14"
+      }
+    },
+    {
+      "id": "drf-3677",
+      "url": "https://github.com/encode/django-rest-framework/pull/3677",
+      "stack": "django_drf",
+      "reason": "DRF aligns nested bound-field rendering for empty strings and None with a focused nested-form regression test.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the nested empty-value rendering compatibility fix ready.",
+        "reviewed_at": "2026-06-14"
+      }
+    },
+    {
+      "id": "drf-4260",
+      "url": "https://github.com/encode/django-rest-framework/pull/4260",
+      "stack": "django_drf",
+      "reason": "DRF preserves empty query parameters in pagination links and adds focused next/previous URL regression coverage.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report correctly keeps the tested empty-query compatibility fix ready.",
+        "reviewed_at": "2026-06-14"
+      }
+    },
+    {
+      "id": "drf-5351",
+      "url": "https://github.com/encode/django-rest-framework/pull/5351",
+      "stack": "django_drf",
+      "reason": "DRF preserves an explicit content type when RequestFactory receives an empty body and adds a focused metadata regression test.",
+      "expected": {
+        "execution": "pass",
+        "product": "useful",
+        "decision": "ready",
+        "max_top_findings": 0
+      },
+      "label": {
+        "outcome": "good_signal",
+        "rationale": "The report keeps the empty-body boundary fix ready and no longer treats its focused compatibility test as a missing negative-path defect.",
+        "reviewed_at": "2026-06-14"
+      }
     }
   ]
 }

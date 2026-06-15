@@ -11,13 +11,16 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added a PR diff signal for query parser `arrayLimit` changes without indexed-bracket compatibility coverage.
 - Added 8 parser and serialization validation cases, including the confirmed DRF empty-datetime renderer regression and seven clean controls.
 - Added a narrow PR diff signal for strict datetime parsing of field-derived values without empty-string or null regression coverage.
+- Added 8 boundary and optional-value validation cases covering form extraction, serializer conversion, rendering, pagination, and empty request bodies.
 
 ### Changed
 - Deterministic test plans now use dependency and regression-specific assertions for generic PR delta findings instead of API response boilerplate.
 - Public PR validation now uses the historical base commit reported by GitHub for reproducible merged-PR baselines and diffs.
+- Positive boundary regression tests named for empty, blank, null, default, or content-type behavior no longer receive unrelated missing-negative-path findings.
 
 ### Fixed
 - Old merged PRs in high-velocity repositories no longer fall back to noisy full-repository analysis when their merge base is outside the shallow branch history.
+- Historical PR checkout no longer requires a deleted base branch when GitHub provides the exact public base commit SHA.
 - Unchanged baseline findings no longer affect default `review-pr` decisions, risk scores, or test-first actions.
 
 ## [0.2.0] - 2026-06-11

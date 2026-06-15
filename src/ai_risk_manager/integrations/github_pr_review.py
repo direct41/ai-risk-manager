@@ -266,12 +266,11 @@ def prepare_github_pr_checkout(
     pr_branch = f"airisk-pr-{ref.pr_number}"
 
     _run_git(["clone", "--no-tags", "--depth=100", "--no-checkout", ref.clone_url, str(checkout_path)], timeout=180)
-    fetch_refs = [
-        f"refs/heads/{safe_base}:refs/remotes/origin/{safe_base}",
-        f"refs/pull/{ref.pr_number}/head:refs/heads/{pr_branch}",
-    ]
+    fetch_refs = [f"refs/pull/{ref.pr_number}/head:refs/heads/{pr_branch}"]
     if safe_base_sha is not None:
         fetch_refs.append(safe_base_sha)
+    else:
+        fetch_refs.append(f"refs/heads/{safe_base}:refs/remotes/origin/{safe_base}")
     _run_git(
         [
             "fetch",
