@@ -12,6 +12,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added 8 parser and serialization validation cases, including the confirmed DRF empty-datetime renderer regression and seven clean controls.
 - Added a narrow PR diff signal for strict datetime parsing of field-derived values without empty-string or null regression coverage.
 - Added 8 boundary and optional-value validation cases covering form extraction, serializer conversion, rendering, pagination, and empty request bodies.
+- Added two end-to-end `business_invariant_risk` pilot repositories covering Python checkout and JavaScript account-recovery flows.
 
 ### Changed
 - Deterministic test plans now use dependency and regression-specific assertions for generic PR delta findings instead of API response boilerplate.
@@ -22,6 +23,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Old merged PRs in high-velocity repositories no longer fall back to noisy full-repository analysis when their merge base is outside the shallow branch history.
 - Historical PR checkout no longer requires a deleted base branch when GitHub provides the exact public base commit SHA.
 - Unchanged baseline findings no longer affect default `review-pr` decisions, risk scores, or test-first actions.
+- Business invariant flow matching now treats snake_case, kebab-case, and camelCase path terms consistently.
 
 ## [0.2.0] - 2026-06-11
 

@@ -84,7 +84,8 @@ def _parse_values(raw_value: str) -> list[str]:
 
 
 def _split_tokens(value: str) -> set[str]:
-    return {token for token in re.split(r"[^a-z0-9_]+", _normalize_path(value).lower()) if token}
+    normalized = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", _normalize_path(value))
+    return {token for token in re.split(r"[^a-z0-9]+", normalized.lower()) if token}
 
 
 def _expand_terms(values: list[str]) -> tuple[str, ...]:
@@ -92,7 +93,7 @@ def _expand_terms(values: list[str]) -> tuple[str, ...]:
     seen: set[str] = set()
     for value in values:
         cleaned = _normalize_path(value).lower().strip()
-        candidates = [cleaned, *_split_tokens(cleaned)]
+        candidates = [cleaned, *_split_tokens(value)]
         for candidate in candidates:
             if not candidate or candidate in _NOISY_TOKENS or candidate in seen:
                 continue
@@ -173,7 +174,7 @@ def _load_critical_flows(spec_path: Path) -> tuple[BusinessCriticalFlow, ...]:
 
 def _matches_terms(path: str, terms: tuple[str, ...]) -> bool:
     normalized = _normalize_path(path).lower()
-    path_tokens = _split_tokens(normalized)
+    path_tokens = _split_tokens(path)
     for term in terms:
         if "/" in term and term in normalized:
             return True
@@ -186,7 +187,7 @@ def _matches_terms(path: str, terms: tuple[str, ...]) -> bool:
 
 def _is_check_file(path: str) -> bool:
     normalized = _normalize_path(path).lower()
-    path_tokens = _split_tokens(normalized)
+    path_tokens = _split_tokens(path)
     if path_tokens & _CHECK_TOKENS:
         return True
     name = Path(normalized).name

@@ -1,0 +1,4 @@
+[project]
+name = "checkout-service-pilot"
+version = "0.0.0"
+dependencies = ["fastapi==0.137.0"]

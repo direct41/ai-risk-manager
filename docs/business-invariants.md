@@ -92,3 +92,24 @@ This keeps the product honest:
 - no findings unless the repository declares what matters
 
 The next implementation step is enforcing additional declared invariant sections after this first critical-flow rule proves useful.
+
+## Pilot Results
+
+Two repository-owned specifications were exercised end to end:
+
+| Pilot | Stack/layout | Declared flow | Verified behavior |
+|---|---|---|---|
+| `examples/business-invariants/pilots/checkout-service` | FastAPI-style Python service | `checkout` | Implementation-only changes produce one focused finding; a matching integration-test delta clears it; unrelated changes stay clean. |
+| `examples/business-invariants/pilots/support-console` | Express-style JavaScript service | `account-recovery` | Snake-case spec terms match camelCase implementation paths and kebab-case e2e paths; matching checks clear the finding. |
+
+Additional boundary results:
+
+- a spec without a readable critical-flow `id` remains `partial`, emits no finding, and records a diagnostic note
+- a repository without `.riskmap.yml` or `.riskmap.yaml` remains `not_applicable`
+- changing only unrelated files does not produce a critical-flow finding
+
+Pilot decision:
+
+- keep the current critical-flow rule
+- normalize snake_case, kebab-case, and camelCase terms consistently
+- do not add state, auth, payment, or admin invariant rules until real repository-owned examples demonstrate a repeated need

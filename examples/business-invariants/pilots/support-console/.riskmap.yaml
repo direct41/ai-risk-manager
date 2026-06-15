@@ -1,0 +1,4 @@
+critical_flows:
+  - id: account-recovery
+    match: [account_recovery, password_reset]
+    checks: [account_recovery, password_reset]
