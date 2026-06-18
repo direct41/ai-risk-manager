@@ -50,6 +50,7 @@ cat .riskmap/public-pr-corpus-status/corpus_status.md
 Label a reviewed case by changing `expected.product` and adding:
 
 ```json
+"head_sha": "<reviewed-40-character-commit-sha>",
 "label": {
   "outcome": "good_signal",
   "rationale": "The report surfaced the changed-file risk and proposed the right regression test.",
@@ -57,7 +58,7 @@ Label a reviewed case by changing `expected.product` and adding:
 }
 ```
 
-Use `good_signal`, `noisy`, `false_positive`, or `missed_risk`. Pending cases keep `product=needs_human_review` and omit `label`. The strict gate allows pending cases but rejects resolved products without label metadata, labels attached to pending products, and inconsistent outcome/product pairs.
+Use `good_signal`, `noisy`, `false_positive`, or `missed_risk`. Pending cases keep `product=needs_human_review` and omit `label`. Every labeled case records the exact PR head SHA that was reviewed. A later benchmark run fails with an explicit head-drift error when an open PR changes, so maintainers can review the new diff instead of treating stale expectations as a product regression. The strict gate allows pending cases but rejects resolved products without label metadata, labeled cases without a reviewed head SHA, labels attached to pending products, and inconsistent outcome/product pairs.
 
 ## Independent Judge
 
@@ -185,10 +186,14 @@ Use `docs/validation-results.md` as the public-safe template. Keep the working c
 | User role | backend engineer, tech lead, QA |
 | Command | `riskmap review-pr ...` |
 | Decision | `ready`, `review_required`, `block_recommended` |
+| Top three findings or actions | exact short labels from the report |
+| Review/test impact | yes / partly / no, with one concrete behavior change |
 | Useful? | yes / mixed / no |
 | Top false positive | short note |
 | Missed risk | short note |
+| Setup friction | none / install / clone / timeout / unsupported stack / artifact |
 | Next requested workflow | local CLI / GitHub Action / PR comment / none |
+| Run again? | yes / maybe / no |
 
 Do not record secrets, private repository names, customer names, or private vulnerability details.
 

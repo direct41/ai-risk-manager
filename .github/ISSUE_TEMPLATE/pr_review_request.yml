@@ -17,6 +17,18 @@ body:
     validations:
       required: true
   - type: dropdown
+    id: reviewer_role
+    attributes:
+      label: Your review role
+      options:
+        - Backend engineer
+        - Tech lead
+        - QA engineer
+        - Maintainer
+        - Other
+    validations:
+      required: true
+  - type: dropdown
     id: stack
     attributes:
       label: Primary stack
@@ -43,6 +55,16 @@ body:
       label: What would you want the tool to answer?
       description: Keep this focused on merge-risk or test-first review.
       placeholder: What should I test before merging? Which changed area deserves review first?
+    validations:
+      required: true
+  - type: dropdown
+    id: preferred_response
+    attributes:
+      label: Preferred response format
+      options:
+        - GitHub issue reply
+        - Local CLI artifacts
+        - Pull request comment
     validations:
       required: true
   - type: checkboxes

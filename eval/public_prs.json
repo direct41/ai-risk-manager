@@ -4,43 +4,44 @@
   "cases": [
     {
       "id": "express-7287",
+      "head_sha": "1c53e59955944371a22c70cbe8fe901f7267672d",
       "url": "https://github.com/expressjs/express/pull/7287",
       "stack": "express_node",
-      "reason": "Real full_fallback PR that should surface changed application code without test delta, not old repo-wide findings.",
+      "reason": "Express handles non-finite cookie maxAge values and now includes focused Infinity, -Infinity, NaN, and invalid-string regression coverage.",
       "expected": {
         "execution": "pass",
         "product": "useful",
-        "decision": "review_required",
-        "required_rules": ["pr_code_change_without_test_delta"],
-        "required_paths": ["lib/response.js"],
+        "decision": "ready",
         "forbidden_top_rules": ["critical_path_no_tests", "critical_write_missing_authz"],
-        "max_top_findings": 1
+        "max_top_findings": 0
       },
       "label": {
         "outcome": "good_signal",
-        "rationale": "The report correctly surfaced missing changed-file regression coverage without old repo-wide fallback noise.",
-        "reviewed_at": "2026-06-09"
+        "rationale": "The report stays ready after the PR added focused cookie maxAge regression tests requested during review.",
+        "reviewed_at": "2026-06-18"
       }
     },
     {
       "id": "fastapi-15708",
+      "head_sha": "5a079219dc3c7178d3409247b71430a152edc16e",
       "url": "https://github.com/fastapi/fastapi/pull/15708",
       "stack": "fastapi_pytest",
-      "reason": "Real PR where pr_summary should stay aligned with merge-triage test-first actions on an unchanged changed-file finding.",
+      "reason": "FastAPI aligns SSE response-model serialization across primary and fallback paths with broad alias and exclusion regression coverage.",
       "expected": {
         "execution": "pass",
-        "product": "mixed",
+        "product": "useful",
         "decision": "ready",
         "max_top_findings": 0
       },
       "label": {
-        "outcome": "missed_risk",
-        "rationale": "The clean report misses the user-visible alias compatibility change and inconsistent handling between Pydantic and fallback SSE serialization paths.",
-        "reviewed_at": "2026-06-10"
+        "outcome": "good_signal",
+        "rationale": "The report stays ready after the PR aligned primary and fallback SSE serialization and added focused alias, exclusion, and nested-model tests.",
+        "reviewed_at": "2026-06-18"
       }
     },
     {
       "id": "drf-9975",
+      "head_sha": "85dd28a665b4c3c0d84834a771b0244d5d847c57",
       "url": "https://github.com/encode/django-rest-framework/pull/9975",
       "stack": "django_drf",
       "reason": "DRF validator fix with matching regression tests; should stay ready with no surfaced top risks.",
@@ -58,6 +59,7 @@
     },
     {
       "id": "express-7291",
+      "head_sha": "9cd2f5e107f1bcd3d4ff69626a3419c2b42dcee8",
       "url": "https://github.com/expressjs/express/pull/7291",
       "stack": "express_node",
       "reason": "Express forwarded-host parsing change with matching regression test; should stay ready with no surfaced top risks.",
@@ -75,6 +77,7 @@
     },
     {
       "id": "full-stack-fastapi-template-2239",
+      "head_sha": "52d58b42d240ec92d9026967461177aa7b945349",
       "url": "https://github.com/fastapi/full-stack-fastapi-template/pull/2239",
       "stack": "fastapi_pytest",
       "reason": "FastAPI private user creation adds duplicate-email validation but only updates success status assertion.",
@@ -94,6 +97,7 @@
     },
     {
       "id": "drf-9883",
+      "head_sha": "89020ae9248d41ea9b4095e273e8ce58409c7fdb",
       "url": "https://github.com/encode/django-rest-framework/pull/9883",
       "stack": "django_drf",
       "reason": "DRF exception inheritance change without tests; should ask for changed-file regression coverage without repo-wide fallback noise.",
@@ -114,6 +118,7 @@
     },
     {
       "id": "fastapi-15676",
+      "head_sha": "df50247add73bc07719903512ce3c3452f3a5b29",
       "url": "https://github.com/fastapi/fastapi/pull/15676",
       "stack": "fastapi_pytest",
       "reason": "FastAPI jsonable_encoder recursion fix with a focused regression test.",
@@ -131,6 +136,7 @@
     },
     {
       "id": "fastapi-15646",
+      "head_sha": "5bee710a91f9328161114cc6cc62516b118feded",
       "url": "https://github.com/fastapi/fastapi/pull/15646",
       "stack": "fastapi_pytest",
       "reason": "FastAPI OpenAPI example handling change with broad regression coverage.",
@@ -146,6 +152,7 @@
     },
     {
       "id": "fastapi-15641",
+      "head_sha": "a5062d5241684dd102a8234a6b2362e4c9d640ae",
       "url": "https://github.com/fastapi/fastapi/pull/15641",
       "stack": "fastapi_pytest",
       "reason": "FastAPI jsonable_encoder invalid UTF-8 bytes crash fix with a regression test.",
@@ -165,6 +172,7 @@
     },
     {
       "id": "full-stack-fastapi-template-2320",
+      "head_sha": "5af007fbc41f9c27255fad04d049941be9f7c9cd",
       "url": "https://github.com/fastapi/full-stack-fastapi-template/pull/2320",
       "stack": "fastapi_pytest",
       "reason": "FastAPI template DB session dependency cleanup without a matching test delta.",
@@ -184,6 +192,7 @@
     },
     {
       "id": "full-stack-fastapi-template-2253",
+      "head_sha": "8592e59669dcf1b3669573a7cbf6fc8bb21ae779",
       "url": "https://github.com/fastapi/full-stack-fastapi-template/pull/2253",
       "stack": "fastapi_pytest",
       "reason": "FastAPI template users route cleanup with updated API tests.",
@@ -201,6 +210,7 @@
     },
     {
       "id": "full-stack-fastapi-template-2285",
+      "head_sha": "4c927670d3b1cdb01090ac5b32d87054a11dcc80",
       "url": "https://github.com/fastapi/full-stack-fastapi-template/pull/2285",
       "stack": "fastapi_pytest",
       "reason": "FastAPI template frontend sidebar interaction fix without a test delta.",
@@ -220,6 +230,7 @@
     },
     {
       "id": "full-stack-fastapi-template-2244",
+      "head_sha": "ee13aeb8e4facf23449297a0e01e62d52bdc5151",
       "url": "https://github.com/fastapi/full-stack-fastapi-template/pull/2244",
       "stack": "fastapi_pytest",
       "reason": "FastAPI template app startup diagnostics change without a test delta.",
@@ -239,25 +250,25 @@
     },
     {
       "id": "drf-9978",
+      "head_sha": "e8596418648e18ff9ab4d8edaa71b7524b6cfd3b",
       "url": "https://github.com/encode/django-rest-framework/pull/9978",
       "stack": "django_drf",
-      "reason": "DRF header parsing compatibility update without a matching test delta.",
+      "reason": "DRF updates Vary header parsing for Django 6.1 and includes focused compatibility tests across supported Django behavior.",
       "expected": {
         "execution": "pass",
         "product": "useful",
-        "decision": "review_required",
-        "required_rules": ["pr_code_change_without_test_delta"],
-        "required_paths": ["rest_framework/compat.py"],
-        "max_top_findings": 1
+        "decision": "ready",
+        "max_top_findings": 0
       },
       "label": {
         "outcome": "good_signal",
-        "rationale": "The report matches the maintainer-requested regression coverage for Vary header splitting across Django versions without repeating the reviewer's rejected fallback-API claim.",
-        "reviewed_at": "2026-06-11"
+        "rationale": "The report stays ready after the PR added focused Vary header compatibility tests for the changed Django behavior.",
+        "reviewed_at": "2026-06-18"
       }
     },
     {
       "id": "drf-9977",
+      "head_sha": "323af3f5794487aad96c4864445234ce700ca67d",
       "url": "https://github.com/encode/django-rest-framework/pull/9977",
       "stack": "django_drf",
       "reason": "DRF OpenAPI schema numeric-bound fix with focused schema tests.",
@@ -275,6 +286,7 @@
     },
     {
       "id": "drf-9972",
+      "head_sha": "e972c2bfafbbede07463aa4f526fa6abf9cbacd5",
       "url": "https://github.com/encode/django-rest-framework/pull/9972",
       "stack": "django_drf",
       "reason": "DRF TemplateHTMLRenderer list-data fix with renderer tests.",
@@ -294,6 +306,7 @@
     },
     {
       "id": "drf-9951",
+      "head_sha": "32265943b0f319c64fed759490c8fb4e7116f4cc",
       "url": "https://github.com/encode/django-rest-framework/pull/9951",
       "stack": "django_drf",
       "reason": "DRF uniqueness constraint behavior change without a test delta.",
@@ -316,6 +329,7 @@
     },
     {
       "id": "drf-9674",
+      "head_sha": "a6a4790c6b5a2fb8001835cb9b4303f2fb24d830",
       "url": "https://github.com/encode/django-rest-framework/pull/9674",
       "stack": "django_drf",
       "reason": "Independent DRF custom-user authentication change with dynamic gettext messages and no regression tests.",
@@ -338,6 +352,7 @@
     },
     {
       "id": "drf-9932",
+      "head_sha": "9e793e10ae6c6fd551c3135e5b846ec1c6b23b06",
       "url": "https://github.com/encode/django-rest-framework/pull/9932",
       "stack": "django_drf",
       "reason": "DRF AuthTokenSerializer user-field behavior change without a test delta.",
@@ -360,6 +375,7 @@
     },
     {
       "id": "express-7290",
+      "head_sha": "6263c0df42bbb950df0a33a6f36f72850af81892",
       "url": "https://github.com/expressjs/express/pull/7290",
       "stack": "express_node",
       "reason": "Express error logging change with dedicated app logging tests.",
@@ -377,6 +393,7 @@
     },
     {
       "id": "express-7047",
+      "head_sha": "ccffa36d6c1daa69329ed76f59a0350d968ebb1a",
       "url": "https://github.com/expressjs/express/pull/7047",
       "stack": "express_node",
       "reason": "Independent Express control where a trimRight-to-trimEnd change also alters host extraction behavior.",
@@ -396,6 +413,7 @@
     },
     {
       "id": "express-7265",
+      "head_sha": "bf6754c69c2676fe4acbab0ffd59c3c27c06bea3",
       "url": "https://github.com/expressjs/express/pull/7265",
       "stack": "express_node",
       "reason": "Express tiny request parsing maintenance change without a test delta.",
@@ -413,6 +431,7 @@
     },
     {
       "id": "express-7142",
+      "head_sha": "84d809d4de1583b13da5016e85a27dbc6e453102",
       "url": "https://github.com/expressjs/express/pull/7142",
       "stack": "express_node",
       "reason": "Express view lookup path containment change without a test delta.",
@@ -432,6 +451,7 @@
     },
     {
       "id": "fastapi-15038",
+      "head_sha": "65d01e37ea4315f3bb234899a9ebfe08651fbce6",
       "url": "https://github.com/fastapi/fastapi/pull/15038",
       "stack": "fastapi_pytest",
       "reason": "FastAPI request dependency lifecycle fix changes TaskGroup and async exit-stack behavior without a regression test delta.",
@@ -451,6 +471,7 @@
     },
     {
       "id": "fastapi-14786",
+      "head_sha": "2900456bea267567b4a2c0c1be970de233f63ade",
       "url": "https://github.com/fastapi/fastapi/pull/14786",
       "stack": "fastapi_pytest",
       "reason": "FastAPI Authorization credential whitespace fix with focused HTTP and OAuth2 regression tests plus maintainer standards review.",
@@ -468,6 +489,7 @@
     },
     {
       "id": "fastapi-13786",
+      "head_sha": "61d703e761e83f7084c3224157310cc4732dd690",
       "url": "https://github.com/fastapi/fastapi/pull/13786",
       "stack": "fastapi_pytest",
       "reason": "FastAPI authentication status-code contract change with broad security tests, compatibility docs, and maintainer review.",
@@ -485,6 +507,7 @@
     },
     {
       "id": "drf-9902",
+      "head_sha": "95b5934f1d83a16b1ea92721479755edc536d6be",
       "url": "https://github.com/encode/django-rest-framework/pull/9902",
       "stack": "django_drf",
       "reason": "DRF partial ListField form parsing fix whose review requested backward-compatibility coverage before the final tested implementation.",
@@ -502,6 +525,7 @@
     },
     {
       "id": "drf-9928",
+      "head_sha": "7966d30e2b8cd8c58eedf8721eac69d13e00bad7",
       "url": "https://github.com/encode/django-rest-framework/pull/9928",
       "stack": "django_drf",
       "reason": "DRF HTMLFormRenderer empty datetime crash fix with a focused regression test and maintainer approval.",
@@ -519,6 +543,7 @@
     },
     {
       "id": "drf-9929",
+      "head_sha": "3da5927899bef34d712617e5cfc6a589e8309cb0",
       "url": "https://github.com/encode/django-rest-framework/pull/9929",
       "stack": "django_drf",
       "reason": "DRF non-editable choices mapping fix with a focused serializer regression test and maintainer approvals.",
@@ -536,6 +561,7 @@
     },
     {
       "id": "express-7181",
+      "head_sha": "f0a137e9071a78d30bb9dbc7623451214465f684",
       "url": "https://github.com/expressjs/express/pull/7181",
       "stack": "express_node",
       "reason": "Express repeated-key query parsing regression fix with a known indexed-bracket compatibility side effect discussed in review.",
@@ -555,6 +581,7 @@
     },
     {
       "id": "express-7057",
+      "head_sha": "cefc1f50d20735a5ebf02a170373c1a0c45c4a10",
       "url": "https://github.com/expressjs/express/pull/7057",
       "stack": "express_node",
       "reason": "Express raises the minimum qs version for a public denial-of-service advisory without a test or lockfile delta.",
@@ -574,6 +601,7 @@
     },
     {
       "id": "full-stack-fastapi-template-1396",
+      "head_sha": "568f0da57e8dc1b8ff37622b3dfcb20f1a46af2b",
       "url": "https://github.com/fastapi/full-stack-fastapi-template/pull/1396",
       "stack": "fastapi_pytest",
       "reason": "FastAPI template user lookup fix with explicit 404 and permission-preserving 403 regression tests requested by the maintainer.",
@@ -591,6 +619,7 @@
     },
     {
       "id": "full-stack-fastapi-template-1940",
+      "head_sha": "eb4bd620a4c58622676f7a3972913928ac1b7e3b",
       "url": "https://github.com/fastapi/full-stack-fastapi-template/pull/1940",
       "stack": "fastapi_pytest",
       "reason": "FastAPI template settings type fix changes startup validation behavior without a regression test delta.",
@@ -610,6 +639,7 @@
     },
     {
       "id": "drf-9365",
+      "head_sha": "8de7110bdd69fd7bf9abc3d02d2fd42055807ade",
       "url": "https://github.com/encode/django-rest-framework/pull/9365",
       "stack": "django_drf",
       "reason": "DRF introduced strict datetime parsing in HTMLFormRenderer with broad format coverage but no empty-value case; the merged change later caused a confirmed crash fixed by #9928.",
@@ -629,6 +659,7 @@
     },
     {
       "id": "drf-9735",
+      "head_sha": "884513200725c7b8c243b70b35497ae05ab94ecb",
       "url": "https://github.com/encode/django-rest-framework/pull/9735",
       "stack": "django_drf",
       "reason": "DRF MultipleChoiceField changes output type and ordering with explicit downstream compatibility, ordering, deduplication, and JSON serialization tests.",
@@ -646,6 +677,7 @@
     },
     {
       "id": "drf-9973",
+      "head_sha": "a84d9bb00d1ccf35cfdb17fd992ca20c59e0c717",
       "url": "https://github.com/encode/django-rest-framework/pull/9973",
       "stack": "django_drf",
       "reason": "DRF BooleanField representation changes unhashable-value fallback behavior with focused empty and non-empty collection coverage.",
@@ -663,6 +695,7 @@
     },
     {
       "id": "drf-9775",
+      "head_sha": "b23088f853f86aceab026b8edb7fceb69b656732",
       "url": "https://github.com/encode/django-rest-framework/pull/9775",
       "stack": "django_drf",
       "reason": "DRF adds optional BigInteger string serialization with settings, documentation, field mapping, bounds, and output-format tests.",
@@ -680,6 +713,7 @@
     },
     {
       "id": "fastapi-12935",
+      "head_sha": "29006661466ac7c758f13082c3a2080fd2542bc0",
       "url": "https://github.com/fastapi/fastapi/pull/12935",
       "stack": "fastapi_pytest",
       "reason": "FastAPI fixes Decimal NaN and Infinity encoding with focused tests for each failing value and maintainer verification against the prior release.",
@@ -697,6 +731,7 @@
     },
     {
       "id": "fastapi-13207",
+      "head_sha": "bdbdcc86ea60a5b678a4c885800bd09ddd097472",
       "url": "https://github.com/fastapi/fastapi/pull/13207",
       "stack": "fastapi_pytest",
       "reason": "FastAPI changes OpenAPI input/output schema compatibility for computed fields with focused mode-specific regression coverage and maintainer review.",
@@ -714,6 +749,7 @@
     },
     {
       "id": "fastapi-4972",
+      "head_sha": "fa4b7c843c907cb24ce7840ae226900319c82026",
       "url": "https://github.com/fastapi/fastapi/pull/4972",
       "stack": "fastapi_pytest",
       "reason": "FastAPI removes jsonable_encoder mutation of Pydantic model configuration with a focused repeated custom-encoder side-effect regression test.",
@@ -731,6 +767,7 @@
     },
     {
       "id": "express-6088",
+      "head_sha": "e41fb1403f830bb349262b2135a8426e333ed67a",
       "url": "https://github.com/expressjs/express/pull/6088",
       "stack": "express_node",
       "reason": "Express broadens acceptsCharsets argument parsing with single, variadic, and comma-delimited input tests while preserving existing behavior.",
@@ -748,6 +785,7 @@
     },
     {
       "id": "fastapi-12134",
+      "head_sha": "d4e80e1b70ad66498ed1206df23286764cd22d21",
       "url": "https://github.com/fastapi/fastapi/pull/12134",
       "stack": "fastapi_pytest",
       "reason": "FastAPI added raw form-value completion after filtered field extraction; the change later caused empty optional fields with a None default to be reinserted as empty strings and fail validation.",
@@ -765,6 +803,7 @@
     },
     {
       "id": "fastapi-13537",
+      "head_sha": "7e0467d281ea85347fe771a9518dc998e6ab2782",
       "url": "https://github.com/fastapi/fastapi/pull/13537",
       "stack": "fastapi_pytest",
       "reason": "FastAPI fixes empty form values being reinserted after resolving an optional field to its None default, with focused urlencoded and multipart regression tests.",
@@ -782,6 +821,7 @@
     },
     {
       "id": "drf-7718",
+      "head_sha": "e3180e5925c6ebf540c1a9fac119430d5f20384e",
       "url": "https://github.com/encode/django-rest-framework/pull/7718",
       "stack": "django_drf",
       "reason": "DRF converted empty DecimalField input to None for allow_null fields but did not combine the new behavior with min/max validators; that interaction later raised TypeError and was fixed by #8067.",
@@ -799,6 +839,7 @@
     },
     {
       "id": "drf-8067",
+      "head_sha": "7cd89c6f0e84900876cd5a9f6b525e2b171ed00c",
       "url": "https://github.com/encode/django-rest-framework/pull/8067",
       "stack": "django_drf",
       "reason": "DRF fixes empty allow-null DecimalField input with min/max validators by short-circuiting validation and adds focused constrained-field regression tests.",
@@ -816,6 +857,7 @@
     },
     {
       "id": "drf-3731",
+      "head_sha": "d9c360845d79e4df4be96264c325b2bab5a036db",
       "url": "https://github.com/encode/django-rest-framework/pull/3731",
       "stack": "django_drf",
       "reason": "DRF fixes DateTimeField and TimeField representation of None and empty values with focused output cases.",
@@ -833,6 +875,7 @@
     },
     {
       "id": "drf-3677",
+      "head_sha": "3594c976b751aca07fcd9c07c4e404d81304fe07",
       "url": "https://github.com/encode/django-rest-framework/pull/3677",
       "stack": "django_drf",
       "reason": "DRF aligns nested bound-field rendering for empty strings and None with a focused nested-form regression test.",
@@ -850,6 +893,7 @@
     },
     {
       "id": "drf-4260",
+      "head_sha": "bf3ed2a34aaca353ce4fa8b073f2e0e8ce747b43",
       "url": "https://github.com/encode/django-rest-framework/pull/4260",
       "stack": "django_drf",
       "reason": "DRF preserves empty query parameters in pagination links and adds focused next/previous URL regression coverage.",
@@ -867,6 +911,7 @@
     },
     {
       "id": "drf-5351",
+      "head_sha": "0ec915e6234bdc602e131f08e8cff46fcf3dc3ff",
       "url": "https://github.com/encode/django-rest-framework/pull/5351",
       "stack": "django_drf",
       "reason": "DRF preserves an explicit content type when RequestFactory receives an empty body and adds a focused metadata regression test.",

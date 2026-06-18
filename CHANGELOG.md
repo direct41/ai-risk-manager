@@ -13,11 +13,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added a narrow PR diff signal for strict datetime parsing of field-derived values without empty-string or null regression coverage.
 - Added 8 boundary and optional-value validation cases covering form extraction, serializer conversion, rendering, pagination, and empty request bodies.
 - Added two end-to-end `business_invariant_risk` pilot repositories covering Python checkout and JavaScript account-recovery flows.
+- Alpha feedback and public PR request templates now capture reviewer role, top findings, review impact, setup friction, workflow preference, repeat intent, and privacy acknowledgement.
 
 ### Changed
 - Deterministic test plans now use dependency and regression-specific assertions for generic PR delta findings instead of API response boilerplate.
 - Public PR validation now uses the historical base commit reported by GitHub for reproducible merged-PR baselines and diffs.
 - Positive boundary regression tests named for empty, blank, null, default, or content-type behavior no longer receive unrelated missing-negative-path findings.
+- Public PR corpus labels are pinned to the exact reviewed head SHA, with all 49 current cases refreshed and two changed open PRs re-reviewed as clean controls.
 
 ### Fixed
 - Old merged PRs in high-velocity repositories no longer fall back to noisy full-repository analysis when their merge base is outside the shallow branch history.
@@ -25,6 +27,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Unchanged baseline findings no longer affect default `review-pr` decisions, risk scores, or test-first actions.
 - Business invariant flow matching now treats snake_case, kebab-case, and camelCase path terms consistently.
 - Declared UI smoke selection now includes affected shared components as well as route files, preserving the changed component as failure evidence.
+- Public PR benchmark failures now distinguish stale open-PR expectations from product regressions by reporting reviewed-versus-observed head SHA drift.
 
 ## [0.2.0] - 2026-06-11
 

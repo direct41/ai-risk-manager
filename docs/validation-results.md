@@ -170,12 +170,15 @@ Decision: keep targeted declared smoke execution opt-in and limited to changed j
 | Command | `riskmap review-pr ...` |
 | Exit code | 0 / 1 / 2 / 3 |
 | Merge decision | `ready` / `review_required` / `block_recommended` |
+| Top three findings or actions | short ordered list |
+| Changed review/test behavior | yes / partly / no, with one concrete example |
 | Useful? | yes / mixed / no |
 | Most useful output | short note |
 | Top false positive | short note |
 | Missed risk | short note |
 | Setup blocker | none / install / clone / unsupported stack / other |
 | Requested workflow | local CLI / GitHub Action / PR comment / hosted / none |
+| Would run again | yes / maybe / no |
 | Follow-up | issue / PR / docs / no action |
 
 ## Weekly Summary Template

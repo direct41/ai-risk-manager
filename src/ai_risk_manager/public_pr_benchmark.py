@@ -19,6 +19,7 @@ EvaluationStatus = Literal["passed", "failed", "needs_human_review"]
 LabelOutcome = Literal["good_signal", "noisy", "false_positive", "missed_risk"]
 
 _SAFE_CASE_ID = re.compile(r"^[A-Za-z0-9_.-]+$")
+_SAFE_COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 _SUCCESS_EXIT_CODES = {0, 3}
 _REQUIRED_ARTIFACTS = ("pr_summary.json", "merge_triage.json", "findings.json")
 
@@ -48,6 +49,7 @@ class PublicPRCase:
     stack: str
     reason: str
     expected: PublicPRExpectation
+    head_sha: str | None = None
     base: str | None = None
     label: PublicPRLabel | None = None
 
@@ -90,6 +92,8 @@ class PublicPRCaseResult:
     expected_execution: ExecutionStatus
     product_verdict: ProductVerdict
     evaluation_status: EvaluationStatus
+    expected_head_sha: str | None = None
+    observed_head_sha: str | None = None
     decision: str | None = None
     risk_score: int | None = None
     top_finding_count: int = 0
@@ -425,6 +429,10 @@ def _populate_observed_artifacts(result: PublicPRCaseResult, output_dir: Path) -
     result.action_paths = _unique_strings(
         _normalize_source_refs([*_extract_field(top_actions, "source_ref"), *_extract_field(merge_actions, "source_ref")])
     )
+    metadata_path = output_dir / "review_pr_metadata.json"
+    if metadata_path.is_file():
+        metadata = _read_json_object(metadata_path)
+        result.observed_head_sha = _optional_str(metadata.get("head_sha"))
 
 
 def _evaluate_case_result(case: PublicPRCase, result: PublicPRCaseResult) -> None:
@@ -433,6 +441,10 @@ def _evaluate_case_result(case: PublicPRCase, result: PublicPRCaseResult) -> Non
         result.errors.append(f"expected execution `{expected.execution}`, got `{result.execution_status}`")
 
     if result.execution_status == "pass":
+        if case.head_sha and result.observed_head_sha != case.head_sha:
+            result.errors.append(
+                f"expected reviewed head SHA `{case.head_sha}`, got `{result.observed_head_sha or 'missing'}`"
+            )
         if expected.decision and result.decision != expected.decision:
             result.errors.append(f"expected decision `{expected.decision}`, got `{result.decision or 'unknown'}`")
 
@@ -485,6 +497,7 @@ def _base_result(
         expected_execution=case.expected.execution,
         product_verdict=case.expected.product,
         evaluation_status="failed",
+        expected_head_sha=case.head_sha,
         stdout_tail=_tail(stdout),
         stderr_tail=_tail(stderr),
     )
@@ -524,6 +537,7 @@ def _parse_case(raw_case: object, *, index: int, path: Path) -> PublicPRCase:
         url=_required_str(raw_case, "url", path=path, index=index),
         stack=_optional_str(raw_case.get("stack")) or "unknown",
         reason=_optional_str(raw_case.get("reason")) or "",
+        head_sha=_parse_commit_sha(raw_case.get("head_sha"), case_id=case_id, path=path),
         base=_optional_str(raw_case.get("base")),
         label=_parse_label(raw_case.get("label"), case_id=case_id, path=path),
         expected=PublicPRExpectation(
@@ -609,6 +623,8 @@ def _corpus_labeling_issues(cases: list[PublicPRCase]) -> list[str]:
                     f"`{case.id}` has product `{case.expected.product}` but no label metadata"
                 )
             continue
+        if case.head_sha is None:
+            issues.append(f"`{case.id}` has label metadata but no reviewed head SHA")
         if case.expected.product == "needs_human_review":
             issues.append(f"`{case.id}` has label metadata but product is still `needs_human_review`")
             continue
@@ -620,6 +636,14 @@ def _corpus_labeling_issues(cases: list[PublicPRCase]) -> list[str]:
                 f"got `{case.expected.product}`"
             )
     return issues
+
+
+def _parse_commit_sha(value: object, *, case_id: str, path: Path) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str) and _SAFE_COMMIT_SHA.fullmatch(value):
+        return value
+    raise ValueError(f"{path}: {case_id}.head_sha must be a lowercase 40-character commit SHA")
 
 
 def _read_json_object(path: Path) -> dict[str, object]:

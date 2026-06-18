@@ -2,6 +2,18 @@ name: Alpha feedback
 description: Share feedback from running AI Risk Manager on a real repository
 labels: [alpha-feedback]
 body:
+  - type: dropdown
+    id: reviewer_role
+    attributes:
+      label: Your review role
+      options:
+        - Backend engineer
+        - Tech lead
+        - QA engineer
+        - Maintainer
+        - Other
+    validations:
+      required: true
   - type: input
     id: pr_url
     attributes:
@@ -25,6 +37,38 @@ body:
       placeholder: riskmap review-pr https://github.com/OWNER/REPO/pull/123
     validations:
       required: true
+  - type: dropdown
+    id: merge_decision
+    attributes:
+      label: Reported merge decision
+      options:
+        - ready
+        - review_required
+        - block_recommended
+        - command did not complete
+    validations:
+      required: true
+  - type: textarea
+    id: top_findings
+    attributes:
+      label: Top three findings or test actions
+      description: List up to three items from merge_triage.md or pr_summary.md.
+      placeholder: |
+        1. Finding or test action
+        2. Finding or test action
+        3. Finding or test action
+    validations:
+      required: true
+  - type: dropdown
+    id: review_impact
+    attributes:
+      label: Did the output change your review or test plan?
+      options:
+        - Yes
+        - Partly
+        - No
+    validations:
+      required: true
   - type: textarea
     id: useful
     attributes:
@@ -40,9 +84,45 @@ body:
     validations:
       required: true
   - type: textarea
+    id: setup_friction
+    attributes:
+      label: Setup friction
+      description: Record installation, clone, timeout, unsupported-stack, or artifact problems. Write "none" when there were no blockers.
+    validations:
+      required: true
+  - type: dropdown
+    id: preferred_workflow
+    attributes:
+      label: Preferred workflow
+      options:
+        - Local CLI
+        - GitHub Action
+        - Pull request comment
+        - Hosted analysis
+        - None
+    validations:
+      required: true
+  - type: dropdown
+    id: run_again
+    attributes:
+      label: Would you use it on another risky PR?
+      options:
+        - Yes
+        - Maybe
+        - No
+    validations:
+      required: true
+  - type: textarea
     id: artifacts
     attributes:
       label: Relevant output snippets
       description: Paste short snippets from merge_triage.md, pr_summary.md, report.md, or findings.json. Avoid secrets.
     validations:
       required: false
+  - type: checkboxes
+    id: privacy_ack
+    attributes:
+      label: Public data acknowledgement
+      options:
+        - label: This feedback contains no secrets, private repository names, customer information, personal contact data, or non-public vulnerability details.
+          required: true

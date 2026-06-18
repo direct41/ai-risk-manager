@@ -30,6 +30,7 @@ def _case(
 ) -> dict:
     case = {
         "id": case_id,
+        "head_sha": "1" * 40,
         "url": url,
         "stack": "express_node",
         "reason": "regression corpus case",
@@ -90,6 +91,10 @@ def _write_review_artifacts(
         encoding="utf-8",
     )
     (output_dir / "findings.json").write_text(json.dumps({"findings": resolved_top_findings}), encoding="utf-8")
+    (output_dir / "review_pr_metadata.json").write_text(
+        json.dumps({"head_sha": "1" * 40}),
+        encoding="utf-8",
+    )
 
 
 def test_load_public_pr_corpus_reads_expected_fields(tmp_path: Path) -> None:
@@ -119,6 +124,7 @@ def test_load_public_pr_corpus_reads_expected_fields(tmp_path: Path) -> None:
     cases = load_public_pr_corpus(corpus)
 
     assert cases[0].id == "express-7287"
+    assert cases[0].head_sha == "1" * 40
     assert cases[0].expected.product == "useful"
     assert cases[0].expected.required_paths == ["lib/response.js"]
     assert cases[0].label is not None
@@ -183,6 +189,24 @@ def test_inspect_public_pr_corpus_reports_inconsistent_labels(tmp_path: Path) ->
     assert len(result.issues) == 2
     assert "no label metadata" in result.issues[0]
     assert "requires product `not_useful`" in result.issues[1]
+
+
+def test_inspect_public_pr_corpus_requires_reviewed_head_for_labeled_case(tmp_path: Path) -> None:
+    corpus = tmp_path / "public_prs.json"
+    case = _case(
+        {"product": "useful"},
+        label={
+            "outcome": "good_signal",
+            "rationale": "The report found the expected risk.",
+            "reviewed_at": "2026-06-10",
+        },
+    )
+    case.pop("head_sha")
+    _write_corpus(corpus, [case])
+
+    result = inspect_public_pr_corpus(corpus, tmp_path / "status")
+
+    assert result.issues == ["`express-7287` has label metadata but no reviewed head SHA"]
 
 
 def test_load_public_pr_corpus_rejects_invalid_label_date(tmp_path: Path) -> None:
@@ -273,6 +297,24 @@ def test_run_public_pr_benchmark_fails_when_required_rule_is_not_surfaced(tmp_pa
     assert result.failed_cases == 1
     assert result.cases[0].evaluation_status == "failed"
     assert "missing required surfaced rule" in result.cases[0].errors[0]
+
+
+def test_run_public_pr_benchmark_reports_reviewed_head_drift(tmp_path: Path) -> None:
+    corpus = tmp_path / "public_prs.json"
+    case = _case({"execution": "pass", "product": "useful"})
+    case["head_sha"] = "2" * 40
+    _write_corpus(corpus, [case])
+
+    def _fake_runner(command: list[str], cwd: Path, env: dict[str, str], timeout_seconds: int) -> ReviewCommandResult:
+        _write_review_artifacts(_output_dir_from_command(command))
+        return ReviewCommandResult(returncode=0)
+
+    result = run_public_pr_benchmark(corpus, tmp_path / "out", command_runner=_fake_runner)
+
+    assert result.failed_cases == 1
+    assert result.cases[0].expected_head_sha == "2" * 40
+    assert result.cases[0].observed_head_sha == "1" * 40
+    assert "expected reviewed head SHA" in result.cases[0].errors[0]
 
 
 def test_run_public_pr_benchmark_can_expect_setup_failure(tmp_path: Path) -> None:
