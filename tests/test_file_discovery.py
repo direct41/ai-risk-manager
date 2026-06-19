@@ -39,3 +39,13 @@ def test_file_discovery_does_not_follow_symlinks_outside_repo(tmp_path: Path, wr
     (repo_path / "app" / "outside.py").symlink_to(outside_file)
 
     assert _relative_paths(repo_path) == {"app/main.py"}
+
+
+def test_file_discovery_preserves_relative_repo_path_style(tmp_path: Path, write_file, monkeypatch) -> None:
+    write_file(tmp_path / "service" / "api.py", "print('owned')\n")
+    monkeypatch.chdir(tmp_path)
+
+    discovered = iter_project_files(Path("."))
+
+    assert discovered == [Path("service/api.py")]
+    assert _relative_paths(Path(".")) == {"service/api.py"}

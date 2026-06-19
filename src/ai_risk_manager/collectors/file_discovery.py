@@ -99,9 +99,8 @@ def iter_project_files(repo_path: Path) -> list[Path]:
 
     repo_root = repo_path.resolve()
     git_paths = _git_visible_paths(repo_root)
-    if git_paths is not None:
-        return git_paths
-    return _walk_visible_paths(repo_root)
+    visible_paths = git_paths if git_paths is not None else _walk_visible_paths(repo_root)
+    return [repo_path / path.relative_to(repo_root) for path in visible_paths]
 
 
 __all__ = ["iter_project_files"]
