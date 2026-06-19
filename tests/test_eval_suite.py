@@ -20,14 +20,27 @@ def test_load_trust_thresholds_uses_defaults_for_missing_file(tmp_path: Path) ->
     path = tmp_path / "missing.json"
     loaded = run_eval_suite.load_trust_thresholds(path)
 
-    assert loaded["min_avg_precision_proxy"] == 0.75
+    assert loaded["min_avg_forbidden_rule_avoidance"] == 0.75
     assert loaded["max_flaky_cases"] == 0.0
+
+
+def test_load_trust_thresholds_migrates_legacy_metric_names(tmp_path: Path) -> None:
+    path = tmp_path / "thresholds.json"
+    path.write_text(
+        json.dumps({"min_avg_precision_proxy": 0.81, "min_avg_recall_proxy": 0.82}),
+        encoding="utf-8",
+    )
+
+    loaded = run_eval_suite.load_trust_thresholds(path)
+
+    assert loaded["min_avg_forbidden_rule_avoidance"] == 0.81
+    assert loaded["min_avg_required_rule_recall"] == 0.82
 
 
 def test_evaluate_trust_gates_detects_threshold_breach() -> None:
     aggregates = {
-        "avg_precision_proxy": 0.60,
-        "avg_recall_proxy": 0.80,
+        "avg_forbidden_rule_avoidance": 0.60,
+        "avg_required_rule_recall": 0.80,
         "avg_actionability_proxy": 0.50,
         "avg_evidence_completeness": 0.96,
         "avg_verification_pass_rate": 0.97,
@@ -40,13 +53,13 @@ def test_evaluate_trust_gates_detects_threshold_breach() -> None:
     errors = run_eval_suite.evaluate_trust_gates(aggregates, thresholds)
 
     assert errors
-    assert any("avg_precision_proxy" in err for err in errors)
+    assert any("avg_forbidden_rule_avoidance" in err for err in errors)
 
 
 def test_evaluate_trust_gates_passes_on_healthy_aggregates() -> None:
     aggregates = {
-        "avg_precision_proxy": 0.90,
-        "avg_recall_proxy": 0.90,
+        "avg_forbidden_rule_avoidance": 0.90,
+        "avg_required_rule_recall": 0.90,
         "avg_actionability_proxy": 0.60,
         "avg_evidence_completeness": 0.99,
         "avg_verification_pass_rate": 0.99,
@@ -87,8 +100,8 @@ def test_write_trend_artifacts_generates_history_and_delta(tmp_path: Path) -> No
     history_path = tmp_path / "history" / "trust_gate_history.jsonl"
 
     first_aggregates = {
-        "avg_precision_proxy": 0.80,
-        "avg_recall_proxy": 0.85,
+        "avg_forbidden_rule_avoidance": 0.80,
+        "avg_required_rule_recall": 0.85,
         "avg_actionability_proxy": 0.50,
         "avg_evidence_completeness": 0.98,
         "avg_verification_pass_rate": 0.97,
@@ -97,7 +110,7 @@ def test_write_trend_artifacts_generates_history_and_delta(tmp_path: Path) -> No
         "flaky_cases": 0.0,
     }
     second_aggregates = dict(first_aggregates)
-    second_aggregates["avg_precision_proxy"] = 0.90
+    second_aggregates["avg_forbidden_rule_avoidance"] = 0.90
     second_aggregates["avg_fallback_rate"] = 0.05
 
     with patch.object(run_eval_suite, "_utc_now_iso", side_effect=["2026-01-01T00:00:00Z", "2026-01-08T00:00:00Z"]):
@@ -122,12 +135,12 @@ def test_write_trend_artifacts_generates_history_and_delta(tmp_path: Path) -> No
     trend_payload = json.loads((output_root / "trust_trend.json").read_text(encoding="utf-8"))
     assert trend_payload["window_size"] == 2
     assert trend_payload["latest"]["generated_at_utc"] == "2026-01-08T00:00:00Z"
-    assert abs(trend_payload["delta_vs_previous"]["avg_precision_proxy"] - 0.10) < 1e-9
+    assert abs(trend_payload["delta_vs_previous"]["avg_forbidden_rule_avoidance"] - 0.10) < 1e-9
     assert abs(trend_payload["delta_vs_previous"]["avg_fallback_rate"] + 0.05) < 1e-9
 
     trend_md = (output_root / "trust_trend.md").read_text(encoding="utf-8")
     assert "Delta vs Previous Run" in trend_md
-    assert "avg_precision_proxy" in trend_md
+    assert "avg_forbidden_rule_avoidance" in trend_md
 
 
 def test_write_trend_artifacts_applies_window_limit(tmp_path: Path) -> None:

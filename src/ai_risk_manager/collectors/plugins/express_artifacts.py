@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
 from pathlib import Path
 import re
 
+from ai_risk_manager.collectors.file_discovery import iter_project_files
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle, IngressCoverageArtifact, IngressSurfaceArtifact
 from ai_risk_manager.collectors.plugins.dependency_artifacts import extract_dependency_specs
 from ai_risk_manager.collectors.plugins.generated_test_artifacts import (
@@ -16,20 +16,6 @@ from ai_risk_manager.collectors.plugins.workflow_automation_artifacts import col
 WRITE_METHODS = ("post", "put", "patch", "delete")
 JS_SUFFIXES = {".js", ".cjs", ".mjs", ".ts", ".tsx"}
 CSS_SUFFIXES = {".css"}
-EXCLUDED_DIRS = {
-    ".git",
-    ".venv",
-    "venv",
-    "__pycache__",
-    "node_modules",
-    ".riskmap",
-    "eval",
-    "fixtures",
-    "testdata",
-    "dist",
-    "build",
-    "coverage",
-}
 _EXPRESS_IMPORT_RE = re.compile(r"(?:require\(\s*['\"]express['\"]\s*\))|(?:from\s+['\"]express['\"])", re.IGNORECASE)
 _ROUTE_CALL_RE = re.compile(
     r"\b(?P<receiver>[A-Za-z_$][A-Za-z0-9_$]*)\.(?P<method>post|put|patch|delete)\s*\(\s*"
@@ -150,13 +136,7 @@ def _read_text(path: Path) -> str:
 
 
 def _iter_files(repo_path: Path) -> list[Path]:
-    files: list[Path] = []
-    for root, dirs, filenames in os.walk(repo_path):
-        dirs[:] = [d for d in dirs if d not in EXCLUDED_DIRS]
-        root_path = Path(root)
-        for filename in filenames:
-            files.append(root_path / filename)
-    return files
+    return iter_project_files(repo_path)
 
 
 def _iter_js_files(all_files: list[Path]) -> list[Path]:

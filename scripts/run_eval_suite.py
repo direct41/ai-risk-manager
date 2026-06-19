@@ -26,6 +26,8 @@ EXPANSION_REQUIRED_CASES = {
     "milestone11_express_balanced",
 }
 PERCENT_METRICS = {
+    "avg_forbidden_rule_avoidance",
+    "avg_required_rule_recall",
     "avg_precision_proxy",
     "avg_recall_proxy",
     "avg_actionability_proxy",
@@ -36,14 +38,18 @@ PERCENT_METRICS = {
 MIN_AVG_VERIFICATION_PASS_RATE_KEY = "min_avg_verification_" + "pass_rate"
 VERIFICATION_PASS_RATE_KEY = "verification_" + "pass_rate"
 DEFAULT_TRUST_THRESHOLDS: dict[str, float] = {
-    "min_avg_precision_proxy": 0.75,
-    "min_avg_recall_proxy": 0.75,
+    "min_avg_forbidden_rule_avoidance": 0.75,
+    "min_avg_required_rule_recall": 0.75,
     "min_avg_actionability_proxy": 0.40,
     "min_avg_evidence_completeness": 0.95,
     MIN_AVG_VERIFICATION_PASS_RATE_KEY: 0.95,
     "max_avg_triage_time_proxy_min": 10.0,
     "max_flaky_cases": 0.0,
     "max_avg_fallback_rate": 0.15,
+}
+LEGACY_TRUST_THRESHOLD_KEYS = {
+    "min_avg_precision_proxy": "min_avg_forbidden_rule_avoidance",
+    "min_avg_recall_proxy": "min_avg_required_rule_recall",
 }
 DEFAULT_SUPPORT_LEVEL_PROMOTION_POLICY: dict[str, object] = {
     "version": 1,
@@ -487,7 +493,7 @@ def render_trend_md(history: list[dict], delta_vs_previous: dict[str, float]) ->
         "",
         f"- Window size: `{len(history)}`",
         "",
-        "| Run (UTC) | Gate | Precision | Recall | Actionability | Evidence | Verification | Fallback | Triage | Flaky |",
+        "| Run (UTC) | Gate | Forbidden-rule avoidance | Required-rule recall | Actionability | Evidence | Verification | Fallback | Triage | Flaky |",
         "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in reversed(history):
@@ -498,8 +504,8 @@ def render_trend_md(history: list[dict], delta_vs_previous: dict[str, float]) ->
             "| "
             f"{row.get('generated_at_utc', 'unknown')} | "
             f"{row.get('gate_status', 'unknown')} | "
-            f"{float(aggregates.get('avg_precision_proxy', 0.0)):.2%} | "
-            f"{float(aggregates.get('avg_recall_proxy', 0.0)):.2%} | "
+            f"{float(aggregates.get('avg_forbidden_rule_avoidance', aggregates.get('avg_precision_proxy', 0.0))):.2%} | "
+            f"{float(aggregates.get('avg_required_rule_recall', aggregates.get('avg_recall_proxy', 0.0))):.2%} | "
             f"{float(aggregates.get('avg_actionability_proxy', 0.0)):.2%} | "
             f"{float(aggregates.get('avg_evidence_completeness', 0.0)):.2%} | "
             f"{float(aggregates.get('avg_verification_pass_rate', 0.0)):.2%} | "
@@ -612,8 +618,9 @@ def load_trust_thresholds(path: Path = TRUST_THRESHOLDS_PATH) -> dict[str, float
         return thresholds
 
     for key, value in payload.items():
-        if key in thresholds and isinstance(value, (int, float)):
-            thresholds[key] = float(value)
+        normalized_key = LEGACY_TRUST_THRESHOLD_KEYS.get(key, key)
+        if normalized_key in thresholds and isinstance(value, (int, float)):
+            thresholds[normalized_key] = float(value)
     return thresholds
 
 
@@ -722,6 +729,8 @@ def run_case(case: EvalCase) -> dict:
         "runs": [],
         "required_missed_count": 0,
         "forbidden_hit_count": 0,
+        "forbidden_rule_avoidance": 1.0,
+        "required_rule_recall": 1.0,
         "precision_proxy": 1.0,
         "recall_proxy": 1.0,
         "actionability_proxy": 1.0,
@@ -800,8 +809,13 @@ def run_case(case: EvalCase) -> dict:
     present_forbidden = case.forbidden_rules & rules
     result["required_missed_count"] = len(missing_required)
     result["forbidden_hit_count"] = len(present_forbidden)
-    result["precision_proxy"] = 1.0 - (len(present_forbidden) / max(1, len(rules)))
-    result["recall_proxy"] = 1.0 - (len(missing_required) / max(1, len(case.required_rules)))
+    forbidden_rule_avoidance = 1.0 - (len(present_forbidden) / max(1, len(rules)))
+    required_rule_recall = 1.0 - (len(missing_required) / max(1, len(case.required_rules)))
+    result["forbidden_rule_avoidance"] = forbidden_rule_avoidance
+    result["required_rule_recall"] = required_rule_recall
+    # Compatibility aliases for existing eval history. These are not statistical precision/recall.
+    result["precision_proxy"] = forbidden_rule_avoidance
+    result["recall_proxy"] = required_rule_recall
 
     if metrics_per_run:
         result["actionability_proxy"] = _safe_mean([float(row.get("actionability_proxy", 0.0)) for row in metrics_per_run])
@@ -867,9 +881,17 @@ def _evaluate_ingress_expectations(case: EvalCase, repo_path: Path, result: dict
 
 
 def compute_aggregates(results: list[dict]) -> dict[str, float]:
+    forbidden_rule_avoidance = _safe_mean(
+        [float(row.get("forbidden_rule_avoidance", row.get("precision_proxy", 0.0))) for row in results]
+    )
+    required_rule_recall = _safe_mean(
+        [float(row.get("required_rule_recall", row.get("recall_proxy", 0.0))) for row in results]
+    )
     return {
-        "avg_precision_proxy": _safe_mean([float(row.get("precision_proxy", 0.0)) for row in results]),
-        "avg_recall_proxy": _safe_mean([float(row.get("recall_proxy", 0.0)) for row in results]),
+        "avg_forbidden_rule_avoidance": forbidden_rule_avoidance,
+        "avg_required_rule_recall": required_rule_recall,
+        "avg_precision_proxy": forbidden_rule_avoidance,
+        "avg_recall_proxy": required_rule_recall,
         "avg_actionability_proxy": _safe_mean([float(row.get("actionability_proxy", 0.0)) for row in results]),
         "avg_evidence_completeness": _safe_mean([float(row.get("evidence_completeness", 0.0)) for row in results]),
         "avg_verification_pass_rate": _safe_mean([float(row.get("verification_pass_rate", 0.0)) for row in results]),
@@ -883,14 +905,14 @@ def evaluate_trust_gates(aggregates: dict[str, float], thresholds: dict[str, flo
     errors: list[str] = []
     checks: tuple[tuple[str, str, bool], ...] = (
         (
-            "avg_precision_proxy",
-            "min_avg_precision_proxy",
-            aggregates["avg_precision_proxy"] >= thresholds["min_avg_precision_proxy"],
+            "avg_forbidden_rule_avoidance",
+            "min_avg_forbidden_rule_avoidance",
+            aggregates["avg_forbidden_rule_avoidance"] >= thresholds["min_avg_forbidden_rule_avoidance"],
         ),
         (
-            "avg_recall_proxy",
-            "min_avg_recall_proxy",
-            aggregates["avg_recall_proxy"] >= thresholds["min_avg_recall_proxy"],
+            "avg_required_rule_recall",
+            "min_avg_required_rule_recall",
+            aggregates["avg_required_rule_recall"] >= thresholds["min_avg_required_rule_recall"],
         ),
         (
             "avg_actionability_proxy",
@@ -1137,8 +1159,8 @@ def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_
     lines = [
         "# Eval Suite Summary",
         "",
-        f"- Avg precision proxy: `{aggregates['avg_precision_proxy']:.2%}`",
-        f"- Avg recall proxy: `{aggregates['avg_recall_proxy']:.2%}`",
+        f"- Avg forbidden-rule avoidance: `{aggregates['avg_forbidden_rule_avoidance']:.2%}`",
+        f"- Avg required-rule recall: `{aggregates['avg_required_rule_recall']:.2%}`",
         f"- Avg actionability proxy: `{aggregates['avg_actionability_proxy']:.2%}`",
         f"- Avg evidence completeness: `{aggregates['avg_evidence_completeness']:.2%}`",
         f"- Avg verification pass rate: `{aggregates['avg_verification_pass_rate']:.2%}`",
@@ -1150,8 +1172,8 @@ def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_
         "",
         f"- Gate status: `{'FAILED' if gate_errors else 'PASSED'}`",
         f"- Enforced: `{enforce_gates}`",
-        f"- min_avg_precision_proxy: `{thresholds['min_avg_precision_proxy']:.2%}`",
-        f"- min_avg_recall_proxy: `{thresholds['min_avg_recall_proxy']:.2%}`",
+        f"- min_avg_forbidden_rule_avoidance: `{thresholds['min_avg_forbidden_rule_avoidance']:.2%}`",
+        f"- min_avg_required_rule_recall: `{thresholds['min_avg_required_rule_recall']:.2%}`",
         f"- min_avg_actionability_proxy: `{thresholds['min_avg_actionability_proxy']:.2%}`",
         f"- min_avg_evidence_completeness: `{thresholds['min_avg_evidence_completeness']:.2%}`",
         f"- min_avg_verification_pass_rate: `{thresholds['min_avg_verification_pass_rate']:.2%}`",
@@ -1238,8 +1260,8 @@ def write_summary(results: list[dict], *, thresholds: dict[str, float], enforce_
         lines.append(f"- Status: `{row['status']}`")
         lines.append(f"- Exit code: `{row['exit_code']}`")
         lines.append(f"- Found rules: `{', '.join(row['found_rules']) or 'none'}`")
-        lines.append(f"- Precision proxy: `{row.get('precision_proxy', 0.0):.2%}`")
-        lines.append(f"- Recall proxy: `{row.get('recall_proxy', 0.0):.2%}`")
+        lines.append(f"- Forbidden-rule avoidance: `{row.get('forbidden_rule_avoidance', 0.0):.2%}`")
+        lines.append(f"- Required-rule recall: `{row.get('required_rule_recall', 0.0):.2%}`")
         lines.append(f"- Actionability proxy: `{row.get('actionability_proxy', 0.0):.2%}`")
         lines.append(f"- Evidence completeness: `{row.get('evidence_completeness', 0.0):.2%}`")
         lines.append(f"- Verification pass rate: `{row.get('verification_pass_rate', 0.0):.2%}`")

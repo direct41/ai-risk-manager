@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from ai_risk_manager.schemas.types import (
     Finding,
     FindingsReport,
@@ -202,3 +204,91 @@ def test_merge_triage_markdown_explains_test_first_order() -> None:
     assert "# Merge Risk Triage" in markdown
     assert "## Test First" in markdown
     assert "`critical_path_no_tests`" in markdown
+
+
+@pytest.mark.parametrize(
+    ("severity", "confidence", "ci_mode", "support_state", "expected_decision", "expected_score"),
+    [
+        ("critical", "high", "advisory", "supported", "block_recommended", 72),
+        ("critical", "medium", "advisory", "supported", "review_required", 66),
+        ("high", "medium", "advisory", "supported", "review_required", 51),
+        ("medium", "medium", "advisory", "supported", "review_required", 38),
+        ("low", "medium", "advisory", "supported", "ready", 30),
+        ("high", "medium", "soft", "supported", "block_recommended", 51),
+        ("low", "medium", "advisory", "partial", "review_required", 30),
+    ],
+)
+def test_merge_triage_decision_and_score_boundaries(
+    severity: str,
+    confidence: str,
+    ci_mode: str,
+    support_state: str,
+    expected_decision: str,
+    expected_score: int,
+) -> None:
+    finding = _finding("boundary", severity=severity, confidence=confidence)
+
+    triage = build_merge_triage(
+        FindingsReport(findings=[finding], generated_without_llm=True),
+        RiskTestPlan(generated_without_llm=True),
+        summary=RunSummary(
+            effective_ci_mode=ci_mode,
+            repository_support_state=support_state,
+            verification_pass_rate=1.0,
+            evidence_completeness=1.0,
+        ),
+        analysis_scope="impacted",
+    )
+
+    assert triage.decision == expected_decision
+    assert triage.risk_score == expected_score
+    assert triage.estimated_triage_minutes == (5 if severity in {"critical", "high"} else 3)
+
+
+def test_merge_triage_budget_and_ranking_are_exact() -> None:
+    high = _finding("high", severity="high", confidence="high", rule_id="z_rule")
+    medium = _finding("medium", severity="medium", confidence="medium", rule_id="a_rule")
+    low = _finding("low", severity="low", confidence="medium", rule_id="b_rule")
+    test_plan = RiskTestPlan(
+        items=[
+            RiskTestRecommendation(
+                id="medium-plan",
+                title="medium",
+                priority="medium",
+                finding_id=medium.id,
+                source_ref=medium.source_ref,
+                recommendation="integration test",
+                test_type="integration",
+                test_target="service",
+            )
+        ],
+        generated_without_llm=True,
+    )
+
+    triage = build_merge_triage(
+        FindingsReport(findings=[low, medium, high], generated_without_llm=True),
+        test_plan,
+        summary=RunSummary(verification_pass_rate=1.0, evidence_completeness=1.0),
+        analysis_scope="impacted",
+    )
+
+    assert [action.finding_id for action in triage.actions] == ["high", "medium"]
+    assert [action.estimated_minutes for action in triage.actions] == [5, 4]
+    assert triage.estimated_triage_minutes == 9
+    assert triage.risk_score == 100
+
+
+def test_merge_triage_only_new_hides_unchanged_findings() -> None:
+    unchanged = _finding("unchanged", severity="critical", confidence="high", status="unchanged")
+
+    triage = build_merge_triage(
+        FindingsReport(findings=[unchanged], generated_without_llm=True),
+        RiskTestPlan(generated_without_llm=True),
+        summary=RunSummary(verification_pass_rate=1.0, evidence_completeness=1.0),
+        analysis_scope="impacted",
+        only_new=True,
+    )
+
+    assert triage.decision == "ready"
+    assert triage.risk_score == 0
+    assert triage.actions == []

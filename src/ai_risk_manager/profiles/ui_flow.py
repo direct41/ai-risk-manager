@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-import os
 from pathlib import Path
 
+from ai_risk_manager.collectors.file_discovery import iter_project_files
 from ai_risk_manager.profiles.base import ProfileApplicability, ProfileId
 from ai_risk_manager.profiles.ui_flow_smoke import load_ui_smoke_manifest, run_ui_smoke
 from ai_risk_manager.signals.types import SignalBundle
@@ -75,14 +75,7 @@ class UiFlowScopeAssessment:
 
 
 def _iter_candidate_files(repo_path: Path) -> list[Path]:
-    excluded = {".git", ".venv", "venv", "node_modules", ".riskmap", "dist", "build", "coverage"}
-    files: list[Path] = []
-    for root, dirs, filenames in os.walk(repo_path):
-        dirs[:] = [name for name in dirs if name not in excluded]
-        root_path = Path(root)
-        for filename in filenames:
-            files.append(root_path / filename)
-    return files
+    return iter_project_files(repo_path)
 
 
 def _read_json(path: Path) -> dict | None:

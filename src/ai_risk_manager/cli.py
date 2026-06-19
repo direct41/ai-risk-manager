@@ -403,6 +403,7 @@ def _run_review_pr(args: argparse.Namespace) -> int:
             repo_path = prepare_github_pr_checkout(
                 ref,
                 base_ref=base_ref,
+                head_sha=metadata.head_sha,
                 base_sha=historical_base_sha,
                 workspace=Path(tmp),
             )

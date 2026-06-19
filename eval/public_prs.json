@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "dataset_role": "regression",
   "description": "Public GitHub PR corpus for deterministic review-pr validation. Use public PRs only.",
   "cases": [
     {

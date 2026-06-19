@@ -16,12 +16,16 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Alpha feedback and public PR request templates now capture reviewer role, top findings, review impact, setup friction, workflow preference, repeat intent, and privacy acknowledgement.
 
 ### Changed
+- Eval reports now name synthetic fixture metrics as forbidden-rule avoidance and required-rule recall instead of presenting them as statistical precision and recall.
+- Public PR corpus metadata now identifies its regression role explicitly; validation documentation records that no independent frozen holdout exists yet.
 - Deterministic test plans now use dependency and regression-specific assertions for generic PR delta findings instead of API response boilerplate.
 - Public PR validation now uses the historical base commit reported by GitHub for reproducible merged-PR baselines and diffs.
 - Positive boundary regression tests named for empty, blank, null, default, or content-type behavior no longer receive unrelated missing-negative-path findings.
 - Public PR corpus labels are pinned to the exact reviewed head SHA, with all 49 current cases refreshed and two changed open PRs re-reviewed as clean controls.
 
 ### Fixed
+- GitHub PR review now verifies and checks out the exact metadata head SHA, preventing a moving PR ref from changing the analyzed commit mid-run.
+- Repository collectors now share git-aware file discovery that respects ignored files and excludes generated, sample, dependency, and virtual-environment trees.
 - Old merged PRs in high-velocity repositories no longer fall back to noisy full-repository analysis when their merge base is outside the shallow branch history.
 - Historical PR checkout no longer requires a deleted base branch when GitHub provides the exact public base commit SHA.
 - Unchanged baseline findings no longer affect default `review-pr` decisions, risk scores, or test-first actions.

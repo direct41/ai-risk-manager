@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
-import os
 from pathlib import Path
 import re
 
+from ai_risk_manager.collectors.file_discovery import iter_project_files
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle
 from ai_risk_manager.collectors.plugins.dependency_artifacts import extract_dependency_specs
 from ai_risk_manager.collectors.plugins.generated_test_artifacts import (
@@ -21,20 +21,6 @@ from ai_risk_manager.collectors.plugins.workflow_automation_artifacts import col
 
 WRITE_METHODS = ("post", "put", "patch", "delete")
 ROUTE_METHODS = WRITE_METHODS + ("get",)
-EXCLUDED_DIRS = {
-    ".git",
-    ".venv",
-    "venv",
-    "__pycache__",
-    "node_modules",
-    ".riskmap",
-    "dist",
-    "build",
-    "coverage",
-    "eval",
-    "fixtures",
-    "testdata",
-}
 GUARD_HINTS = (
     "allow",
     "valid",
@@ -66,13 +52,7 @@ def _read_text(path: Path) -> str:
 
 
 def _iter_files(repo_path: Path) -> list[Path]:
-    files: list[Path] = []
-    for root, dirs, filenames in os.walk(repo_path):
-        dirs[:] = [d for d in dirs if d not in EXCLUDED_DIRS]
-        root_path = Path(root)
-        for filename in filenames:
-            files.append(root_path / filename)
-    return files
+    return iter_project_files(repo_path)
 
 
 def _iter_python_files(repo_path: Path) -> list[Path]:

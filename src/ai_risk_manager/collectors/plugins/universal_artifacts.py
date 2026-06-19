@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import ast
-import os
 from pathlib import Path
 
+from ai_risk_manager.collectors.file_discovery import iter_project_files
 from ai_risk_manager.collectors.plugins.base import ArtifactBundle
 from ai_risk_manager.collectors.plugins.dependency_artifacts import extract_dependency_specs
 from ai_risk_manager.collectors.plugins.generated_test_artifacts import (
@@ -13,31 +13,11 @@ from ai_risk_manager.collectors.plugins.generated_test_artifacts import (
 )
 from ai_risk_manager.collectors.plugins.workflow_automation_artifacts import collect_workflow_automation_issues
 
-_EXCLUDED_DIRS = {
-    ".git",
-    ".venv",
-    "venv",
-    "__pycache__",
-    "node_modules",
-    ".riskmap",
-    "dist",
-    "build",
-    "coverage",
-    "eval",
-    "fixtures",
-    "testdata",
-}
 _JS_TEST_SUFFIXES = {".js", ".jsx", ".cjs", ".mjs", ".ts", ".tsx"}
 
 
 def _iter_files(repo_path: Path) -> list[Path]:
-    files: list[Path] = []
-    for root, dirs, filenames in os.walk(repo_path):
-        dirs[:] = [d for d in dirs if d not in _EXCLUDED_DIRS]
-        root_path = Path(root)
-        for filename in filenames:
-            files.append(root_path / filename)
-    return files
+    return iter_project_files(repo_path)
 
 
 def _read_text(path: Path) -> str:

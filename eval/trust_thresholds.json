@@ -1,6 +1,6 @@
 {
-  "min_avg_precision_proxy": 0.75,
-  "min_avg_recall_proxy": 0.75,
+  "min_avg_forbidden_rule_avoidance": 0.75,
+  "min_avg_required_rule_recall": 0.75,
   "min_avg_actionability_proxy": 0.40,
   "min_avg_evidence_completeness": 0.95,
   "min_avg_verification_pass_rate": 0.95,

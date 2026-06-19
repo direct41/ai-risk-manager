@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "datasets": [
+    {
+      "path": "eval/repos",
+      "role": "tuning",
+      "purpose": "Synthetic rule development and deterministic regression fixtures",
+      "frozen": false
+    },
+    {
+      "path": "eval/public_prs.json",
+      "role": "regression",
+      "purpose": "Labeled public PR product regression corpus",
+      "frozen": false
+    }
+  ],
+  "holdout": {
+    "status": "not_established",
+    "path": null,
+    "release_claim_blocked": true
+  }
+}

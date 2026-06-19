@@ -239,7 +239,7 @@ def _non_negative_int(value: object) -> int:
     return value if isinstance(value, int) and value >= 0 else 0
 
 
-def _run_git(args: list[str], *, cwd: Path | None = None, timeout: int = 120) -> None:
+def _run_git(args: list[str], *, cwd: Path | None = None, timeout: int = 120) -> str:
     proc = subprocess.run(  # nosec B603
         ["git", *args],
         cwd=cwd,
@@ -251,16 +251,19 @@ def _run_git(args: list[str], *, cwd: Path | None = None, timeout: int = 120) ->
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout).strip()
         raise GitHubPRReviewError(f"git {' '.join(args)} failed: {detail}")
+    return proc.stdout.strip()
 
 
 def prepare_github_pr_checkout(
     ref: GitHubPRReference,
     *,
     base_ref: str,
+    head_sha: str,
     base_sha: str | None = None,
     workspace: Path,
 ) -> Path:
     safe_base = _safe_ref(base_ref)
+    safe_head_sha = _safe_commit_sha(head_sha)
     safe_base_sha = _safe_commit_sha(base_sha) if base_sha is not None else None
     checkout_path = workspace / f"{ref.repo_full_name.replace('/', '-')}-pull-{ref.pr_number}"
     pr_branch = f"airisk-pr-{ref.pr_number}"
@@ -281,7 +284,18 @@ def prepare_github_pr_checkout(
         cwd=checkout_path,
         timeout=180,
     )
-    _run_git(["checkout", "--detach", pr_branch], cwd=checkout_path)
+    fetched_head_sha = _safe_commit_sha(_run_git(["rev-parse", f"{pr_branch}^{{commit}}"], cwd=checkout_path))
+    if fetched_head_sha != safe_head_sha:
+        raise GitHubPRReviewError(
+            f"GitHub PR head changed during checkout: expected {safe_head_sha}, fetched {fetched_head_sha}."
+        )
+
+    _run_git(["checkout", "--detach", safe_head_sha], cwd=checkout_path)
+    checked_out_head_sha = _safe_commit_sha(_run_git(["rev-parse", "HEAD"], cwd=checkout_path))
+    if checked_out_head_sha != safe_head_sha:
+        raise GitHubPRReviewError(
+            f"GitHub PR checkout verification failed: expected {safe_head_sha}, got {checked_out_head_sha}."
+        )
     return checkout_path
 
 

@@ -12,13 +12,14 @@ from ai_risk_manager.public_pr_benchmark import (
     PublicPRCaseResult,
     ReviewCommandResult,
     inspect_public_pr_corpus,
+    load_public_pr_dataset_role,
     load_public_pr_corpus,
     run_public_pr_benchmark,
 )
 
 
 def _write_corpus(path: Path, cases: list[dict]) -> None:
-    path.write_text(json.dumps({"version": 1, "cases": cases}), encoding="utf-8")
+    path.write_text(json.dumps({"version": 1, "dataset_role": "regression", "cases": cases}), encoding="utf-8")
 
 
 def _case(
@@ -129,6 +130,20 @@ def test_load_public_pr_corpus_reads_expected_fields(tmp_path: Path) -> None:
     assert cases[0].expected.required_paths == ["lib/response.js"]
     assert cases[0].label is not None
     assert cases[0].label.outcome == "good_signal"
+
+
+def test_public_pr_corpus_requires_explicit_valid_dataset_role(tmp_path: Path) -> None:
+    corpus = tmp_path / "public_prs.json"
+    _write_corpus(corpus, [])
+    assert load_public_pr_dataset_role(corpus) == "regression"
+
+    corpus.write_text('{"version":1,"dataset_role":"validation","cases":[]}', encoding="utf-8")
+    try:
+        load_public_pr_dataset_role(corpus)
+    except ValueError as exc:
+        assert "dataset_role" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError")
 
 
 def test_inspect_public_pr_corpus_renders_labeling_queue(tmp_path: Path) -> None:

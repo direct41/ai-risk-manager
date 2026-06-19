@@ -17,6 +17,7 @@ ExecutionStatus = Literal["pass", "setup_fail", "provider_fail", "tool_fail", "a
 ProductVerdict = Literal["useful", "mixed", "not_useful", "needs_human_review"]
 EvaluationStatus = Literal["passed", "failed", "needs_human_review"]
 LabelOutcome = Literal["good_signal", "noisy", "false_positive", "missed_risk"]
+DatasetRole = Literal["tuning", "regression", "holdout", "unspecified"]
 
 _SAFE_CASE_ID = re.compile(r"^[A-Za-z0-9_.-]+$")
 _SAFE_COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -117,6 +118,7 @@ class PublicPRBenchmarkResult:
     needs_human_review_cases: int
     execution_passed_cases: int
     cases: list[PublicPRCaseResult]
+    dataset_role: DatasetRole = "unspecified"
 
 
 @dataclass
@@ -129,9 +131,23 @@ class PublicPRCorpusStatus:
     outcome_counts: dict[str, int]
     pending_case_ids: list[str]
     issues: list[str]
+    dataset_role: DatasetRole = "unspecified"
 
 
 ReviewCommandRunner = Callable[[list[str], Path, dict[str, str], int], ReviewCommandResult]
+
+
+def load_public_pr_dataset_role(path: Path) -> DatasetRole:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path}: invalid JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        return "unspecified"
+    role = payload.get("dataset_role", "unspecified")
+    if role not in {"tuning", "regression", "holdout"}:
+        raise ValueError(f"{path}: dataset_role must be one of ['holdout', 'regression', 'tuning']")
+    return cast(DatasetRole, role)
 
 
 def load_public_pr_corpus(path: Path) -> list[PublicPRCase]:
@@ -160,12 +176,16 @@ def load_public_pr_corpus(path: Path) -> list[PublicPRCase]:
 
 def inspect_public_pr_corpus(path: Path, output_dir: Path) -> PublicPRCorpusStatus:
     cases = load_public_pr_corpus(path)
+    dataset_role = load_public_pr_dataset_role(path)
     pending_case_ids = [case.id for case in cases if case.label is None]
     outcome_counts = {outcome: 0 for outcome in ("good_signal", "noisy", "false_positive", "missed_risk")}
     for case in cases:
         if case.label is not None:
             outcome_counts[case.label.outcome] += 1
 
+    issues = _corpus_labeling_issues(cases)
+    if dataset_role == "unspecified":
+        issues.append("corpus dataset_role is required to distinguish tuning, regression, and holdout evidence")
     status = PublicPRCorpusStatus(
         generated_at_utc=_utc_now_iso(),
         corpus_path=str(path),
@@ -174,7 +194,8 @@ def inspect_public_pr_corpus(path: Path, output_dir: Path) -> PublicPRCorpusStat
         pending_cases=len(pending_case_ids),
         outcome_counts=outcome_counts,
         pending_case_ids=pending_case_ids,
-        issues=_corpus_labeling_issues(cases),
+        issues=issues,
+        dataset_role=dataset_role,
     )
     write_public_pr_corpus_status(status, output_dir)
     return status
@@ -195,6 +216,7 @@ def render_public_pr_corpus_status_md(result: PublicPRCorpusStatus) -> str:
         "",
         f"- Generated: `{result.generated_at_utc}`",
         f"- Corpus: `{result.corpus_path}`",
+        f"- Dataset role: `{result.dataset_role}`",
         f"- Cases: `{result.total_cases}`",
         f"- Labeled: `{result.labeled_cases}`",
         f"- Pending: `{result.pending_cases}`",
@@ -228,6 +250,7 @@ def run_public_pr_benchmark(
 ) -> PublicPRBenchmarkResult:
     resolved_options = options or PublicPRBenchmarkOptions()
     cases = _select_cases(load_public_pr_corpus(corpus_path), resolved_options)
+    dataset_role = load_public_pr_dataset_role(corpus_path)
     output_dir.mkdir(parents=True, exist_ok=True)
     runner = command_runner or _run_review_command
 
@@ -245,6 +268,7 @@ def run_public_pr_benchmark(
         needs_human_review_cases=sum(1 for result in results if result.evaluation_status == "needs_human_review"),
         execution_passed_cases=sum(1 for result in results if result.execution_status == "pass"),
         cases=results,
+        dataset_role=dataset_role,
     )
     write_public_pr_benchmark_artifacts(benchmark, output_dir)
     return benchmark
@@ -265,6 +289,7 @@ def render_public_pr_benchmark_md(result: PublicPRBenchmarkResult) -> str:
         "",
         f"- Generated: `{result.generated_at_utc}`",
         f"- Corpus: `{result.corpus_path}`",
+        f"- Dataset role: `{result.dataset_role}`",
         f"- Cases: `{result.total_cases}`",
         f"- Execution passed: `{result.execution_passed_cases}`",
         f"- Evaluation passed: `{result.passed_cases}`",

@@ -37,8 +37,11 @@ def test_prepare_github_pr_checkout_uses_explicit_pull_and_base_sha(
 ) -> None:
     calls: list[tuple[list[str], Path | None]] = []
 
-    def _fake_run_git(args: list[str], *, cwd: Path | None = None, timeout: int = 120) -> None:
+    def _fake_run_git(args: list[str], *, cwd: Path | None = None, timeout: int = 120) -> str:
         calls.append((args, cwd))
+        if args[:1] == ["rev-parse"]:
+            return "b" * 40
+        return ""
 
     monkeypatch.setattr("ai_risk_manager.integrations.github_pr_review._run_git", _fake_run_git)
     ref = GitHubPRReference(
@@ -50,6 +53,7 @@ def test_prepare_github_pr_checkout_uses_explicit_pull_and_base_sha(
     checkout = prepare_github_pr_checkout(
         ref,
         base_ref="release/v1",
+        head_sha="b" * 40,
         base_sha="a" * 40,
         workspace=tmp_path,
     )
@@ -66,7 +70,9 @@ def test_prepare_github_pr_checkout_uses_explicit_pull_and_base_sha(
     assert "refs/pull/123/head:refs/heads/airisk-pr-123" in calls[1][0]
     assert "a" * 40 in calls[1][0]
     assert "refs/heads/release/v1:refs/remotes/origin/release/v1" not in calls[1][0]
-    assert calls[2][0] == ["checkout", "--detach", "airisk-pr-123"]
+    assert calls[2][0] == ["rev-parse", "airisk-pr-123^{commit}"]
+    assert calls[3][0] == ["checkout", "--detach", "b" * 40]
+    assert calls[4][0] == ["rev-parse", "HEAD"]
 
 
 def test_prepare_github_pr_checkout_uses_base_ref_without_base_sha(
@@ -75,8 +81,11 @@ def test_prepare_github_pr_checkout_uses_base_ref_without_base_sha(
 ) -> None:
     calls: list[tuple[list[str], Path | None]] = []
 
-    def _fake_run_git(args: list[str], *, cwd: Path | None = None, timeout: int = 120) -> None:
+    def _fake_run_git(args: list[str], *, cwd: Path | None = None, timeout: int = 120) -> str:
         calls.append((args, cwd))
+        if args[:1] == ["rev-parse"]:
+            return "b" * 40
+        return ""
 
     monkeypatch.setattr("ai_risk_manager.integrations.github_pr_review._run_git", _fake_run_git)
     ref = GitHubPRReference(
@@ -88,6 +97,7 @@ def test_prepare_github_pr_checkout_uses_base_ref_without_base_sha(
     prepare_github_pr_checkout(
         ref,
         base_ref="release/v1",
+        head_sha="b" * 40,
         workspace=tmp_path,
     )
 
@@ -103,9 +113,40 @@ def test_prepare_github_pr_checkout_rejects_option_like_base(tmp_path: Path) -> 
     )
 
     try:
-        prepare_github_pr_checkout(ref, base_ref="--upload-pack=bad", workspace=tmp_path)
+        prepare_github_pr_checkout(ref, base_ref="--upload-pack=bad", head_sha="b" * 40, workspace=tmp_path)
     except GitHubPRReviewError as exc:
         assert "Unsafe Git ref" in str(exc)
+    else:
+        raise AssertionError("Expected GitHubPRReviewError")
+
+
+def test_prepare_github_pr_checkout_rejects_head_changed_during_fetch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    def _fake_run_git(args: list[str], *, cwd: Path | None = None, timeout: int = 120) -> str:
+        if args[:1] == ["rev-parse"]:
+            return "c" * 40
+        return ""
+
+    monkeypatch.setattr("ai_risk_manager.integrations.github_pr_review._run_git", _fake_run_git)
+    ref = GitHubPRReference(
+        repo_full_name="example/project",
+        pr_number=123,
+        clone_url="https://github.com/example/project.git",
+    )
+
+    try:
+        prepare_github_pr_checkout(
+            ref,
+            base_ref="main",
+            head_sha="b" * 40,
+            workspace=tmp_path,
+        )
+    except GitHubPRReviewError as exc:
+        assert "head changed during checkout" in str(exc)
+        assert "b" * 40 in str(exc)
+        assert "c" * 40 in str(exc)
     else:
         raise AssertionError("Expected GitHubPRReviewError")
 
@@ -173,11 +214,13 @@ def test_cli_review_pr_builds_context_from_github_pr_url(
         ref: GitHubPRReference,
         *,
         base_ref: str,
+        head_sha: str,
         base_sha: str | None = None,
         workspace: Path,
     ) -> Path:
         captured["checkout_ref"] = ref
         captured["base_ref"] = base_ref
+        captured["head_sha"] = head_sha
         captured["base_sha"] = base_sha
         captured["workspace_exists"] = workspace.exists()
         return checkout
@@ -213,6 +256,7 @@ def test_cli_review_pr_builds_context_from_github_pr_url(
     assert ctx.output_dir == tmp_path / ".riskmap" / "review-pr-example-project-123"
     assert captured["token"] == "secret"
     assert captured["base_sha"] == "a" * 40
+    assert captured["head_sha"] == "b" * 40
     assert captured["workspace_exists"] is True
     assert checkout_refs == ["a" * 40, "airisk-pr-123"]
     output = capsys.readouterr().out
