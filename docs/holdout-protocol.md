@@ -57,7 +57,7 @@ Run the selected analyzer commit against every case before importing human label
 
 If execution fails, retain the failure as a prediction outcome. Do not replace difficult cases after observing results.
 
-Place successful outputs under `<results-dir>/<case-id>/` with `pr_summary.json`, `merge_triage.json`, and `findings.json`. For a failed execution, write only `execution.json` with one of `setup_fail`, `provider_fail`, `tool_fail`, `artifact_fail`, or `timeout`. The freeze command requires one result directory per frozen case and records a deterministic artifact hash.
+Place successful outputs under `<results-dir>/<case-id>/` with `pr_summary.json`, `merge_triage.json`, `findings.json`, and `review_pr_metadata.json`. The recorded head SHA must match the frozen case. For a failed execution, write only `execution.json` with one of `setup_fail`, `provider_fail`, `tool_fail`, `artifact_fail`, or `timeout`. The freeze command requires one result directory per frozen case and records a deterministic hash covering all required artifacts.
 
 ## Independent labeling
 

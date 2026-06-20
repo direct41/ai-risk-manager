@@ -238,7 +238,7 @@ def freeze_cases(
     return cases_hash
 
 
-def _case_prediction(case_id: str, case_dir: Path) -> dict[str, Any]:
+def _case_prediction(case_id: str, expected_head_sha: str, case_dir: Path) -> dict[str, Any]:
     execution_path = case_dir / "execution.json"
     if execution_path.is_file():
         execution_payload = _read_object(execution_path)
@@ -254,13 +254,19 @@ def _case_prediction(case_id: str, case_dir: Path) -> dict[str, Any]:
             "artifact_hash": _artifact_hash([execution_path]),
         }
 
-    required = [case_dir / name for name in ("pr_summary.json", "merge_triage.json", "findings.json")]
+    required = [
+        case_dir / name
+        for name in ("pr_summary.json", "merge_triage.json", "findings.json", "review_pr_metadata.json")
+    ]
     missing = [path.name for path in required if not path.is_file()]
     if missing:
         raise HoldoutWorkflowError(f"{case_id}: missing result artifacts: {', '.join(missing)}")
     summary = _read_object(required[0])
     triage = _read_object(required[1])
     findings_payload = _read_object(required[2])
+    metadata = _read_object(required[3])
+    if metadata.get("head_sha") != expected_head_sha:
+        raise HoldoutWorkflowError(f"{case_id}: result head SHA does not match the frozen case")
     decision = triage.get("decision")
     if decision not in DECISIONS or summary.get("decision") != decision:
         raise HoldoutWorkflowError(f"{case_id}: summary and triage must contain the same valid decision")
@@ -303,11 +309,21 @@ def freeze_predictions(
     cases = _read_object(cases_path).get("cases")
     if not isinstance(cases, list):
         raise HoldoutWorkflowError("frozen cases file must contain a cases list")
-    case_ids = [case.get("id") for case in cases if isinstance(case, dict)]
-    if len(case_ids) != len(cases) or not all(isinstance(case_id, str) for case_id in case_ids):
-        raise HoldoutWorkflowError("frozen cases contain invalid IDs")
+    case_refs = [
+        (case.get("id"), case.get("head_sha"))
+        for case in cases
+        if isinstance(case, dict)
+    ]
+    if len(case_refs) != len(cases) or not all(
+        isinstance(case_id, str) and isinstance(head_sha, str) and SHA40.fullmatch(head_sha)
+        for case_id, head_sha in case_refs
+    ):
+        raise HoldoutWorkflowError("frozen cases contain invalid IDs or head SHAs")
 
-    predictions = [_case_prediction(case_id, results_dir / case_id) for case_id in case_ids]
+    predictions = [
+        _case_prediction(case_id, head_sha, results_dir / case_id)
+        for case_id, head_sha in case_refs
+    ]
     relative_output = _relative_holdout_path(output_path, repo_root)
     _write_new_json(
         output_path,

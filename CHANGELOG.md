@@ -29,6 +29,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Public PR corpus labels are pinned to the exact reviewed head SHA, with all 49 current cases refreshed and two changed open PRs re-reviewed as clean controls.
 
 ### Fixed
+- Holdout prediction freezing now verifies and hashes review metadata so each successful result is bound to the frozen PR head SHA.
 - Frozen holdout case packets now retain validated selection provenance and the exact excluded regression-corpus hash.
 - API audit records now use validated request defaults, and JSON/Markdown artifacts are replaced atomically.
 - GitHub PR review now verifies and checks out the exact metadata head SHA, preventing a moving PR ref from changing the analyzed commit mid-run.

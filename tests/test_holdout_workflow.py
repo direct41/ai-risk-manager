@@ -87,13 +87,16 @@ def _freeze_cases(tmp_path: Path) -> tuple[Path, Path]:
     return manifest_path, output_path
 
 
-def _write_success_result(path: Path, *, decision: str = "review_required") -> None:
+def _write_success_result(
+    path: Path, *, decision: str = "review_required", head_sha: str = "0000000000000000000000000000000000000001"
+) -> None:
     _write_json(
         path / "pr_summary.json",
         {"decision": decision, "top_findings": [{"rule_id": "rule-a"}, {"rule_id": "rule-a"}]},
     )
     _write_json(path / "merge_triage.json", {"decision": decision})
     _write_json(path / "findings.json", {"findings": [{"rule_id": "rule-a"}, {"rule_id": "rule-b"}]})
+    _write_json(path / "review_pr_metadata.json", {"head_sha": head_sha})
 
 
 def test_freeze_cases_updates_manifest_and_writes_blind_packet(tmp_path: Path) -> None:
@@ -229,6 +232,22 @@ def test_freeze_predictions_collects_success_and_failure_results(tmp_path: Path)
     assert manifest["holdout"]["release_claim_blocked"] is True
 
 
+def test_freeze_predictions_rejects_result_from_different_head_sha(tmp_path: Path) -> None:
+    manifest_path, _ = _freeze_cases(tmp_path)
+    results_dir = tmp_path / "results"
+    _write_success_result(results_dir / "case-0", head_sha="f" * 40)
+    _write_success_result(results_dir / "case-1", head_sha="2" * 40)
+
+    with pytest.raises(holdout_workflow.HoldoutWorkflowError, match="head SHA does not match"):
+        holdout_workflow.freeze_predictions(
+            results_dir,
+            tmp_path / "eval" / "holdout" / "predictions.json",
+            manifest_path,
+            "a" * 40,
+            repo_root=tmp_path,
+        )
+
+
 def test_freeze_predictions_rejects_hash_drift_missing_artifacts_and_bad_commit(tmp_path: Path) -> None:
     manifest_path, cases_path = _freeze_cases(tmp_path)
     results_dir = tmp_path / "results"
@@ -257,7 +276,11 @@ def test_create_label_template_contains_no_predictions(tmp_path: Path) -> None:
     manifest_path, _ = _freeze_cases(tmp_path)
     results_dir = tmp_path / "results"
     _write_success_result(results_dir / "case-0", decision="ready")
-    _write_success_result(results_dir / "case-1", decision="block_recommended")
+    _write_success_result(
+        results_dir / "case-1",
+        decision="block_recommended",
+        head_sha="0000000000000000000000000000000000000002",
+    )
     predictions_path = tmp_path / "eval" / "holdout" / "predictions.json"
     holdout_workflow.freeze_predictions(
         results_dir, predictions_path, manifest_path, "b" * 40, repo_root=tmp_path
