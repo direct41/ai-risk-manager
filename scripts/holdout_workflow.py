@@ -18,6 +18,17 @@ from ai_risk_manager.artifact_io import write_text_atomic, write_text_new_atomic
 
 
 CASE_FIELDS = {"id", "url", "head_sha", "stack", "selected_at"}
+SELECTION_POLICY_FIELDS = {
+    "repositories",
+    "per_repository",
+    "states",
+    "changed_files",
+    "diff_size",
+    "ordering",
+    "excluded_dataset",
+    "excluded_dataset_sha256",
+    "selected_at",
+}
 EXECUTIONS = {"pass", "setup_fail", "provider_fail", "tool_fail", "artifact_fail", "timeout"}
 DECISIONS = {"ready", "review_required", "block_recommended"}
 SHA40 = re.compile(r"[0-9a-f]{40}")
@@ -120,6 +131,60 @@ def _validate_cases(cases: object, minimum_cases: int) -> list[dict[str, str]]:
     return normalized
 
 
+def _validate_selection_policy(policy: object, regression_path: Path, cases: list[dict[str, str]]) -> dict[str, Any]:
+    if not isinstance(policy, dict) or set(policy) != SELECTION_POLICY_FIELDS:
+        raise HoldoutWorkflowError(f"selection_policy must contain exactly {sorted(SELECTION_POLICY_FIELDS)}")
+    repositories = policy.get("repositories")
+    quota = policy.get("per_repository")
+    if (
+        not isinstance(repositories, list)
+        or not repositories
+        or not all(isinstance(repo, str) and re.fullmatch(r"[^/]+/[^/]+", repo) for repo in repositories)
+        or len(repositories) != len(set(repositories))
+    ):
+        raise HoldoutWorkflowError("selection_policy repositories must be unique owner/repository strings")
+    if not isinstance(quota, int) or isinstance(quota, bool) or quota < 1:
+        raise HoldoutWorkflowError("selection_policy per_repository must be a positive integer")
+    if len(cases) != len(repositories) * quota:
+        raise HoldoutWorkflowError("case count must match the repository quota in selection_policy")
+    counts = {repository: 0 for repository in repositories}
+    for case in cases:
+        match = re.match(r"https://github\.com/([^/]+/[^/]+)/pull/", case["url"])
+        repository = match.group(1) if match else ""
+        if repository not in counts:
+            raise HoldoutWorkflowError(f"case {case['id']} is outside selection_policy repositories")
+        counts[repository] += 1
+        if case["selected_at"] != policy.get("selected_at"):
+            raise HoldoutWorkflowError("case selected_at values must match selection_policy selected_at")
+    if any(count != quota for count in counts.values()):
+        raise HoldoutWorkflowError("each selection_policy repository must satisfy per_repository quota")
+    if policy.get("states") != ["MERGED"]:
+        raise HoldoutWorkflowError("selection_policy states must be [MERGED]")
+    for field in ("changed_files", "diff_size"):
+        bounds = policy.get(field)
+        if (
+            not isinstance(bounds, list)
+            or len(bounds) != 2
+            or not all(isinstance(value, int) and not isinstance(value, bool) for value in bounds)
+            or bounds[0] < 0
+            or bounds[0] > bounds[1]
+        ):
+            raise HoldoutWorkflowError(f"selection_policy {field} must be ordered non-negative integer bounds")
+    if policy.get("ordering") != "most_recently_updated_eligible":
+        raise HoldoutWorkflowError("selection_policy ordering must be most_recently_updated_eligible")
+    if policy.get("excluded_dataset") != "eval/public_prs.json":
+        raise HoldoutWorkflowError("selection_policy excluded_dataset must be eval/public_prs.json")
+    expected_regression_hash = policy.get("excluded_dataset_sha256")
+    if not isinstance(expected_regression_hash, str) or not SHA64.fullmatch(expected_regression_hash):
+        raise HoldoutWorkflowError("selection_policy excluded_dataset_sha256 must be a SHA-256")
+    if _sha256(regression_path) != expected_regression_hash:
+        raise HoldoutWorkflowError("selection_policy excluded dataset hash does not match the regression corpus")
+    selected_at = policy.get("selected_at")
+    if not isinstance(selected_at, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", selected_at):
+        raise HoldoutWorkflowError("selection_policy selected_at must be an ISO date")
+    return policy
+
+
 def freeze_cases(
     candidate_path: Path,
     output_path: Path,
@@ -138,6 +203,7 @@ def freeze_cases(
     if candidates.get("dataset_role") != "holdout_candidates":
         raise HoldoutWorkflowError("candidate packet must have dataset_role=holdout_candidates")
     cases = _validate_cases(candidates.get("cases"), minimum_cases)
+    selection_policy = _validate_selection_policy(candidates.get("selection_policy"), regression_path, cases)
 
     regression = _read_object(regression_path)
     regression_cases = regression.get("cases")
@@ -150,7 +216,10 @@ def freeze_cases(
         raise HoldoutWorkflowError(f"holdout reuses regression cases: {', '.join(reused)}")
 
     relative_output = _relative_holdout_path(output_path, repo_root)
-    _write_new_json(output_path, {"version": 1, "dataset_role": "holdout", "cases": cases})
+    _write_new_json(
+        output_path,
+        {"version": 1, "dataset_role": "holdout", "selection_policy": selection_policy, "cases": cases},
+    )
     cases_hash = _sha256(output_path)
     holdout.update(
         {

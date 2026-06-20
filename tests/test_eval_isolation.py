@@ -34,7 +34,22 @@ def _cases_payload(count: int = 30, *, extra_field: bool = False) -> dict:
         if extra_field:
             case["expected"] = {"decision": "ready"}
         cases.append(case)
-    return {"version": 1, "dataset_role": "holdout", "cases": cases}
+    return {
+        "version": 1,
+        "dataset_role": "holdout",
+        "selection_policy": {
+            "repositories": ["example/project"],
+            "per_repository": count,
+            "states": ["MERGED"],
+            "changed_files": [1, 20],
+            "diff_size": [5, 1500],
+            "ordering": "most_recently_updated_eligible",
+            "excluded_dataset": "eval/public_prs.json",
+            "excluded_dataset_sha256": "a" * 64,
+            "selected_at": "2026-06-20",
+        },
+        "cases": cases,
+    }
 
 
 def _manifest(holdout: dict) -> dict:

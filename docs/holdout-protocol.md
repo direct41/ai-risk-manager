@@ -49,7 +49,7 @@ Each case contains only:
 
 Do not include `expected`, `label`, outcome rationale, known analyzer misses, or rule IDs. Cases used in tuning, regression, documentation examples, or prior benchmark analysis are ineligible.
 
-The candidate packet uses `dataset_role=holdout_candidates` and the same five case fields. The freeze command rejects any URL or head SHA already present in `eval/public_prs.json`.
+The candidate packet uses `dataset_role=holdout_candidates` and the same five case fields. It must also record the repository quotas, merged-state filter, diff-size bounds, ordering, selection date, and SHA-256 of the excluded regression dataset. The freeze command preserves this policy in the frozen packet and rejects any URL or head SHA already present in `eval/public_prs.json`.
 
 ## Blind prediction freeze
 

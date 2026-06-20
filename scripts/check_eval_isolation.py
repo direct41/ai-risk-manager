@@ -25,6 +25,18 @@ ANALYZER_EXACT_PATHS = {
 }
 HOLDOUT_PHASES = ("not_established", "cases_frozen", "predictions_frozen", "evaluated")
 CASE_ALLOWED_FIELDS = {"id", "url", "head_sha", "stack", "selected_at"}
+CASE_PACKET_ALLOWED_FIELDS = {"version", "dataset_role", "selection_policy", "cases"}
+SELECTION_POLICY_ALLOWED_FIELDS = {
+    "repositories",
+    "per_repository",
+    "states",
+    "changed_files",
+    "diff_size",
+    "ordering",
+    "excluded_dataset",
+    "excluded_dataset_sha256",
+    "selected_at",
+}
 PREDICTION_ALLOWED_FIELDS = {"id", "execution", "decision", "top_rules", "finding_count", "artifact_hash"}
 LABEL_ALLOWED_FIELDS = {"id", "reviewer", "outcome", "expected_decision", "rationale", "reviewed_at"}
 PREDICTION_EXECUTIONS = {"pass", "setup_fail", "provider_fail", "tool_fail", "artifact_fail", "timeout"}
@@ -78,6 +90,11 @@ def _validate_cases(path: Path, *, minimum_cases: int, errors: list[str]) -> set
     if not isinstance(payload, dict) or payload.get("dataset_role") != "holdout":
         errors.append("holdout cases must be an object with dataset_role=holdout")
         return set()
+    unexpected_packet_fields = sorted(set(payload) - CASE_PACKET_ALLOWED_FIELDS)
+    if unexpected_packet_fields:
+        errors.append(f"holdout cases packet contains unknown fields: {unexpected_packet_fields}")
+    if payload.get("version") != 1:
+        errors.append("holdout cases packet version must be 1")
     cases = payload.get("cases")
     if not isinstance(cases, list):
         errors.append("holdout cases must contain a cases list")
@@ -106,7 +123,63 @@ def _validate_cases(path: Path, *, minimum_cases: int, errors: list[str]) -> set
             r"https://github\.com/[^/]+/[^/]+/pull/[1-9][0-9]*", case["url"]
         ):
             errors.append(f"holdout case {index} requires a canonical public GitHub PR URL")
+    _validate_selection_policy(payload.get("selection_policy"), cases, errors=errors)
     return case_ids
+
+
+def _validate_selection_policy(policy: object, cases: list[object], *, errors: list[str]) -> None:
+    if not isinstance(policy, dict) or set(policy) != SELECTION_POLICY_ALLOWED_FIELDS:
+        errors.append("holdout cases require a complete selection_policy")
+        return
+    repositories = policy.get("repositories")
+    quota = policy.get("per_repository")
+    if (
+        not isinstance(repositories, list)
+        or not repositories
+        or not all(isinstance(repo, str) and re.fullmatch(r"[^/]+/[^/]+", repo) for repo in repositories)
+        or len(repositories) != len(set(repositories))
+    ):
+        errors.append("selection_policy repositories must be unique owner/repository strings")
+        return
+    if not isinstance(quota, int) or isinstance(quota, bool) or quota < 1:
+        errors.append("selection_policy per_repository must be a positive integer")
+        return
+    counts = {repository: 0 for repository in repositories}
+    selected_at = policy.get("selected_at")
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        url = case.get("url")
+        match = re.match(r"https://github\.com/([^/]+/[^/]+)/pull/", url) if isinstance(url, str) else None
+        repository = match.group(1) if match else ""
+        if repository in counts:
+            counts[repository] += 1
+        if case.get("selected_at") != selected_at:
+            errors.append("case selected_at values must match selection_policy selected_at")
+            break
+    if len(cases) != len(repositories) * quota or any(count != quota for count in counts.values()):
+        errors.append("holdout cases must satisfy selection_policy repository quotas")
+    if policy.get("states") != ["MERGED"]:
+        errors.append("selection_policy states must be [MERGED]")
+    for field in ("changed_files", "diff_size"):
+        bounds = policy.get(field)
+        if (
+            not isinstance(bounds, list)
+            or len(bounds) != 2
+            or not all(isinstance(value, int) and not isinstance(value, bool) for value in bounds)
+            or bounds[0] < 0
+            or bounds[0] > bounds[1]
+        ):
+            errors.append(f"selection_policy {field} must be ordered non-negative integer bounds")
+    if policy.get("ordering") != "most_recently_updated_eligible":
+        errors.append("selection_policy ordering must be most_recently_updated_eligible")
+    if policy.get("excluded_dataset") != "eval/public_prs.json":
+        errors.append("selection_policy excluded_dataset must be eval/public_prs.json")
+    excluded_hash = policy.get("excluded_dataset_sha256")
+    if not isinstance(excluded_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", excluded_hash):
+        errors.append("selection_policy excluded_dataset_sha256 must be a SHA-256")
+    if not isinstance(selected_at, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", selected_at):
+        errors.append("selection_policy selected_at must be an ISO date")
 
 
 def _validate_predictions(path: Path, *, case_ids: set[str], cases_sha256: str, errors: list[str]) -> str | None:

@@ -48,9 +48,20 @@ def _repo(tmp_path: Path) -> tuple[Path, Path]:
     return manifest_path, regression_path
 
 
-def _candidates() -> dict:
+def _candidates(regression_path: Path) -> dict:
     return {
         "dataset_role": "holdout_candidates",
+        "selection_policy": {
+            "repositories": ["example/project"],
+            "per_repository": 2,
+            "states": ["MERGED"],
+            "changed_files": [1, 20],
+            "diff_size": [5, 1500],
+            "ordering": "most_recently_updated_eligible",
+            "excluded_dataset": "eval/public_prs.json",
+            "excluded_dataset_sha256": hashlib.sha256(regression_path.read_bytes()).hexdigest(),
+            "selected_at": "2026-06-20",
+        },
         "cases": [
             {
                 "id": f"case-{index}",
@@ -68,7 +79,7 @@ def _freeze_cases(tmp_path: Path) -> tuple[Path, Path]:
     manifest_path, regression_path = _repo(tmp_path)
     candidate_path = tmp_path / "candidates.json"
     output_path = tmp_path / "eval" / "holdout" / "cases.json"
-    _write_json(candidate_path, _candidates())
+    _write_json(candidate_path, _candidates(regression_path))
     digest = holdout_workflow.freeze_cases(
         candidate_path, output_path, manifest_path, regression_path, repo_root=tmp_path
     )
@@ -91,7 +102,13 @@ def test_freeze_cases_updates_manifest_and_writes_blind_packet(tmp_path: Path) -
     packet = json.loads(cases_path.read_text(encoding="utf-8"))
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-    assert packet == {"version": 1, "dataset_role": "holdout", "cases": _candidates()["cases"]}
+    candidates = _candidates(tmp_path / "eval" / "public_prs.json")
+    assert packet == {
+        "version": 1,
+        "dataset_role": "holdout",
+        "selection_policy": candidates["selection_policy"],
+        "cases": candidates["cases"],
+    }
     assert manifest["holdout"]["status"] == "cases_frozen"
     assert manifest["holdout"]["cases_path"] == "eval/holdout/cases.json"
     assert manifest["holdout"]["frozen"] is True
@@ -102,7 +119,7 @@ def test_cli_freeze_cases_uses_manifest_repository_root(tmp_path: Path, capsys: 
     manifest_path, regression_path = _repo(tmp_path)
     candidate_path = tmp_path / "intake" / "candidates.json"
     output_path = tmp_path / "eval" / "holdout" / "cases.json"
-    _write_json(candidate_path, _candidates())
+    _write_json(candidate_path, _candidates(regression_path))
 
     exit_code = holdout_workflow.main(
         [
@@ -127,8 +144,9 @@ def test_freeze_cases_rejects_regression_reuse_and_forbidden_fields(tmp_path: Pa
     manifest_path, regression_path = _repo(tmp_path)
     candidate_path = tmp_path / "candidates.json"
     output_path = tmp_path / "eval" / "holdout" / "cases.json"
-    candidates = _candidates()
+    candidates = _candidates(regression_path)
     _write_json(regression_path, {"cases": [{"url": candidates["cases"][0]["url"]}]})
+    candidates["selection_policy"]["excluded_dataset_sha256"] = hashlib.sha256(regression_path.read_bytes()).hexdigest()
     _write_json(candidate_path, candidates)
 
     with pytest.raises(holdout_workflow.HoldoutWorkflowError, match="reuses regression"):
@@ -138,6 +156,7 @@ def test_freeze_cases_rejects_regression_reuse_and_forbidden_fields(tmp_path: Pa
 
     candidates["cases"][0]["expected"] = "ready"
     _write_json(regression_path, {"cases": []})
+    candidates["selection_policy"]["excluded_dataset_sha256"] = hashlib.sha256(regression_path.read_bytes()).hexdigest()
     _write_json(candidate_path, candidates)
     with pytest.raises(holdout_workflow.HoldoutWorkflowError, match="exactly"):
         holdout_workflow.freeze_cases(
@@ -149,7 +168,7 @@ def test_freeze_cases_refuses_overwrite_without_mutating_manifest(tmp_path: Path
     manifest_path, regression_path = _repo(tmp_path)
     candidate_path = tmp_path / "candidates.json"
     output_path = tmp_path / "eval" / "holdout" / "cases.json"
-    _write_json(candidate_path, _candidates())
+    _write_json(candidate_path, _candidates(regression_path))
     output_path.parent.mkdir(parents=True)
     output_path.write_text("existing", encoding="utf-8")
     original_manifest = manifest_path.read_bytes()
@@ -169,7 +188,7 @@ def test_freeze_cases_removes_new_artifact_when_manifest_update_fails(
     manifest_path, regression_path = _repo(tmp_path)
     candidate_path = tmp_path / "candidates.json"
     output_path = tmp_path / "eval" / "holdout" / "cases.json"
-    _write_json(candidate_path, _candidates())
+    _write_json(candidate_path, _candidates(regression_path))
 
     def fail_manifest(path: Path, payload: object) -> None:
         raise OSError("simulated manifest failure")
