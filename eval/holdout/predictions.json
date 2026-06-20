@@ -1,0 +1,280 @@
+{
+  "version": 1,
+  "dataset_role": "holdout_predictions",
+  "cases_sha256": "a59e205e93a2eb6b4d77fc121a5dd672043dc42a837727cdc02b9123c8dfc989",
+  "generated_from_commit": "07e4c2b192db032bee8545d30a5d5ab0d07e7de1",
+  "predictions": [
+    {
+      "id": "fastapi-15805",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [],
+      "finding_count": 253,
+      "artifact_hash": "78043d3598ad77d0e0f6f46a5fbd6d51168dfd5b8ed682331347eb94cb51efe4"
+    },
+    {
+      "id": "fastapi-15801",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [],
+      "finding_count": 253,
+      "artifact_hash": "2b7fe473ed87edd0a544c071355fbf13b813942b6825df8a9729b0defa9794aa"
+    },
+    {
+      "id": "fastapi-15796",
+      "execution": "pass",
+      "decision": "review_required",
+      "top_rules": [
+        "pr_dependency_change_without_test_delta"
+      ],
+      "finding_count": 17,
+      "artifact_hash": "8a3bb7bb90ee038062da9847297f246cc0969775d812c6804e9c49c84ff64cc8"
+    },
+    {
+      "id": "fastapi-15554",
+      "execution": "pass",
+      "decision": "review_required",
+      "top_rules": [
+        "pr_dependency_change_without_test_delta"
+      ],
+      "finding_count": 17,
+      "artifact_hash": "df994c54d61f00b0e7e0f576196ef424f0958f164c55d9e7844a49a34b8780ac"
+    },
+    {
+      "id": "fastapi-15724",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [],
+      "finding_count": 247,
+      "artifact_hash": "307918d7cf68b2b1e5c7adbc3187b96685109ed6dbde2d9793096a8bb726b270"
+    },
+    {
+      "id": "fastapi-15785",
+      "execution": "pass",
+      "decision": "review_required",
+      "top_rules": [
+        "agent_generated_test_missing_negative_path"
+      ],
+      "finding_count": 4,
+      "artifact_hash": "b88a54783bafc277d2b518d54104dea534d2b7f66330598a4d1a23788537cc66"
+    },
+    {
+      "id": "fastapi-15787",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [],
+      "finding_count": 250,
+      "artifact_hash": "b64d8dba1af7038a730919958c3c387b6387d2eeb32642abad0ace939a4d2c33"
+    },
+    {
+      "id": "fastapi-15786",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [],
+      "finding_count": 250,
+      "artifact_hash": "d56c46228603ab4328118827812a6b1fcd744936cafc58141a78aaf484ae5540"
+    },
+    {
+      "id": "fastapi-15777",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [],
+      "finding_count": 250,
+      "artifact_hash": "b63bfef06bfdcf67fc9c2cd4eba1784973a62360c619643c96376466d83baf15"
+    },
+    {
+      "id": "fastapi-15779",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [],
+      "finding_count": 250,
+      "artifact_hash": "5a09a581b664a775cad672197c76d372c48a7774e0ec3b75403d6f1a3abaa3a0"
+    },
+    {
+      "id": "django-rest-framework-9979",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [
+        "pr_workflow_change_requires_review"
+      ],
+      "finding_count": 115,
+      "artifact_hash": "ebe3f5a6bf7ec40b26ee1ce7095fa2c7f58b70d4378f57b84bb47d87070e7f5e"
+    },
+    {
+      "id": "django-rest-framework-9974",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [
+        "pr_workflow_change_requires_review"
+      ],
+      "finding_count": 115,
+      "artifact_hash": "d9363a902ad38266cd4701d3f9588c9261e51df0225a6ff251a79000c2b6b770"
+    },
+    {
+      "id": "django-rest-framework-9954",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [],
+      "finding_count": 37,
+      "artifact_hash": "758db51719c27c3862969280d4433b4b7680a319ad15e309626a44ec7eae99c4"
+    },
+    {
+      "id": "django-rest-framework-9934",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [],
+      "finding_count": 1,
+      "artifact_hash": "43b03d786436328b851e5651084c1ba108e603e94e51ea0492a9d57e4ca86fb2"
+    },
+    {
+      "id": "django-rest-framework-9952",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [
+        "pr_workflow_change_requires_review"
+      ],
+      "finding_count": 115,
+      "artifact_hash": "bcb04a228577d4fcae819f080e1bfe317ddc0da9fa2d3f7e5995e30c3b62fddd"
+    },
+    {
+      "id": "django-rest-framework-9949",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [
+        "pr_workflow_change_requires_review"
+      ],
+      "finding_count": 3,
+      "artifact_hash": "263ed92345c5e49f9f1aee06c17d473ba9fa7fd7b9c6a001d55328657af2b5ba"
+    },
+    {
+      "id": "django-rest-framework-9905",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [],
+      "finding_count": 114,
+      "artifact_hash": "c79888b9702545792a5fb997e1cbd5f4cf415b5d8065c97d115a8777bd492da1"
+    },
+    {
+      "id": "django-rest-framework-9931",
+      "execution": "pass",
+      "decision": "review_required",
+      "top_rules": [
+        "pr_code_change_without_test_delta"
+      ],
+      "finding_count": 115,
+      "artifact_hash": "e6c3f0c727a33be31387e196ca7fcab770c41bf2808eb36b47a94b62da667710"
+    },
+    {
+      "id": "django-rest-framework-9926",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [],
+      "finding_count": 114,
+      "artifact_hash": "356002e3cc643d1ee090e008e1354703ed12aeda941df50fd8a20b37c0a576cb"
+    },
+    {
+      "id": "django-rest-framework-9921",
+      "execution": "pass",
+      "decision": "review_required",
+      "top_rules": [
+        "pr_code_change_without_test_delta"
+      ],
+      "finding_count": 115,
+      "artifact_hash": "f868eaed554277ec888a5788d2529a5d2e1c9bccb2d804283b7af2ccd71c7dff"
+    },
+    {
+      "id": "express-4893",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [],
+      "finding_count": 0,
+      "artifact_hash": "8bf90fbc7834504629c01aed42b6162ff2c88c6031fefcc1c94494b98148ef51"
+    },
+    {
+      "id": "express-7233",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [],
+      "finding_count": 36,
+      "artifact_hash": "5320eb1c490e30d8357b3eaa99cc8dabc00bd6785182dacdd87682b10b11da87"
+    },
+    {
+      "id": "express-7297",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [
+        "pr_workflow_change_requires_review"
+      ],
+      "finding_count": 37,
+      "artifact_hash": "006b2d8943dca07ad5ad2998be629bf3ab6f9b094303bde0514bec31789c5efe"
+    },
+    {
+      "id": "express-7234",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [],
+      "finding_count": 36,
+      "artifact_hash": "5cc86520f97c11c126fbe3b0373e94f3726823d8f9c671aed1063426a7f17f71"
+    },
+    {
+      "id": "express-7212",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [
+        "pr_workflow_change_requires_review"
+      ],
+      "finding_count": 37,
+      "artifact_hash": "ffd5668d86711bc5b02ce4087337ebca07786cc931da2b47eb3338f00a7876fa"
+    },
+    {
+      "id": "express-7211",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [
+        "pr_workflow_change_requires_review"
+      ],
+      "finding_count": 37,
+      "artifact_hash": "9a60c2881aa908cab9073c75ce16b3d4b3579bc37187a9aa6ffe2d796ab057a1"
+    },
+    {
+      "id": "express-7210",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [
+        "pr_workflow_change_requires_review"
+      ],
+      "finding_count": 37,
+      "artifact_hash": "1d9843a380e20e5d44befd8822fc5daff23c6e0ae6b68b50fcb730a0072816ec"
+    },
+    {
+      "id": "express-7225",
+      "execution": "pass",
+      "decision": "review_required",
+      "top_rules": [
+        "pr_dependency_change_without_test_delta"
+      ],
+      "finding_count": 29,
+      "artifact_hash": "671015230b0ce1f6e6a161e50e94f1298cf3085ca4487d680f19da3690597151"
+    },
+    {
+      "id": "express-7224",
+      "execution": "pass",
+      "decision": "review_required",
+      "top_rules": [
+        "pr_dependency_change_without_test_delta"
+      ],
+      "finding_count": 29,
+      "artifact_hash": "27183b4b0f86ac6c52e54ce7f691a13fef991416eb4b73388f85e592dfdfa779"
+    },
+    {
+      "id": "express-7150",
+      "execution": "pass",
+      "decision": "ready",
+      "top_rules": [
+        "pr_workflow_change_requires_review"
+      ],
+      "finding_count": 37,
+      "artifact_hash": "0cc02f0b1b675c6233f4560f84c59c34313c172dcbe38f94a716ad00a578c941"
+    }
+  ]
+}

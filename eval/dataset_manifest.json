@@ -15,7 +15,7 @@
     }
   ],
   "holdout": {
-    "status": "cases_frozen",
+    "status": "predictions_frozen",
     "protocol_version": 1,
     "minimum_cases": 30,
     "minimum_independent_labelers": 2,
@@ -23,8 +23,8 @@
     "frozen": true,
     "cases_path": "eval/holdout/cases.json",
     "cases_sha256": "a59e205e93a2eb6b4d77fc121a5dd672043dc42a837727cdc02b9123c8dfc989",
-    "predictions_path": null,
-    "predictions_sha256": null,
+    "predictions_path": "eval/holdout/predictions.json",
+    "predictions_sha256": "200b5f8d78dda3c2fb42d3942c6bf72d2d5ebb6d0d63bfdddd30a4d17e6a6c70",
     "labels_path": null,
     "labels_sha256": null,
     "release_claim_blocked": true
