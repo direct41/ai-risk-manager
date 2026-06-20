@@ -15,14 +15,14 @@
     }
   ],
   "holdout": {
-    "status": "not_established",
+    "status": "cases_frozen",
     "protocol_version": 1,
     "minimum_cases": 30,
     "minimum_independent_labelers": 2,
     "minimum_overlap_cases": 10,
-    "frozen": false,
-    "cases_path": null,
-    "cases_sha256": null,
+    "frozen": true,
+    "cases_path": "eval/holdout/cases.json",
+    "cases_sha256": "a59e205e93a2eb6b4d77fc121a5dd672043dc42a837727cdc02b9123c8dfc989",
     "predictions_path": null,
     "predictions_sha256": null,
     "labels_path": null,

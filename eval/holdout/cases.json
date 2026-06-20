@@ -1,0 +1,239 @@
+{
+  "version": 1,
+  "dataset_role": "holdout",
+  "selection_policy": {
+    "repositories": [
+      "fastapi/fastapi",
+      "encode/django-rest-framework",
+      "expressjs/express"
+    ],
+    "per_repository": 10,
+    "states": [
+      "MERGED"
+    ],
+    "changed_files": [
+      1,
+      20
+    ],
+    "diff_size": [
+      5,
+      1500
+    ],
+    "ordering": "most_recently_updated_eligible",
+    "excluded_dataset": "eval/public_prs.json",
+    "excluded_dataset_sha256": "b0e739bf0910a1d25f686732adc2d9f2388b6ca56980e2f5efec7f6773e0a996",
+    "selected_at": "2026-06-20"
+  },
+  "cases": [
+    {
+      "id": "fastapi-15805",
+      "url": "https://github.com/fastapi/fastapi/pull/15805",
+      "head_sha": "98befde3791e534445cc96df011db088fc472ab8",
+      "stack": "fastapi_pytest",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "fastapi-15801",
+      "url": "https://github.com/fastapi/fastapi/pull/15801",
+      "head_sha": "f15a6677e800e6bf091e99298e03731ba696462b",
+      "stack": "fastapi_pytest",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "fastapi-15796",
+      "url": "https://github.com/fastapi/fastapi/pull/15796",
+      "head_sha": "55c825d152afbd66fca2af23316f75cdaf749c72",
+      "stack": "fastapi_pytest",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "fastapi-15554",
+      "url": "https://github.com/fastapi/fastapi/pull/15554",
+      "head_sha": "7b330dfd3c7dc920abbd1cf18f9f3184cec2271b",
+      "stack": "fastapi_pytest",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "fastapi-15724",
+      "url": "https://github.com/fastapi/fastapi/pull/15724",
+      "head_sha": "e9f6f9ec2ef88436ad1a98c613c1cf2b8646fc03",
+      "stack": "fastapi_pytest",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "fastapi-15785",
+      "url": "https://github.com/fastapi/fastapi/pull/15785",
+      "head_sha": "cdd2b51c2258a7581279fff99b7f4a53a2660acf",
+      "stack": "fastapi_pytest",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "fastapi-15787",
+      "url": "https://github.com/fastapi/fastapi/pull/15787",
+      "head_sha": "c5e513139a11e42759ef651cc52259527ee87558",
+      "stack": "fastapi_pytest",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "fastapi-15786",
+      "url": "https://github.com/fastapi/fastapi/pull/15786",
+      "head_sha": "34b688a0b68eca28c285bca1835b99b1933f121e",
+      "stack": "fastapi_pytest",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "fastapi-15777",
+      "url": "https://github.com/fastapi/fastapi/pull/15777",
+      "head_sha": "c2301c6de7c404938bcb17d1f62fe296f57ec26d",
+      "stack": "fastapi_pytest",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "fastapi-15779",
+      "url": "https://github.com/fastapi/fastapi/pull/15779",
+      "head_sha": "871a4badac80fdd8552efdbbf7d82ea54e295391",
+      "stack": "fastapi_pytest",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "django-rest-framework-9979",
+      "url": "https://github.com/encode/django-rest-framework/pull/9979",
+      "head_sha": "84654c00685a3a19e37e95a97cb2dc6e33db699a",
+      "stack": "django_drf",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "django-rest-framework-9974",
+      "url": "https://github.com/encode/django-rest-framework/pull/9974",
+      "head_sha": "d5a8317df3276003bf6b78aaeedffc43df3d2f48",
+      "stack": "django_drf",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "django-rest-framework-9954",
+      "url": "https://github.com/encode/django-rest-framework/pull/9954",
+      "head_sha": "beeb8df1f87501a8ffb3b59c112e036c9f0cf402",
+      "stack": "django_drf",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "django-rest-framework-9934",
+      "url": "https://github.com/encode/django-rest-framework/pull/9934",
+      "head_sha": "86b60c806b5d083d7f7c4892ab82f1a313261803",
+      "stack": "django_drf",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "django-rest-framework-9952",
+      "url": "https://github.com/encode/django-rest-framework/pull/9952",
+      "head_sha": "613511b482cf6b15cda7e61644c493867bf9ac81",
+      "stack": "django_drf",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "django-rest-framework-9949",
+      "url": "https://github.com/encode/django-rest-framework/pull/9949",
+      "head_sha": "4158e57228b46602347f4bd0788eb53f87e4aad3",
+      "stack": "django_drf",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "django-rest-framework-9905",
+      "url": "https://github.com/encode/django-rest-framework/pull/9905",
+      "head_sha": "f20e94e6aaffa0861eb6cda39d20b8b54d06638f",
+      "stack": "django_drf",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "django-rest-framework-9931",
+      "url": "https://github.com/encode/django-rest-framework/pull/9931",
+      "head_sha": "c8e8610b41bd4a6d6df7343676c2a94fdff0bafd",
+      "stack": "django_drf",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "django-rest-framework-9926",
+      "url": "https://github.com/encode/django-rest-framework/pull/9926",
+      "head_sha": "03e653c66eb5db45eeb06a4522e4d2da84372cd6",
+      "stack": "django_drf",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "django-rest-framework-9921",
+      "url": "https://github.com/encode/django-rest-framework/pull/9921",
+      "head_sha": "5abd696aedb8617fcfd535d4d08518ccf20fe7b3",
+      "stack": "django_drf",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "express-4893",
+      "url": "https://github.com/expressjs/express/pull/4893",
+      "head_sha": "dddae1894b8cca5f3b8f8f429def8ecf6bb98ab8",
+      "stack": "express_node",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "express-7233",
+      "url": "https://github.com/expressjs/express/pull/7233",
+      "head_sha": "754a1831de09be6ffb81acf7af12c60164c7f7f7",
+      "stack": "express_node",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "express-7297",
+      "url": "https://github.com/expressjs/express/pull/7297",
+      "head_sha": "ead103e91075da8386261491a535f7d25e20c713",
+      "stack": "express_node",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "express-7234",
+      "url": "https://github.com/expressjs/express/pull/7234",
+      "head_sha": "0b8f68b8a7f525bc81c973b5596ae0826228f19f",
+      "stack": "express_node",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "express-7212",
+      "url": "https://github.com/expressjs/express/pull/7212",
+      "head_sha": "e41bb718cdaf5daf4b3c01b26c10fabb4326b37c",
+      "stack": "express_node",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "express-7211",
+      "url": "https://github.com/expressjs/express/pull/7211",
+      "head_sha": "9d6c42763bafb93ad952252ab548f8c6b3b8c63f",
+      "stack": "express_node",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "express-7210",
+      "url": "https://github.com/expressjs/express/pull/7210",
+      "head_sha": "9402438335f0cfe9a8328954e81ee7fa9757cc88",
+      "stack": "express_node",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "express-7225",
+      "url": "https://github.com/expressjs/express/pull/7225",
+      "head_sha": "9519b3e106817d2d069abc1eb1f048d4a5729a12",
+      "stack": "express_node",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "express-7224",
+      "url": "https://github.com/expressjs/express/pull/7224",
+      "head_sha": "c16927d88dab50580cc0893fa31d9afb475a5dc3",
+      "stack": "express_node",
+      "selected_at": "2026-06-20"
+    },
+    {
+      "id": "express-7150",
+      "url": "https://github.com/expressjs/express/pull/7150",
+      "head_sha": "987c3a0b2783b2351a003c5db9b3c81ce2bd4901",
+      "stack": "express_node",
+      "selected_at": "2026-06-20"
+    }
+  ]
+}
