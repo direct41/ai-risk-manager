@@ -4,6 +4,7 @@ from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
 
+from ai_risk_manager.artifact_io import write_text_atomic
 from ai_risk_manager.pr_scope import is_pr_scoped_finding, normalize_path
 from ai_risk_manager.schemas.types import (
     Finding,
@@ -373,8 +374,7 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
 
 
 def write_report(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    write_text_atomic(path, text)
 
 
 def build_pr_summary(

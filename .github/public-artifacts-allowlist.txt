@@ -7,6 +7,7 @@ docs/business-invariants.md
 docs/capability-signals.md
 docs/compatibility.md
 docs/deployment-hardening.md
+docs/holdout-protocol.md
 docs/ingress-contract.md
 docs/plugin-contract.md
 docs/ru.md

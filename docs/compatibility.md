@@ -30,6 +30,7 @@ Breaking changes include:
 
 Additive response fields are allowed in minor releases.
 API hardening that rejects unsafe unauthenticated public-host or out-of-root path requests is considered compatible because the endpoint contract stays unchanged for valid requests.
+The API isolates artifacts below the requested output root. Clients must use the response `output_dir` and `artifacts` paths; `run_id` is an additive correlation field.
 
 ## JSON artifact compatibility
 

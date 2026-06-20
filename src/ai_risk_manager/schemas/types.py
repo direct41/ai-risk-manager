@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any, Literal
 import json
 
+from ai_risk_manager.artifact_io import write_text_atomic
+
 Severity = Literal["critical", "high", "medium", "low"]
 Confidence = Literal["high", "medium", "low"]
 Layer = Literal["domain", "infrastructure", "qa"]
@@ -302,9 +304,7 @@ class PipelineResult:
 
 
 def write_json(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as fh:
-        json.dump(data, fh, ensure_ascii=False, indent=2)
+    write_text_atomic(path, json.dumps(data, ensure_ascii=False, indent=2))
 
 
 def to_dict(instance: Any) -> Any:

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, cast
 import uuid
 
 from ai_risk_manager import __version__
+from ai_risk_manager.artifact_io import write_text_atomic
 from ai_risk_manager.pipeline.context_builder import build_run_context
 from ai_risk_manager.pipeline.run import run_pipeline
 from ai_risk_manager.sample_repo import resolve_sample_repo_path
@@ -27,6 +28,7 @@ _HealthResponse: Any = None
 _RATE_LIMIT_STATE: dict[str, deque[float]] = {}
 _RATE_LIMIT_LOCK = threading.Lock()
 _AUDIT_LOCK = threading.Lock()
+_RUNS_DIR_NAME = "runs"
 
 if TYPE_CHECKING:
     from fastapi import FastAPI as FastAPIApp
@@ -238,6 +240,20 @@ def _resolve_output_dir(raw: str, *, repo_path: Path) -> Path:
     return path
 
 
+def _allocate_run_output_dir(output_root: Path) -> tuple[str, Path]:
+    runs_root = output_root / _RUNS_DIR_NAME
+    runs_root.mkdir(parents=True, exist_ok=True)
+    for _ in range(10):
+        run_id = uuid.uuid4().hex
+        run_output_dir = runs_root / run_id
+        try:
+            run_output_dir.mkdir()
+        except FileExistsError:
+            continue
+        return run_id, run_output_dir
+    raise RuntimeError("Unable to allocate a unique API run directory")
+
+
 def _configured_api_token() -> str | None:
     token = os.getenv("AIRISK_API_TOKEN", "").strip()
     return token or None
@@ -358,6 +374,7 @@ def _write_audit_event(
     http_status: int,
     request_payload: dict[str, Any],
     output_dir: Path | None,
+    run_id: str | None = None,
     exit_code: int | None = None,
     error_detail: str | None = None,
     diagnostics: dict[str, Any] | None = None,
@@ -367,8 +384,8 @@ def _write_audit_event(
         "path": request_payload.get("path", "."),
         "mode": request_payload.get("mode", "full"),
         "provider": request_payload.get("provider", "auto"),
-        "analysis_engine": request_payload.get("analysis_engine", "ai_first"),
-        "no_llm": bool(request_payload.get("no_llm", False)),
+        "analysis_engine": request_payload.get("analysis_engine", "deterministic"),
+        "no_llm": bool(request_payload.get("no_llm", True)),
     }
     payload = {
         "timestamp": _utc_now_iso(),
@@ -378,6 +395,7 @@ def _write_audit_event(
         "exit_code": exit_code,
         "duration_ms": duration_ms,
         "request": request_view,
+        "run_id": run_id,
         "output_dir": str(output_dir) if output_dir is not None else None,
     }
     if error_detail:
@@ -387,10 +405,9 @@ def _write_audit_event(
 
     if output_dir is not None:
         try:
-            output_dir.mkdir(parents=True, exist_ok=True)
-            (output_dir / "api_audit.json").write_text(
+            write_text_atomic(
+                output_dir / "api_audit.json",
                 json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
-                encoding="utf-8",
             )
         except OSError:
             pass
@@ -503,6 +520,8 @@ def create_app() -> FastAPIApp:
                 raise HTTPException(status_code=422, detail=detail) from exc
             raise
 
+        validated_request_payload = cast(dict[str, Any], request.model_dump(by_alias=True))
+
         try:
             _enforce_api_auth(
                 expected_token=_configured_api_token(),
@@ -527,7 +546,7 @@ def create_app() -> FastAPIApp:
                 correlation_id=correlation_id,
                 status="request_rejected",
                 http_status=exc.status_code,
-                request_payload=request_payload,
+                request_payload=validated_request_payload,
                 output_dir=None,
                 error_detail=_sanitize_error_detail(exc.detail),
             )
@@ -541,14 +560,14 @@ def create_app() -> FastAPIApp:
                 correlation_id=correlation_id,
                 status="invalid_repo_path",
                 http_status=400,
-                request_payload=request_payload,
+                request_payload=validated_request_payload,
                 output_dir=None,
                 error_detail=str(exc),
             )
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         try:
-            output_dir = _resolve_output_dir(request.output_dir, repo_path=repo_path)
+            output_root = _resolve_output_dir(request.output_dir, repo_path=repo_path)
             baseline_graph = _resolve_input_file_path(
                 request.baseline_graph,
                 repo_path=repo_path,
@@ -565,11 +584,25 @@ def create_app() -> FastAPIApp:
                 correlation_id=correlation_id,
                 status="invalid_api_path",
                 http_status=400,
-                request_payload=request_payload,
+                request_payload=validated_request_payload,
                 output_dir=None,
                 error_detail=str(exc),
             )
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        try:
+            run_id, output_dir = _allocate_run_output_dir(output_root)
+        except (OSError, RuntimeError) as exc:
+            _write_audit_event(
+                started_at=started_at,
+                correlation_id=correlation_id,
+                status="output_allocation_error",
+                http_status=500,
+                request_payload=validated_request_payload,
+                output_dir=None,
+                error_detail=str(exc),
+            )
+            raise HTTPException(status_code=500, detail="Unable to allocate run output directory") from exc
 
         try:
             ctx = build_run_context(
@@ -598,8 +631,9 @@ def create_app() -> FastAPIApp:
                 correlation_id=correlation_id,
                 status="internal_error",
                 http_status=500,
-                request_payload=request_payload,
+                request_payload=validated_request_payload,
                 output_dir=output_dir,
+                run_id=run_id,
                 diagnostics=diagnostics,
                 error_detail=_diagnostic_error_detail(exc),
             )
@@ -622,8 +656,9 @@ def create_app() -> FastAPIApp:
             correlation_id=correlation_id,
             status="completed",
             http_status=200,
-            request_payload=request_payload,
+            request_payload=validated_request_payload,
             output_dir=output_dir,
+            run_id=run_id,
             exit_code=exit_code,
             diagnostics=success_diagnostics,
         )
@@ -634,6 +669,7 @@ def create_app() -> FastAPIApp:
             artifacts=_collect_artifacts(output_dir),
             result=to_dict(result) if result is not None else None,
             summary=to_dict(result.summary) if result is not None else None,
+            run_id=run_id,
             correlation_id=correlation_id,
             diagnostics=success_diagnostics,
         )

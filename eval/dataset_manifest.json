@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "datasets": [
     {
       "path": "eval/repos",
@@ -16,7 +16,17 @@
   ],
   "holdout": {
     "status": "not_established",
-    "path": null,
+    "protocol_version": 1,
+    "minimum_cases": 30,
+    "minimum_independent_labelers": 2,
+    "minimum_overlap_cases": 10,
+    "frozen": false,
+    "cases_path": null,
+    "cases_sha256": null,
+    "predictions_path": null,
+    "predictions_sha256": null,
+    "labels_path": null,
+    "labels_sha256": null,
     "release_claim_blocked": true
   }
 }

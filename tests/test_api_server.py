@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
+import threading
 from unittest.mock import patch
 
 import pytest
@@ -47,12 +49,13 @@ def test_api_analyze_matches_pipeline_for_same_input(tmp_path: Path, write_file)
     assert response.status_code == 200
 
     api_data = response.json()
+    api_output_dir = Path(api_data["output_dir"])
 
     ctx = RunContext(
         repo_path=tmp_path.resolve(),
         mode="full",
         base=None,
-        output_dir=output_dir.resolve(),
+        output_dir=(tmp_path / ".riskmap_direct").resolve(),
         provider="auto",
         no_llm=True,
         output_format="json",
@@ -70,10 +73,12 @@ def test_api_analyze_matches_pipeline_for_same_input(tmp_path: Path, write_file)
     assert api_data["result"]["analysis_scope"] == direct_result.analysis_scope
     assert len(api_data["result"]["findings"]["findings"]) == len(direct_result.findings.findings)
     assert isinstance(api_data["correlation_id"], str)
+    assert isinstance(api_data["run_id"], str)
+    assert api_output_dir == output_dir / "runs" / api_data["run_id"]
     assert api_data["diagnostics"]["status"] == "completed"
     assert isinstance(api_data["diagnostics"]["duration_ms"], int)
     assert api_data["artifacts"]["api_audit.json"].endswith("api_audit.json")
-    assert (output_dir / "api_audit.json").exists()
+    assert (api_output_dir / "api_audit.json").exists()
 
 
 def test_api_pr_mode_exposes_pr_summary_artifacts(tmp_path: Path, write_file) -> None:
@@ -100,9 +105,10 @@ def test_api_pr_mode_exposes_pr_summary_artifacts(tmp_path: Path, write_file) ->
 
     assert response.status_code == 200
     api_data = response.json()
+    api_output_dir = Path(api_data["output_dir"])
     assert api_data["artifacts"]["github_check.json"].endswith("github_check.json")
     assert api_data["artifacts"]["pr_summary.json"].endswith("pr_summary.json")
-    pr_summary = json.loads((output_dir / "pr_summary.json").read_text(encoding="utf-8"))
+    pr_summary = json.loads((api_output_dir / "pr_summary.json").read_text(encoding="utf-8"))
     assert pr_summary["marker"] == "ai-risk-manager"
     assert "top_findings" in pr_summary
     assert "profiles" in pr_summary
@@ -457,6 +463,58 @@ def test_api_writes_audit_log_when_configured(tmp_path: Path, write_file, monkey
     assert payload["http_status"] == 200
     assert payload["exit_code"] == 0
     assert payload["correlation_id"] == response.json()["correlation_id"]
+    assert payload["run_id"] == response.json()["run_id"]
+    assert payload["request"]["analysis_engine"] == "deterministic"
+    assert payload["request"]["no_llm"] is True
+
+
+def test_api_isolates_concurrent_runs_under_same_output_root(tmp_path: Path, write_file) -> None:
+    write_file(tmp_path / "app.py", "def read():\n    return True\n")
+    output_root = tmp_path / ".riskmap-concurrent"
+    barrier = threading.Barrier(2)
+
+    def synchronized_pipeline(ctx):
+        barrier.wait(timeout=5)
+        return None, 0, [f"output={ctx.output_dir}"]
+
+    def submit(correlation_id: str):
+        with TestClient(app) as client:
+            return client.post(
+                "/v1/analyze",
+                json={"path": str(tmp_path), "output_dir": str(output_root)},
+                headers={"X-Correlation-ID": correlation_id},
+            )
+
+    with patch("ai_risk_manager.api.server.run_pipeline", side_effect=synchronized_pipeline):
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            responses = list(executor.map(submit, ["concurrent-1", "concurrent-2"]))
+
+    assert [response.status_code for response in responses] == [200, 200]
+    payloads = [response.json() for response in responses]
+    output_dirs = [Path(payload["output_dir"]) for payload in payloads]
+    assert output_dirs[0] != output_dirs[1]
+    assert {path.parent for path in output_dirs} == {output_root / "runs"}
+    assert {path.name for path in output_dirs} == {payload["run_id"] for payload in payloads}
+    for payload, output_dir in zip(payloads, output_dirs, strict=True):
+        audit = json.loads((output_dir / "api_audit.json").read_text(encoding="utf-8"))
+        assert audit["correlation_id"] == payload["correlation_id"]
+        assert audit["run_id"] == payload["run_id"]
+
+
+def test_api_reports_output_allocation_failure_without_running_pipeline(tmp_path: Path, write_file) -> None:
+    write_file(tmp_path / "app.py", "def read():\n    return True\n")
+    output_root = tmp_path / "occupied-output"
+    output_root.write_text("not a directory", encoding="utf-8")
+
+    with patch("ai_risk_manager.api.server.run_pipeline") as run_pipeline_mock:
+        response = TestClient(app).post(
+            "/v1/analyze",
+            json={"path": str(tmp_path), "output_dir": str(output_root)},
+        )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Unable to allocate run output directory"
+    run_pipeline_mock.assert_not_called()
 
 
 def test_api_returns_failure_diagnostics_on_internal_error(tmp_path: Path, write_file) -> None:

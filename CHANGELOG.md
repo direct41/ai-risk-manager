@@ -7,6 +7,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Added holdout workflow tooling for regression-deduplicated case freezing, deterministic prediction packets, and prediction-blind reviewer templates.
+- Added a machine-enforced frozen-holdout lifecycle with hash pinning, blind prediction/label phases, minimum reviewer overlap, and mixed-change leakage protection.
+- Quality CI now builds wheel and source artifacts once, verifies hashes and metadata, clean-installs both across Python 3.11-3.13, and publishes SBOM/audit evidence.
+- Runtime, API-extra, and release-toolchain dependencies now have separate vulnerability gates with a pinned release toolchain.
+- API analysis responses now include a server-generated run ID and isolate artifacts under a per-run output directory.
 - Added 10 evidence-backed public PR cases from FastAPI, Django REST framework, Express, and the full-stack FastAPI template, including reviewer-impact notes and a confirmed compatibility false negative.
 - Added a PR diff signal for query parser `arrayLimit` changes without indexed-bracket compatibility coverage.
 - Added 8 parser and serialization validation cases, including the confirmed DRF empty-datetime renderer regression and seven clean controls.
@@ -24,6 +29,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Public PR corpus labels are pinned to the exact reviewed head SHA, with all 49 current cases refreshed and two changed open PRs re-reviewed as clean controls.
 
 ### Fixed
+- API audit records now use validated request defaults, and JSON/Markdown artifacts are replaced atomically.
 - GitHub PR review now verifies and checks out the exact metadata head SHA, preventing a moving PR ref from changing the analyzed commit mid-run.
 - Repository collectors now share git-aware file discovery that respects ignored files and excludes generated, sample, dependency, and virtual-environment trees.
 - Old merged PRs in high-velocity repositories no longer fall back to noisy full-repository analysis when their merge base is outside the shallow branch history.

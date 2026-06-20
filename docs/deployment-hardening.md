@@ -35,6 +35,7 @@ Security notes:
 - Keep `AIRISK_API_TOKEN` in a secret manager, never in Git.
 - Keep analyzed repositories under `AIRISK_API_WORKSPACE_ROOTS`; request paths outside those roots are rejected.
 - Keep artifact output under `AIRISK_API_OUTPUT_ROOTS`, or omit it to restrict output to the analyzed repository.
+- Treat request `output_dir` as an output root. Each API request writes to an isolated `runs/<server-generated-run-id>/` directory returned in the response; callers must not assume artifacts are written directly into the requested root.
 - Place API behind a reverse proxy (TLS termination + ingress ACL).
 - Restrict access to trusted networks and CI runners only.
 - Mount audit log path to persistent storage with rotation policy.

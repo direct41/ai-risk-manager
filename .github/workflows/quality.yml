@@ -16,6 +16,8 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
 
       - uses: ./.github/actions/setup-python-env
         with:
@@ -30,30 +32,86 @@ jobs:
       - name: Public PR corpus gate
         run: riskmap corpus-status eval/public_prs.json --output-dir "${RUNNER_TEMP}/public-pr-corpus-status" --strict
 
+      - name: Eval dataset isolation gate
+        env:
+          AIRISK_EVAL_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python scripts/check_eval_isolation.py
+
       - name: Mypy
         run: mypy src
 
       - name: Pytest + coverage
         run: pytest --cov=ai_risk_manager --cov-fail-under=80
 
-      - name: Minimal install smoke (no extras)
+  release-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.13"
+
+      - name: Install pinned release toolchain
+        run: python -m pip install --upgrade -r .github/requirements/release.txt
+
+      - name: Build wheel and source distribution once
+        run: python -m build --no-isolation --sdist --wheel --outdir dist
+
+      - name: Validate package metadata
+        run: python -m twine check dist/*.whl dist/*.tar.gz
+
+      - name: Record artifact hashes
+        working-directory: dist
+        run: sha256sum *.whl *.tar.gz > SHA256SUMS
+
+      - name: Upload release candidates
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-candidates
+          path: dist/
+          if-no-files-found: error
+
+  artifact-smoke:
+    needs: release-artifacts
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download release candidates
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-candidates
+          path: dist
+
+      - name: Verify artifact hashes
+        working-directory: dist
+        run: sha256sum --check SHA256SUMS
+
+      - name: Clean-install and smoke wheel
         run: |
           set -o pipefail
-          python -m venv .venv-min
-          . .venv-min/bin/activate
-          python -m pip install --upgrade pip
-          python -m pip install .
-          python -c "import ai_risk_manager.api.server"
-          riskmap analyze \
+          wheel="$(find dist -maxdepth 1 -name '*.whl' -print -quit)"
+          test -n "$wheel"
+          python -m venv "${RUNNER_TEMP}/wheel-env"
+          "${RUNNER_TEMP}/wheel-env/bin/python" -m pip install --upgrade pip==26.1.2
+          "${RUNNER_TEMP}/wheel-env/bin/python" -m pip install "$wheel"
+          "${RUNNER_TEMP}/wheel-env/bin/python" -c "import ai_risk_manager.api.server"
+          "${RUNNER_TEMP}/wheel-env/bin/riskmap" analyze \
             --sample \
             --no-llm \
             --analysis-engine deterministic \
-            --output-dir "${RUNNER_TEMP}/riskmap-sample" \
-            | tee "${RUNNER_TEMP}/riskmap-sample.log"
-          test -s "${RUNNER_TEMP}/riskmap-sample/report.md"
-          grep -Fq "Support level applied: l2" "${RUNNER_TEMP}/riskmap-sample.log"
+            --output-dir "${RUNNER_TEMP}/wheel-sample" \
+            | tee "${RUNNER_TEMP}/wheel-sample.log"
+          test -s "${RUNNER_TEMP}/wheel-sample/report.md"
+          grep -Fq "Support level applied: l2" "${RUNNER_TEMP}/wheel-sample.log"
           set +e
-          output="$(riskmap-api 2>&1)"
+          output="$("${RUNNER_TEMP}/wheel-env/bin/riskmap-api" 2>&1)"
           code=$?
           set -e
           if [ "$code" -eq 0 ]; then
@@ -61,3 +119,99 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -Fq "Install API dependencies with: pip install -e '.[api]'."
+
+      - name: Clean-install and smoke source distribution
+        run: |
+          set -o pipefail
+          sdist="$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)"
+          test -n "$sdist"
+          python -m venv "${RUNNER_TEMP}/sdist-env"
+          "${RUNNER_TEMP}/sdist-env/bin/python" -m pip install --upgrade \
+            pip==26.1.2 setuptools==82.0.1 wheel==0.47.0
+          "${RUNNER_TEMP}/sdist-env/bin/python" -m pip install --no-build-isolation "$sdist"
+          "${RUNNER_TEMP}/sdist-env/bin/riskmap" analyze \
+            --sample \
+            --no-llm \
+            --analysis-engine deterministic \
+            --output-dir "${RUNNER_TEMP}/sdist-sample" \
+            | tee "${RUNNER_TEMP}/sdist-sample.log"
+          test -s "${RUNNER_TEMP}/sdist-sample/report.md"
+          grep -Fq "Support level applied: l2" "${RUNNER_TEMP}/sdist-sample.log"
+
+      - name: Clean-install API extras from wheel
+        run: |
+          wheel="$(find dist -maxdepth 1 -name '*.whl' -print -quit)"
+          python -m venv "${RUNNER_TEMP}/api-env"
+          "${RUNNER_TEMP}/api-env/bin/python" -m pip install --upgrade pip==26.1.2
+          "${RUNNER_TEMP}/api-env/bin/python" -m pip install "${wheel}[api]"
+          "${RUNNER_TEMP}/api-env/bin/python" -c \
+            "from ai_risk_manager.api.server import create_app; assert create_app() is not None"
+
+  dependency-audit:
+    needs: release-artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.13"
+
+      - name: Download release candidates
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-candidates
+          path: dist
+
+      - name: Install pinned audit toolchain
+        run: python -m pip install --upgrade -r .github/requirements/release.txt
+
+      - name: Install core and API runtime environments
+        run: |
+          wheel="$(find dist -maxdepth 1 -name '*.whl' -print -quit)"
+          python -m venv "${RUNNER_TEMP}/core-audit-env"
+          "${RUNNER_TEMP}/core-audit-env/bin/python" -m pip install --upgrade pip==26.1.2
+          "${RUNNER_TEMP}/core-audit-env/bin/python" -m pip install "$wheel"
+          python -m venv "${RUNNER_TEMP}/api-audit-env"
+          "${RUNNER_TEMP}/api-audit-env/bin/python" -m pip install --upgrade pip==26.1.2
+          "${RUNNER_TEMP}/api-audit-env/bin/python" -m pip install "${wheel}[api]"
+
+      - name: Generate reproducible runtime SBOM
+        run: |
+          cyclonedx-py environment \
+            "${RUNNER_TEMP}/api-audit-env/bin/python" \
+            --pyproject pyproject.toml \
+            --mc-type library \
+            --output-reproducible \
+            --output-format JSON \
+            --output-file dist/runtime-api-sbom.cdx.json
+
+      - name: Audit runtime and release toolchain dependencies
+        run: |
+          "${RUNNER_TEMP}/core-audit-env/bin/python" -m pip freeze \
+            | sed '/^ai-risk-manager/d' > dist/core-runtime-requirements.txt
+          "${RUNNER_TEMP}/api-audit-env/bin/python" -m pip freeze \
+            | sed '/^ai-risk-manager/d' > dist/api-runtime-requirements.txt
+          core_code=0
+          api_code=0
+          toolchain_code=0
+          pip-audit --strict --requirement dist/core-runtime-requirements.txt \
+            --format json --output dist/core-runtime-audit.json || core_code=$?
+          pip-audit --strict --requirement dist/api-runtime-requirements.txt \
+            --format json --output dist/api-runtime-audit.json || api_code=$?
+          pip-audit --strict --format json --output dist/release-toolchain-audit.json || toolchain_code=$?
+          if [ "$core_code" -ne 0 ] || [ "$api_code" -ne 0 ] || [ "$toolchain_code" -ne 0 ]; then
+            echo "Dependency audit failed: core=$core_code api=$api_code toolchain=$toolchain_code"
+            exit 1
+          fi
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-evidence
+          path: |
+            dist/*-audit.json
+            dist/*-requirements.txt
+            dist/*.cdx.json
+          if-no-files-found: warn

@@ -71,6 +71,7 @@ class AnalyzeResponse(BaseModel):
     artifacts: dict[str, str]
     result: dict[str, Any] | None
     summary: AnalyzeSummary | None = None
+    run_id: str
     correlation_id: str | None = None
     diagnostics: dict[str, Any] | None = None
 

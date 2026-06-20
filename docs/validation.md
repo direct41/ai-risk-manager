@@ -40,6 +40,8 @@ cat .riskmap/public-pr-corpus/benchmark_summary.md
 
 `eval/public_prs.json` is a labeled regression corpus, not an independent holdout set. The synthetic repositories under `eval/repos/` are tuning and regression fixtures. The project does not currently claim statistical generalization: release claims that require an independent benchmark remain blocked until a separately sourced, frozen holdout corpus is established.
 
+The lifecycle and isolation requirements for that future corpus are defined in `docs/holdout-protocol.md`, prepared with `scripts/holdout_workflow.py`, and enforced by `scripts/check_eval_isolation.py`.
+
 The synthetic eval suite reports `forbidden-rule avoidance` and `required-rule recall`. These are deterministic fixture-contract checks, not statistical precision and recall measured on an independently sampled population.
 
 The benchmark records two verdict layers per PR: execution status (`pass`, `setup_fail`, `provider_fail`, `tool_fail`, `artifact_fail`, or `timeout`) and product evaluation (`passed`, `failed`, or `needs_human_review`). Treat `needs_human_review` rows as labeling work, not as product success.
