@@ -82,3 +82,14 @@ def test_quality_workflow_enforces_critical_mutation_score() -> None:
     assert 'mutmut==3.6.0' in pyproject
     for module in ("rules/policy.py", "trust/scoring.py", "triage/merge.py", "pr_scope.py"):
         assert f'"src/ai_risk_manager/{module}"' in pyproject
+
+
+def test_quality_workflow_enforces_and_preserves_performance_evidence() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert "performance-slo:" in workflow
+    assert "python scripts/run_performance_suite.py" in workflow
+    assert "--repetitions 3" in workflow
+    assert "--enforce" in workflow
+    assert "--output performance-results.json" in workflow
+    assert "name: performance-slo-results" in workflow
