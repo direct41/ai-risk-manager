@@ -2,6 +2,7 @@
 #
 # Any new docs/*.md file must be added here in the same PR, with the PR
 # explaining why the document is safe and useful for public readers.
+docs/adr/0001-graph-first-integration-risk.md
 docs/architecture.md
 docs/business-invariants.md
 docs/capability-signals.md
