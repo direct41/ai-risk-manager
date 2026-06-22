@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from ai_risk_manager.collectors.plugins.base import ArtifactBundle
+from ai_risk_manager.collectors.plugins.base import ArtifactBundle, DataStoreWriteArtifact, ExternalCallArtifact
 from ai_risk_manager.signals.types import SignalBundle
 from ai_risk_manager.schemas.types import Edge, Graph, Node, TransitionSpec
 
@@ -73,6 +73,15 @@ def _route_paths_match(api_path: str, observed_path: str) -> bool:
             continue
         return False
     return True
+
+
+def _test_type(test_file_path: str, *, has_http_call: bool) -> str:
+    parts = {part.lower() for part in re.split(r"[/\\]+", test_file_path) if part}
+    if "e2e" in parts:
+        return "e2e"
+    if "integration" in parts or has_http_call:
+        return "integration"
+    return "unit"
 
 
 def _artifact_bundle_from_signals(signals: SignalBundle) -> ArtifactBundle:
@@ -173,6 +182,42 @@ def _artifact_bundle_from_signals(signals: SignalBundle) -> ArtifactBundle:
                         str(attrs.get("snippet", "")),
                     )
                 )
+            continue
+
+        if signal.kind == "data_store_write":
+            owner_name = str(attrs.get("owner_name", "")).strip()
+            store_name = str(attrs.get("store_name", "")).strip()
+            operation = str(attrs.get("operation", "")).strip()
+            if not owner_name or not store_name or not operation:
+                continue
+            artifacts.data_store_writes.append(
+                DataStoreWriteArtifact(
+                    file_path=file_path,
+                    owner_name=owner_name,
+                    store_name=store_name,
+                    operation=operation,
+                    line=line,
+                    snippet=str(attrs.get("snippet", "")),
+                )
+            )
+            continue
+
+        if signal.kind == "external_call":
+            owner_name = str(attrs.get("owner_name", "")).strip()
+            system_name = str(attrs.get("system_name", "")).strip()
+            operation = str(attrs.get("operation", "")).strip()
+            if not owner_name or not system_name or not operation:
+                continue
+            artifacts.external_calls.append(
+                ExternalCallArtifact(
+                    file_path=file_path,
+                    owner_name=owner_name,
+                    system_name=system_name,
+                    operation=operation,
+                    line=line,
+                    snippet=str(attrs.get("snippet", "")),
+                )
+            )
             continue
 
         if signal.kind == "dependency_version_policy":
@@ -296,6 +341,7 @@ def _build_graph_from_artifacts(artifacts: ArtifactBundle) -> Graph:
         )
 
     test_node_ids: dict[tuple[str, str], str] = {}
+    tests_with_http_calls = {(file_path, test_name) for file_path, test_name, *_ in artifacts.test_http_calls}
     for test_file_path, test_name, line, snippet in artifacts.test_cases:
         test_node_id = f"test:{_safe_id(test_file_path)}:{test_name}"
         test_node_ids[(test_file_path, test_name)] = test_node_id
@@ -307,7 +353,13 @@ def _build_graph_from_artifacts(artifacts: ArtifactBundle) -> Graph:
                 layer="qa",
                 source_ref=_with_line_ref(test_file_path, line),
                 confidence="high",
-                details={"snippet": snippet},
+                details={
+                    "snippet": snippet,
+                    "test_type": _test_type(
+                        test_file_path,
+                        has_http_call=(test_file_path, test_name) in tests_with_http_calls,
+                    ),
+                },
             )
         )
 
@@ -427,6 +479,7 @@ def _build_graph_from_artifacts(artifacts: ArtifactBundle) -> Graph:
             )
         )
 
+    transition_node_ids_by_owner: dict[str, list[str]] = {}
     for file_path, machine, src, dst, line, snippet, invariant_guarded in artifacts.handled_transitions:
         graph.handled_transitions.append(
             TransitionSpec(
@@ -439,6 +492,107 @@ def _build_graph_from_artifacts(artifacts: ArtifactBundle) -> Graph:
                 invariant_guarded=invariant_guarded,
             )
         )
+        transition_node_id = f"transition:{machine}:{src}->{dst}:handled:{line or 0}"
+        transition_node_ids_by_owner.setdefault(machine, []).append(transition_node_id)
+        graph.nodes.append(
+            Node(
+                id=transition_node_id,
+                type="Transition",
+                name=f"{src}->{dst}",
+                layer="domain",
+                source_ref=_with_line_ref(file_path, line),
+                confidence="high" if invariant_guarded else "medium",
+                details={
+                    "machine": machine,
+                    "status": "handled",
+                    "invariant_guarded": invariant_guarded,
+                    "snippet": snippet,
+                },
+            )
+        )
+        api_id = api_node_ids_by_file_name.get((file_path, machine)) or api_node_ids_by_name.get(machine)
+        if api_id:
+            graph.edges.append(
+                Edge(
+                    id=f"edge:{api_id}->{transition_node_id}:triggers",
+                    source_node_id=api_id,
+                    target_node_id=transition_node_id,
+                    type="triggers",
+                    source_ref=_with_line_ref(file_path, line),
+                    evidence=f"endpoint '{machine}' handles transition {src}->{dst}",
+                    confidence="high",
+                )
+            )
+
+    seen_store_nodes: set[str] = set()
+    for write in artifacts.data_store_writes:
+        store_node_id = f"data-store:{_safe_id(write.file_path)}:{_safe_id(write.store_name)}"
+        if store_node_id not in seen_store_nodes:
+            seen_store_nodes.add(store_node_id)
+            graph.nodes.append(
+                Node(
+                    id=store_node_id,
+                    type="DataStore",
+                    name=write.store_name,
+                    layer="infrastructure",
+                    source_ref=_with_line_ref(write.file_path, write.line),
+                    confidence="high",
+                    details={"operation": write.operation, "snippet": write.snippet},
+                )
+            )
+        api_id = api_node_ids_by_file_name.get((write.file_path, write.owner_name)) or api_node_ids_by_name.get(
+            write.owner_name
+        )
+        owner_transition_ids = transition_node_ids_by_owner.get(write.owner_name, [])
+        source_id = owner_transition_ids[0] if len(owner_transition_ids) == 1 else api_id
+        if source_id:
+            graph.edges.append(
+                Edge(
+                    id=f"edge:{source_id}->{store_node_id}:writes:{write.line or 0}",
+                    source_node_id=source_id,
+                    target_node_id=store_node_id,
+                    type="writes",
+                    source_ref=_with_line_ref(write.file_path, write.line),
+                    evidence=f"'{write.owner_name}' performs {write.operation} on '{write.store_name}'",
+                    confidence="high",
+                    details={"operation": write.operation, "owner_name": write.owner_name},
+                )
+            )
+
+    seen_external_nodes: set[str] = set()
+    for call in artifacts.external_calls:
+        system_node_id = f"external-system:{_safe_id(call.file_path)}:{_safe_id(call.system_name)}"
+        if system_node_id not in seen_external_nodes:
+            seen_external_nodes.add(system_node_id)
+            graph.nodes.append(
+                Node(
+                    id=system_node_id,
+                    type="ExternalSystem",
+                    name=call.system_name,
+                    layer="infrastructure",
+                    source_ref=_with_line_ref(call.file_path, call.line),
+                    confidence="high",
+                    details={"operation": call.operation, "snippet": call.snippet},
+                )
+            )
+        api_id = api_node_ids_by_file_name.get((call.file_path, call.owner_name)) or api_node_ids_by_name.get(
+            call.owner_name
+        )
+        owner_transition_ids = transition_node_ids_by_owner.get(call.owner_name, [])
+        source_id = owner_transition_ids[0] if len(owner_transition_ids) == 1 else api_id
+        if source_id:
+            graph.edges.append(
+                Edge(
+                    id=f"edge:{source_id}->{system_node_id}:triggers:{call.line or 0}",
+                    source_node_id=source_id,
+                    target_node_id=system_node_id,
+                    type="triggers",
+                    source_ref=_with_line_ref(call.file_path, call.line),
+                    evidence=f"'{call.owner_name}' calls {call.system_name}.{call.operation}",
+                    confidence="high",
+                    details={"operation": call.operation, "owner_name": call.owner_name},
+                )
+            )
 
     return graph
 

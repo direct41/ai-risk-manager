@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ai_risk_manager.collectors.plugins.base import ArtifactBundle
+from ai_risk_manager.collectors.plugins.base import ArtifactBundle, DataStoreWriteArtifact, ExternalCallArtifact
 from ai_risk_manager.signals.adapters import artifact_bundle_to_signal_bundle
 
 
@@ -66,6 +66,23 @@ def test_artifact_bundle_to_signal_bundle_populates_evidence_refs() -> None:
 
     assert bundle.signals
     assert all(signal.evidence_refs for signal in bundle.signals)
+
+
+def test_artifact_bundle_to_signal_bundle_maps_architecture_effects() -> None:
+    artifacts = ArtifactBundle(
+        data_store_writes=[
+            DataStoreWriteArtifact("app/api.py", "pay_order", "orders_db", "assign", 20, "orders_db[id] = row")
+        ],
+        external_calls=[
+            ExternalCallArtifact("app/api.py", "pay_order", "payment_gateway", "charge", 21, "gateway.charge(id)")
+        ],
+    )
+
+    bundle = artifact_bundle_to_signal_bundle(artifacts)
+    kinds = {signal.kind for signal in bundle.signals}
+
+    assert {"data_store_write", "external_call"}.issubset(kinds)
+    assert {"data_store_write", "external_call"}.issubset(bundle.supported_kinds)
 
 
 def test_artifact_bundle_to_signal_bundle_maps_side_effect_contract() -> None:

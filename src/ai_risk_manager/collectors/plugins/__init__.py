@@ -1,7 +1,9 @@
 from ai_risk_manager.collectors.plugins.base import (
     ArtifactBundle,
     CollectorPlugin,
+    DataStoreWriteArtifact,
     DetectionConfidence,
+    ExternalCallArtifact,
     StackId,
     StackProbeResult,
 )
@@ -24,9 +26,11 @@ from ai_risk_manager.collectors.plugins.registry import (
 __all__ = [
     "ArtifactBundle",
     "CollectorPlugin",
+    "DataStoreWriteArtifact",
     "DetectionConfidence",
     "DjangoCollectorPlugin",
     "ExpressCollectorPlugin",
+    "ExternalCallArtifact",
     "FastAPICollectorPlugin",
     "PLUGIN_CONTRACT_VERSION",
     "PluginConformanceReport",

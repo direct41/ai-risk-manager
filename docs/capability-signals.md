@@ -41,6 +41,8 @@ negative-path coverage, and nondeterministic dependency checks remain active for
 | `state_transition_declared` | Declared state machine transitions | `ArtifactBundle.declared_transitions` | `TransitionSpec` + `Node(type=\"Transition\")` + `Edge(type=\"transitions_to\")` | `missing_transition_handler` | implemented |
 | `state_transition_handled_guarded` | Runtime status mutation and guard presence | `ArtifactBundle.handled_transitions` (`invariant_guarded`) | `Graph.handled_transitions` entries | `broken_invariant_on_transition` | implemented |
 | `test_to_endpoint_coverage` | Evidence that tests exercise write paths | `ArtifactBundle.test_cases` + `test_http_calls` (path params, aliases, fixture/reverse mapping) | `Node(type=\"TestCase\")` + `Edge(type=\"covered_by\")` | `critical_path_no_tests` | implemented |
+| `data_store_write` | High-confidence persistence performed by a write handler | FastAPI subscript writes to named stores and known persistence calls | `Node(type=\"DataStore\")` + `Edge(type=\"writes\")` from the handled transition or API | `critical_flow_no_integration_tests` | partial |
+| `external_call` | High-confidence external effect performed by a write handler | FastAPI calls such as `publish`, `send`, `charge`, `notify`, or `enqueue` | `Node(type=\"ExternalSystem\")` + `Edge(type=\"triggers\")` from the handled transition or API | `critical_flow_no_integration_tests` | partial |
 | `dependency_version_policy` | Supply-chain risk from mutable dependency specs | `ArtifactBundle.dependency_specs` via shared extractor (`pyproject.toml` + requirements files) | `Node(type=\"Dependency\")` with `details.policy_violation/scope` | `dependency_risk_policy_violation` | implemented |
 | `side_effect_emit_contract` | Mandatory side-effect after critical write (event, notification, webhook, job) | `ArtifactBundle.side_effect_requirements` + `side_effect_emits` | None yet | `missing_required_side_effect` | partial |
 | `authorization_boundary_enforced` | Authz checks on critical path writes | `ArtifactBundle.authorization_boundaries` (Express middleware extraction implemented) | None yet | `critical_write_missing_authz` | partial |
@@ -54,6 +56,7 @@ negative-path coverage, and nondeterministic dependency checks remain active for
 | Deterministic rule | Required signals |
 |---|---|
 | `critical_path_no_tests` | `http_write_surface`, `test_to_endpoint_coverage` |
+| `critical_flow_no_integration_tests` | graph path containing API, Entity, Transition, DataStore, ExternalSystem, and integration/E2E `covered_by` evidence |
 | `missing_transition_handler` | `state_transition_declared`, `state_transition_handled_guarded` |
 | `broken_invariant_on_transition` | `state_transition_handled_guarded`, `state_transition_declared` |
 | `dependency_risk_policy_violation` | `dependency_version_policy` |
@@ -79,6 +82,7 @@ negative-path coverage, and nondeterministic dependency checks remain active for
 2. HTML/UI packs remain Express-first; Python backend plugins now declare these as explicit unsupported instead of leaving capability status implicit.
 3. Contract binding is still FastAPI-oriented (`pydantic_models`) and only partially generalized for Django/DRF.
 4. Ingress-family model now covers `http`, `webhook`, `job`, `cli_task`, and `event_consumer`, but non-HTTP extraction is still Express-first.
+5. Full architecture write-flow extraction is currently FastAPI-first and intentionally limited to high-confidence persistence and external-call patterns.
 
 ## Recommended Next Capability Pack (Highest ROI)
 

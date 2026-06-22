@@ -1,6 +1,6 @@
 # AI Risk Manager
 
-> PR-native release-risk assistant that tells engineering and QA teams what to test before merging risky or AI-generated code.
+> Architecture-aware PR assistant that finds integration and E2E test gaps in risky write flows.
 
 [![Quality Gates](https://github.com/direct41/ai-risk-manager/actions/workflows/quality.yml/badge.svg)](https://github.com/direct41/ai-risk-manager/actions/workflows/quality.yml)
 [![Eval Suite](https://github.com/direct41/ai-risk-manager/actions/workflows/eval-suite.yml/badge.svg)](https://github.com/direct41/ai-risk-manager/actions/workflows/eval-suite.yml)
@@ -11,7 +11,9 @@
 
 Know what to test before merging risky or AI-generated PRs.
 
-AI Risk Manager scans a repository or PR branch, highlights high-risk changed areas, and writes a short test-first triage package. It starts with deterministic evidence. AI enrichment is optional.
+AI Risk Manager builds an evidence-backed graph of APIs, entities, state transitions, persistence, external effects,
+and tests. It highlights changed write flows without integration or E2E coverage and writes a short test-first triage
+package. Deterministic analysis is the default; AI enrichment is optional.
 
 Use it if you review backend-heavy PRs, adopt AI-generated code, or want a short "what should we test first?" checklist before merge.
 
@@ -46,7 +48,9 @@ AI Risk Manager is built for that review moment. It gives engineering and QA tea
 |---|---|
 | PR risk triage | Ranks risky changed areas before merge. |
 | Deterministic-first analysis | Runs locally without sending repository snippets to an LLM by default. |
-| Test-first output | Writes `merge_triage.md`, `report.md`, `findings.json`, and `test_plan.json`. |
+| Architecture graph | Connects APIs, entities, state transitions, data stores, external systems, and tests. |
+| Integration/E2E gaps | Finds complete write flows covered only by unit tests or not covered at all. |
+| Test-first output | Writes triage, findings, test plan, and Mermaid architecture diagrams. |
 | One-command PR review | Runs `riskmap review-pr <github-pr-url>` against a public GitHub PR. |
 | Public PR benchmark | Runs `riskmap benchmark-prs` against a curated public PR corpus and checks expected outcomes. |
 | Supported stacks | Strongest on FastAPI, Django/DRF, and Express/Node repositories. |
@@ -217,6 +221,8 @@ The most useful files are:
 - `.riskmap/report.md` - human-readable findings and top actions
 - `.riskmap/findings.json` - machine-readable findings
 - `.riskmap/test_plan.json` - prioritized test recommendations
+- `.riskmap/entity-relationships.mmd` - Mermaid architecture and test-coverage graph
+- `.riskmap/state-transitions.mmd` - Mermaid state transition diagram
 
 PR mode can also produce:
 
@@ -244,10 +250,11 @@ PR mode can also produce:
 1. Detect repository shape and support level.
 2. Collect stack-specific and universal evidence from code, tests, workflows, dependencies, and configured invariants.
 3. Normalize evidence into capability signals.
-4. Run deterministic rules first.
-5. Optionally add AI semantic enrichment when explicitly enabled.
-6. Score trust from evidence, support level, confidence, and suppression history.
-7. Emit human-readable and machine-readable triage artifacts for local review or CI.
+4. Build the canonical architecture graph and select impacted paths.
+5. Run graph-first deterministic rules; retain frozen signal-only rules for compatibility.
+6. Optionally add AI semantic enrichment when explicitly enabled.
+7. Score trust from evidence, support level, confidence, and suppression history.
+8. Emit human-readable, machine-readable, and Mermaid review artifacts for local review or CI.
 
 ## GitHub PR Comment
 

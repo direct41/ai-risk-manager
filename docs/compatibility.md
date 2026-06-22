@@ -41,6 +41,8 @@ Artifacts include metadata fields:
 - `tool_version`
 
 Additional artifacts (for example `run_metrics.json`, `expansion_gate.json`) may be added in minor releases.
+Mermaid review artifacts (`entity-relationships.mmd`, `state-transitions.mmd`) are additive and may gain new node or
+edge types as graph extraction expands. `graph.json` remains their machine-readable source of truth.
 PR-mode helper artifacts such as `pr_summary.json`, `pr_summary.md`, and `github_check.json` are additive and may evolve with new additive fields.
 That includes additive profile summary fields and compact trust metadata on top findings.
 Optional repo-local config such as `./.riskmap-ui.toml` may add behavior in minor releases without changing the output contract shape; command execution remains gated by environment.

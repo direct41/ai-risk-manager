@@ -46,6 +46,15 @@
       ],
       "required_consecutive_trust_passes": 2
     },
+    "fastapi_graph_first_write_flow": {
+      "stack_id": "fastapi_pytest",
+      "eligible_level": "l2",
+      "required_cases": [
+        "milestone22_fastapi_graph_flow_gap",
+        "milestone22_fastapi_graph_flow_balanced"
+      ],
+      "required_consecutive_trust_passes": 2
+    },
     "django_stage14_write_contract_integrity": {
       "stack_id": "django_drf",
       "eligible_level": "l2",

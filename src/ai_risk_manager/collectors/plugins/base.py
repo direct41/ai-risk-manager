@@ -44,6 +44,26 @@ class IngressCoverageArtifact:
     snippet: str
 
 
+@dataclass(frozen=True)
+class DataStoreWriteArtifact:
+    file_path: str
+    owner_name: str
+    store_name: str
+    operation: str
+    line: int | None
+    snippet: str
+
+
+@dataclass(frozen=True)
+class ExternalCallArtifact:
+    file_path: str
+    owner_name: str
+    system_name: str
+    operation: str
+    line: int | None
+    snippet: str
+
+
 @dataclass
 class ArtifactBundle:
     """Collector output consumed by graph/rule stages.
@@ -68,6 +88,8 @@ class ArtifactBundle:
     test_ingress_calls: list[IngressCoverageArtifact] = field(default_factory=list)
     test_http_calls: list[tuple[str, str, str, str, int | None, str]] = field(default_factory=list)
     # (file, test_name, method, route_path, line, snippet)
+    data_store_writes: list[DataStoreWriteArtifact] = field(default_factory=list)
+    external_calls: list[ExternalCallArtifact] = field(default_factory=list)
     dependency_specs: list[tuple[str, str, str, int | None, str | None, str]] = field(default_factory=list)
     # (file, dependency_name, raw_spec, line, policy_violation, scope)
     side_effect_requirements: list[tuple[str, str, str, str, int | None, str]] = field(default_factory=list)

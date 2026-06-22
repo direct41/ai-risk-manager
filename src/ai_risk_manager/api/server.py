@@ -63,6 +63,8 @@ _ARTIFACT_FILES = (
     "graph.json",
     "graph.analysis.json",
     "graph.deterministic.json",
+    "entity-relationships.mmd",
+    "state-transitions.mmd",
     "findings.raw.json",
     "findings.json",
     "test_plan.json",

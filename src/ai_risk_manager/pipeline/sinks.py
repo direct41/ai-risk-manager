@@ -10,6 +10,7 @@ import time
 from typing import Protocol
 
 from ai_risk_manager import __version__
+from ai_risk_manager.graph.render import render_entity_relationship_mermaid, render_state_transitions_mermaid
 from ai_risk_manager.reports.generator import (
     build_github_check_payload,
     build_pr_summary,
@@ -210,6 +211,8 @@ class LocalArtifactSink:
                 write_json(ctx.output_dir / "github_check.json", _with_metadata(to_dict(github_check), generated_at))
 
         if ctx.output_format in {"md", "both"}:
+            write_report(ctx.output_dir / "entity-relationships.mmd", render_entity_relationship_mermaid(result.graph))
+            write_report(ctx.output_dir / "state-transitions.mmd", render_state_transitions_mermaid(result.graph))
             report = render_report_md(result, notes + output_notes)
             write_report(ctx.output_dir / "report.md", report)
             write_report(ctx.output_dir / "merge_triage.md", render_merge_triage_md(result.merge_triage))

@@ -1,8 +1,12 @@
-# Profile-Based, Capability-Aware Architecture
+# Graph-First, Profile-Aware Architecture
 
 ## Decision
 
-AI Risk Manager evolves as a single merge-risk pipeline with optional `risk profiles`.
+AI Risk Manager evolves as a single architecture-aware merge-risk pipeline with optional `risk profiles`.
+
+The architecture graph is the canonical model for generic risk decisions. Collectors normalize stack syntax into
+evidence signals; the graph connects ingress, entities, states, persistence, external effects, and tests. Profiles
+select relevant graph surfaces and may add explicitly scoped repository-owned checks.
 
 The product does **not** expand by adding more stack-specific top-level architectures.
 It expands by attaching new profiles to the same pipeline:
@@ -48,15 +52,18 @@ The profile model avoids both.
 1. Repository discovery collects technology hints and changed scope.
 2. Profile selector activates only relevant risk profiles.
 3. Each active profile collects facts and adapts them into `CapabilitySignal`s.
-4. Shared rules evaluate signals into findings.
-5. Shared scoring and triage rank findings for merge review.
-6. Shared report generation emits `report.md`, `merge_triage.md`, `pr_summary.md`, `pr_summary.json`, and `github_check.json`.
+4. Signals build the canonical architecture graph and impacted paths.
+5. Shared generic rules evaluate graph structure and coverage into findings.
+6. Shared scoring and triage rank findings for merge review.
+7. Shared report generation emits reports plus entity/state Mermaid artifacts.
 
 Current runtime note:
 
 - shipped PR-facing summaries already expose active profile applicability and compact trust metadata for top findings
 
-One pipeline. Multiple profiles. One output contract.
+One graph. Multiple profiles. One output contract.
+
+See `docs/adr/0001-graph-first-integration-risk.md` for the decision and migration constraints.
 
 ## Core Runtime
 
@@ -64,14 +71,14 @@ The current code already has the right core modules:
 
 - `collectors`
 - `signals`
+- `graph`
 - `rules`
 - `triage`
 - `reports`
 - `pipeline`
 
-Those remain the center of the system.
-
-The new architectural work is to add a thin profile registry above them, not to replace them.
+Those remain the center of the system. `signals` are evidence ingress; `graph` owns the canonical architecture model;
+generic `rules` query graph structure and path coverage. Existing signal-only rules are frozen compatibility behavior.
 
 ## Risk Profiles
 
@@ -186,18 +193,18 @@ Those remain implementation details or compatibility layers, not the canonical s
 
 ## Rollout Strategy
 
-1. Introduce a profile registry without changing current outputs.
-2. Reframe the existing shipped behavior as `code_risk`.
-3. Add shared trust scoring.
-4. Add `ui_flow_risk` as a targeted changed-journey profile.
-5. Add `business_invariant_risk` using repository-owned invariants.
+1. Ship the FastAPI graph-first write-flow slice without removing compatibility behavior.
+2. Validate entity, transition, persistence, external-system, and test edges on real repositories.
+3. Add Django/Express parity only when extraction evidence is high-confidence.
+4. Migrate valuable legacy signal-only rules into graph path rules incrementally.
+5. Keep profiles as graph views and explicitly scoped repository-owned checks.
 
 ## Recommended Architecture Decision
 
-Keep the existing shared pipeline and evolve the product into a profile-based, capability-aware merge-risk system.
+Keep the existing shared pipeline and make the architecture graph the source of truth for integration/E2E risk.
 
 ## Top 3 Implementation Actions
 
-1. Add a thin profile registry above the current collectors/signals/rules pipeline and move the existing shipped behavior under `code_risk`.
-2. Add a shared heuristic trust layer across all findings; reserve precision claims for independently labeled evaluation.
-3. Add new profiles only as optional packs (`ui_flow_risk`, `business_invariant_risk`), never as separate pipelines or products.
+1. Validate the FastAPI full write-flow extractor against real repositories and public PRs.
+2. Add repository-level coverage edges for service and browser journeys without guessing unsupported facts.
+3. Migrate one repeated legacy risk family to graph-path evaluation before adding another generic rule.

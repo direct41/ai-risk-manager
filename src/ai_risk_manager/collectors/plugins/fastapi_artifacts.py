@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 import re
 
 from ai_risk_manager.collectors.file_discovery import iter_project_files
-from ai_risk_manager.collectors.plugins.base import ArtifactBundle
+from ai_risk_manager.collectors.plugins.base import ArtifactBundle, DataStoreWriteArtifact, ExternalCallArtifact
 from ai_risk_manager.collectors.plugins.dependency_artifacts import extract_dependency_specs
 from ai_risk_manager.collectors.plugins.generated_test_artifacts import (
     collect_generated_test_issues,
@@ -34,6 +35,27 @@ GUARD_HINTS = (
     "can_",
     "policy",
     "transition",
+)
+DATA_STORE_NAME_HINTS = ("collection", "database", "db", "records", "repo", "repository", "session", "store", "table")
+DATA_STORE_METHODS = {"add", "commit", "create", "delete", "execute", "insert", "save", "update"}
+EXTERNAL_CALL_METHODS = {"charge", "dispatch", "emit", "enqueue", "notify", "publish", "send"}
+EXTERNAL_SYSTEM_NAME_HINTS = (
+    "broker",
+    "bus",
+    "client",
+    "email",
+    "gateway",
+    "kafka",
+    "mail",
+    "notifier",
+    "payment",
+    "producer",
+    "publisher",
+    "queue",
+    "sns",
+    "sqs",
+    "stripe",
+    "webhook",
 )
 
 
@@ -124,6 +146,104 @@ def _extract_write_endpoints(tree: ast.AST, source_lines: list[str]) -> list[tup
                 endpoints.append((node.name, method.upper(), route_path, line, _line_snippet(source_lines, line)))
                 break
     return endpoints
+
+
+def _attribute_path(node: ast.AST) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        prefix = _attribute_path(node.value)
+        return f"{prefix}.{node.attr}" if prefix else node.attr
+    return ""
+
+
+def _looks_like_data_store(name: str) -> bool:
+    normalized = name.lower().replace("-", "_")
+    return any(hint in normalized.split("_") or normalized.endswith(hint) for hint in DATA_STORE_NAME_HINTS)
+
+
+def _looks_like_external_system(name: str, operation: str) -> bool:
+    if operation == "charge":
+        return True
+    normalized = name.lower().replace("-", "_").replace(".", "_")
+    return any(hint in normalized.split("_") for hint in EXTERNAL_SYSTEM_NAME_HINTS)
+
+
+def _endpoint_functions(tree: ast.AST) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+    endpoints: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if any(_is_router_decorator(decorator)[0] for decorator in node.decorator_list):
+            endpoints.append(node)
+    return endpoints
+
+
+def _walk_runtime_nodes(node: ast.AST) -> Iterator[ast.AST]:
+    yield node
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.AsyncFunctionDef, ast.ClassDef, ast.FunctionDef, ast.Lambda)):
+            continue
+        yield from _walk_runtime_nodes(child)
+
+
+def _extract_architecture_effects(
+    tree: ast.AST,
+    source_lines: list[str],
+) -> tuple[list[tuple[str, str, str, int, str]], list[tuple[str, str, str, int, str]]]:
+    store_writes: list[tuple[str, str, str, int, str]] = []
+    external_calls: list[tuple[str, str, str, int, str]] = []
+    seen_stores: set[tuple[str, str, str, int]] = set()
+    seen_calls: set[tuple[str, str, str, int]] = set()
+
+    for endpoint in _endpoint_functions(tree):
+        for statement in endpoint.body:
+            if isinstance(statement, (ast.AsyncFunctionDef, ast.ClassDef, ast.FunctionDef)):
+                continue
+            for child in _walk_runtime_nodes(statement):
+                targets: list[ast.AST] = []
+                if isinstance(child, ast.Assign):
+                    targets = list(child.targets)
+                elif isinstance(child, ast.AnnAssign):
+                    targets = [child.target]
+                for target in targets:
+                    if not isinstance(target, ast.Subscript):
+                        continue
+                    store_name = _attribute_path(target.value)
+                    if not store_name or not _looks_like_data_store(store_name):
+                        continue
+                    line = getattr(child, "lineno", getattr(endpoint, "lineno", 1))
+                    key = (endpoint.name, store_name, "assign", line)
+                    if key not in seen_stores:
+                        seen_stores.add(key)
+                        store_writes.append(
+                            (endpoint.name, store_name, "assign", line, _line_snippet(source_lines, line))
+                        )
+
+                if not isinstance(child, ast.Call) or not isinstance(child.func, ast.Attribute):
+                    continue
+                operation = child.func.attr.lower()
+                receiver = _attribute_path(child.func.value)
+                if not receiver:
+                    continue
+                line = getattr(child, "lineno", getattr(endpoint, "lineno", 1))
+                if operation in DATA_STORE_METHODS and _looks_like_data_store(receiver):
+                    key = (endpoint.name, receiver, operation, line)
+                    if key not in seen_stores:
+                        seen_stores.add(key)
+                        store_writes.append(
+                            (endpoint.name, receiver, operation, line, _line_snippet(source_lines, line))
+                        )
+                    continue
+                if operation in EXTERNAL_CALL_METHODS and _looks_like_external_system(receiver, operation):
+                    key = (endpoint.name, receiver, operation, line)
+                    if key not in seen_calls:
+                        seen_calls.add(key)
+                        external_calls.append(
+                            (endpoint.name, receiver, operation, line, _line_snippet(source_lines, line))
+                        )
+
+    return store_writes, external_calls
 
 
 def _is_basemodel_subclass(node: ast.ClassDef) -> bool:
@@ -619,6 +739,30 @@ def collect_fastapi_artifacts(repo_path: Path) -> ArtifactBundle:
 
         for machine, src, dst, line, snippet, invariant_guarded in _extract_handled_transitions(tree, source_lines):
             bundle.handled_transitions.append((relative, machine, src, dst, line, snippet, invariant_guarded))
+
+        store_writes, external_calls = _extract_architecture_effects(tree, source_lines)
+        bundle.data_store_writes.extend(
+            DataStoreWriteArtifact(
+                file_path=relative,
+                owner_name=owner_name,
+                store_name=store_name,
+                operation=operation,
+                line=line,
+                snippet=snippet,
+            )
+            for owner_name, store_name, operation, line, snippet in store_writes
+        )
+        bundle.external_calls.extend(
+            ExternalCallArtifact(
+                file_path=relative,
+                owner_name=owner_name,
+                system_name=system_name,
+                operation=operation,
+                line=line,
+                snippet=snippet,
+            )
+            for owner_name, system_name, operation, line, snippet in external_calls
+        )
 
         if path in bundle.test_files:
             for case, line, snippet in _extract_test_cases(tree, source_lines):

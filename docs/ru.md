@@ -1,8 +1,8 @@
 # AI Risk Manager: быстрый вход
 
-AI Risk Manager помогает перед merge понять, **что тестировать первым**.
+AI Risk Manager помогает перед merge понять, **какие integration и E2E-сценарии тестировать первыми**.
 
-Это CLI-инструмент для release-risk review. Он анализирует репозиторий или PR-ветку, находит рискованные зоны изменений и пишет короткий triage-отчет.
+CLI строит evidence-backed граф API, сущностей, переходов состояния, хранилищ, внешних эффектов и тестов. Затем он находит измененные write-flow без достаточного integration/E2E-покрытия и пишет короткий triage-отчет.
 
 ## Попробовать за 1 минуту
 
@@ -115,6 +115,8 @@ Baseline должен содержать `.riskmap/baseline/graph.json` и `.ris
 - `.riskmap/report.md` - подробнее: findings, reasons, actions.
 - `.riskmap/findings.json` - машинный формат.
 - `.riskmap/test_plan.json` - приоритизированные тестовые действия.
+- `.riskmap/entity-relationships.mmd` - Mermaid-граф сущностей, эффектов и покрытия.
+- `.riskmap/state-transitions.mmd` - Mermaid-диаграмма переходов состояния.
 
 ## Альфа-фидбек
 

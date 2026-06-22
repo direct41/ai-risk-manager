@@ -128,6 +128,15 @@ DEFAULT_CAPABILITY_PACK_PROMOTION_POLICY: dict[str, object] = {
             ],
             "required_consecutive_trust_passes": 2,
         },
+        "fastapi_graph_first_write_flow": {
+            "stack_id": "fastapi_pytest",
+            "eligible_level": "l2",
+            "required_cases": [
+                "milestone22_fastapi_graph_flow_gap",
+                "milestone22_fastapi_graph_flow_balanced",
+            ],
+            "required_consecutive_trust_passes": 2,
+        },
         "django_stage14_write_contract_integrity": {
             "stack_id": "django_drf",
             "eligible_level": "l2",
@@ -379,6 +388,18 @@ CASES = [
             "session_token_key_mismatch",
             "critical_path_no_tests",
         },
+    ),
+    EvalCase(
+        name="milestone22_fastapi_graph_flow_gap",
+        repo_rel="eval/repos/milestone22_fastapi_graph_flow_gap",
+        required_rules={"critical_flow_no_integration_tests"},
+        forbidden_rules={"critical_path_no_tests"},
+    ),
+    EvalCase(
+        name="milestone22_fastapi_graph_flow_balanced",
+        repo_rel="eval/repos/milestone22_fastapi_graph_flow_balanced",
+        required_rules=set(),
+        forbidden_rules={"critical_flow_no_integration_tests", "critical_path_no_tests"},
     ),
 ]
 

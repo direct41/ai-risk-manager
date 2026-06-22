@@ -14,6 +14,8 @@ SignalKind = Literal[
     "state_transition_declared",
     "state_transition_handled_guarded",
     "test_to_endpoint_coverage",
+    "data_store_write",
+    "external_call",
     "dependency_version_policy",
     "side_effect_emit_contract",
     "authorization_boundary_enforced",

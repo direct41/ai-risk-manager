@@ -78,6 +78,8 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     assert (out_dir / "graph.json").exists()
     assert (out_dir / "graph.analysis.json").exists()
     assert (out_dir / "graph.deterministic.json").exists()
+    assert (out_dir / "entity-relationships.mmd").exists()
+    assert (out_dir / "state-transitions.mmd").exists()
     assert (out_dir / "findings.raw.json").exists()
     assert (out_dir / "findings.json").exists()
     assert (out_dir / "test_plan.json").exists()

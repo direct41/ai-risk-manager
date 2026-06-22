@@ -35,14 +35,56 @@ def _api_display_label(api: Node) -> str:
     return api.name
 
 
+_FULL_WRITE_FLOW_TYPES = {"Entity", "Transition", "DataStore", "ExternalSystem"}
+
+
+def _reachable_architecture_nodes(graph: Graph, start_node_id: str) -> list[Node]:
+    nodes_by_id = {node.id: node for node in graph.nodes}
+    outgoing: dict[str, list[str]] = {}
+    for edge in graph.edges:
+        if edge.type == "covered_by":
+            continue
+        outgoing.setdefault(edge.source_node_id, []).append(edge.target_node_id)
+
+    pending = list(outgoing.get(start_node_id, []))
+    visited: set[str] = set()
+    reachable: list[Node] = []
+    while pending:
+        node_id = pending.pop()
+        if node_id in visited:
+            continue
+        visited.add(node_id)
+        node = nodes_by_id.get(node_id)
+        if node is not None:
+            reachable.append(node)
+        pending.extend(outgoing.get(node_id, []))
+    return reachable
+
+
 def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -> FindingsReport:
     findings: list[Finding] = []
     api_nodes = [n for n in graph.nodes if n.type == "API"]
     dependency_nodes = [n for n in graph.nodes if n.type == "Dependency"]
     covered_api_ids = {e.target_node_id for e in graph.edges if e.type == "covered_by"}
+    test_nodes_by_id = {node.id: node for node in graph.nodes if node.type == "TestCase"}
+    integration_covered_api_ids: set[str] = set()
+    for edge in graph.edges:
+        if edge.type != "covered_by":
+            continue
+        test_node = test_nodes_by_id.get(edge.source_node_id)
+        if test_node is not None and str(test_node.details.get("test_type")) in {"integration", "e2e"}:
+            integration_covered_api_ids.add(edge.target_node_id)
+    reachable_by_api = {api.id: _reachable_architecture_nodes(graph, api.id) for api in api_nodes}
+    full_flow_api_ids = {
+        api_id
+        for api_id, reachable in reachable_by_api.items()
+        if _FULL_WRITE_FLOW_TYPES.issubset({node.type for node in reachable})
+    }
 
     for api in api_nodes:
         if api.id not in covered_api_ids:
+            if api.id in full_flow_api_ids:
+                continue
             api_label = _api_display_label(api)
             finding_id = f"critical_path_no_tests:{api.id}"
             findings.append(
@@ -62,6 +104,40 @@ def _run_rules_on_graph(graph: Graph, *, risk_policy: RiskPolicy = "balanced") -
                     generated_without_llm=True,
                 )
             )
+
+    for api in api_nodes:
+        if api.id not in full_flow_api_ids or api.id in integration_covered_api_ids:
+            continue
+        api_label = _api_display_label(api)
+        reachable = reachable_by_api[api.id]
+        evidence_refs = list(dict.fromkeys([api.source_ref, *(node.source_ref for node in reachable)]))
+        downstream_labels = ", ".join(
+            f"{node.type}:{node.name}" for node in reachable if node.type in _FULL_WRITE_FLOW_TYPES
+        )
+        finding_id = f"critical_flow_no_integration_tests:{api.id}"
+        findings.append(
+            Finding(
+                id=finding_id,
+                rule_id="critical_flow_no_integration_tests",
+                title=f"Write flow '{api_label}' has no integration or E2E coverage",
+                description=(
+                    "The architecture graph connects this write ingress to an entity, state transition, "
+                    "data store, and external system, but no integration or E2E test covers the ingress."
+                ),
+                severity="high",
+                confidence="high",
+                evidence=f"Graph path includes {downstream_labels}; no integration/e2e covered_by edge was found.",
+                source_ref=api.source_ref,
+                suppression_key=finding_id,
+                recommendation=(
+                    f"Add an integration or E2E test for '{api_label}' that verifies the state change, "
+                    "persisted record, and external side effect."
+                ),
+                origin="deterministic",
+                evidence_refs=evidence_refs,
+                generated_without_llm=True,
+            )
+        )
 
     declared_pairs = {(t.source, t.target) for t in graph.declared_transitions}
     handled_pairs = {(t.source, t.target) for t in graph.handled_transitions}

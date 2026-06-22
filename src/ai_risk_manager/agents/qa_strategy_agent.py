@@ -49,6 +49,15 @@ def _deterministic_test_plan(findings: FindingsReport, *, generated_without_llm:
 
 
 def _deterministic_test_guidance(finding: Finding) -> tuple[TestType, list[str]]:
+    if finding.rule_id == "critical_flow_no_integration_tests":
+        return (
+            "integration",
+            [
+                "Exercise the write ingress with production-like dependency boundaries.",
+                "Assert the state transition and persisted entity state.",
+                "Assert the external side effect or its contract-visible test double.",
+            ],
+        )
     if finding.rule_id == "pr_dependency_change_without_test_delta":
         return (
             "integration",

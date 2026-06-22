@@ -241,6 +241,49 @@ def artifact_bundle_to_signal_bundle(artifacts: ArtifactBundle) -> SignalBundle:
             )
         )
 
+    for store_write in artifacts.data_store_writes:
+        supported_kinds.add("data_store_write")
+        signals.append(
+            CapabilitySignal(
+                id=(
+                    "sig:data-store-write:"
+                    f"{store_write.file_path}:{store_write.owner_name}:{store_write.store_name}:{store_write.line or 0}"
+                ),
+                kind="data_store_write",
+                source_ref=_line_ref(store_write.file_path, store_write.line),
+                confidence="high",
+                evidence_refs=[_line_ref(store_write.file_path, store_write.line)],
+                attributes={
+                    "owner_name": store_write.owner_name,
+                    "store_name": store_write.store_name,
+                    "operation": store_write.operation,
+                    "snippet": store_write.snippet,
+                },
+            )
+        )
+
+    for external_call in artifacts.external_calls:
+        supported_kinds.add("external_call")
+        signals.append(
+            CapabilitySignal(
+                id=(
+                    "sig:external-call:"
+                    f"{external_call.file_path}:{external_call.owner_name}:"
+                    f"{external_call.system_name}:{external_call.line or 0}"
+                ),
+                kind="external_call",
+                source_ref=_line_ref(external_call.file_path, external_call.line),
+                confidence="high",
+                evidence_refs=[_line_ref(external_call.file_path, external_call.line)],
+                attributes={
+                    "owner_name": external_call.owner_name,
+                    "system_name": external_call.system_name,
+                    "operation": external_call.operation,
+                    "snippet": external_call.snippet,
+                },
+            )
+        )
+
     for file_path, dep_name, raw_spec, line, policy_violation, scope in artifacts.dependency_specs:
         supported_kinds.add("dependency_version_policy")
         signals.append(

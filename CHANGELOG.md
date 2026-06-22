@@ -7,6 +7,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Added a graph-first FastAPI write-flow slice connecting APIs, entities, handled state transitions, data stores, external systems, and test coverage.
+- Added `critical_flow_no_integration_tests` for complete write flows without integration or E2E coverage.
+- Added generated `entity-relationships.mmd` and `state-transitions.mmd` architecture review artifacts.
+- Added an architecture decision and fitness gate that freeze generic signal-only rule expansion.
 - Added a tag/version-verified release workflow with PyPI OIDC trusted publishing, distribution provenance attestations, checksums, reproducible SBOM evidence, release smoke tests, and a rollback procedure.
 - Added reproducible small/medium/large analyzer performance workloads, versioned latency and memory SLOs, and a CI evidence gate.
 - Added a pinned critical-module mutation gate with reproducible scope, CI evidence, direct PR-scope contracts, and a 75% minimum score.

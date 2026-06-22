@@ -37,6 +37,8 @@ Signal kinds:
 - `state_transition_declared`
 - `state_transition_handled_guarded`
 - `test_to_endpoint_coverage`
+- `data_store_write`
+- `external_call`
 - `dependency_version_policy`
 - `side_effect_emit_contract`
 - `authorization_boundary_enforced`
@@ -44,6 +46,11 @@ Signal kinds:
 - `session_lifecycle_consistency`
 - `html_render_safety`
 - `ui_ergonomics`
+- `ui_journey_smoke`
+- `business_invariant_risk`
+- `generated_test_quality`
+- `workflow_automation_risk`
+- `pr_change_risk`
 
 ## Support-Level Capability Requirements
 

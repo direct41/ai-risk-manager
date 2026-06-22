@@ -22,6 +22,9 @@ CONFIDENCE_ORDER = {"high": 0, "medium": 1, "low": 2}
 SEVERITY_INDEX = {severity: idx for idx, severity in enumerate(SEVERITY_ORDER)}
 _REVIEW_FOCUS_BY_RULE = {
     "critical_path_no_tests": "Add or update targeted regression tests for the changed critical path before merge.",
+    "critical_flow_no_integration_tests": (
+        "Add integration or E2E coverage for the changed entity, state, persistence, and external side-effect path."
+    ),
     "missing_transition_handler": "Review state transitions and confirm handler coverage for changed lifecycle paths.",
     "broken_invariant_on_transition": "Review state guards and invariant enforcement around changed transition logic.",
     "dependency_risk_policy_violation": "Review dependency pinning and runtime drift before merge.",
