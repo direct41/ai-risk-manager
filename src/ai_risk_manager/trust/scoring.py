@@ -99,11 +99,10 @@ def score_finding(
     score += history_delta
     score = _clamp(score)
 
-    estimated_precision = _clamp(score)
     return FindingTrust(
         score=round(score, 3),
         band=_band(score),
-        estimated_precision=round(estimated_precision, 3),
+        estimated_precision=round(score, 3),
         evidence_strength=evidence_strength,
         history_signal=history_signal,
     )

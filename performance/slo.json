@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "scope": "cold deterministic full analysis including JSON and Markdown artifact writes",
+  "workloads": {
+    "small": {
+      "file_count": 50,
+      "p95_latency_ms": 750,
+      "peak_rss_mb": 192
+    },
+    "medium": {
+      "file_count": 250,
+      "p95_latency_ms": 1500,
+      "peak_rss_mb": 256
+    },
+    "large": {
+      "file_count": 1000,
+      "p95_latency_ms": 5000,
+      "peak_rss_mb": 384
+    }
+  }
+}

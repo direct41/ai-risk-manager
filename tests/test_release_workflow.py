@@ -6,11 +6,14 @@ import re
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "quality.yml"
+PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "release.yml"
 RELEASE_REQUIREMENTS_PATH = REPO_ROOT / ".github" / "requirements" / "release.txt"
 
 
 def test_quality_workflow_pins_external_actions_to_commit_shas() -> None:
-    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    workflow = "\n".join(
+        path.read_text(encoding="utf-8") for path in (WORKFLOW_PATH, PUBLISH_WORKFLOW_PATH)
+    )
     external_uses = [
         line.strip().split("uses:", 1)[1].strip().split(" #", 1)[0]
         for line in workflow.splitlines()
@@ -82,3 +85,34 @@ def test_quality_workflow_enforces_critical_mutation_score() -> None:
     assert 'mutmut==3.6.0' in pyproject
     for module in ("rules/policy.py", "trust/scoring.py", "triage/merge.py", "pr_scope.py"):
         assert f'"src/ai_risk_manager/{module}"' in pyproject
+
+
+def test_quality_workflow_enforces_and_preserves_performance_evidence() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert "performance-slo:" in workflow
+    assert "python scripts/run_performance_suite.py" in workflow
+    assert "--repetitions 3" in workflow
+    assert "--enforce" in workflow
+    assert "--output performance-results.json" in workflow
+    assert "name: performance-slo-results" in workflow
+
+
+def test_release_workflow_uses_tag_bound_oidc_publish_and_provenance() -> None:
+    workflow = PUBLISH_WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert "types: [published]" in workflow
+    assert "ref: ${{ github.event.release.tag_name }}" in workflow
+    assert "fetch-depth: 0" in workflow
+    assert 'test "$(git cat-file -t "$AIRISK_RELEASE_TAG")" = "tag"' in workflow
+    assert "git merge-base --is-ancestor HEAD origin/main" in workflow
+    assert 'python scripts/check_release_tag.py "$AIRISK_RELEASE_TAG"' in workflow
+    assert workflow.count("python -m build --no-isolation") == 1
+    assert "python -m twine check packages/*.whl packages/*.tar.gz" in workflow
+    assert "--output-reproducible" in workflow
+    assert "actions/attest-build-provenance@" in workflow
+    assert "attestations: write" in workflow
+    assert "name: pypi" in workflow
+    assert "id-token: write" in workflow
+    assert "pypa/gh-action-pypi-publish@" in workflow
+    assert "password:" not in workflow
