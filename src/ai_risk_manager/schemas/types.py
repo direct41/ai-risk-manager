@@ -31,6 +31,7 @@ MergeDecision = Literal["ready", "review_required", "block_recommended"]
 GitHubCheckConclusion = Literal["success", "neutral", "action_required"]
 TrustBand = Literal["strong", "moderate", "weak"]
 TrustHistorySignal = Literal["neutral", "accepted_bias", "suppressed_bias", "actioned_bias"]
+TrustScoreKind = Literal["heuristic_trust"]
 
 
 @dataclass
@@ -223,9 +224,16 @@ class GitHubCheckPayload:
 class FindingTrust:
     score: float
     band: TrustBand
+    # Deprecated compatibility alias. This value is not calibrated statistical precision.
     estimated_precision: float
     evidence_strength: Confidence
     history_signal: TrustHistorySignal = "neutral"
+    score_kind: TrustScoreKind = "heuristic_trust"
+    calibrated: bool = False
+    heuristic_trust_score: float = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.heuristic_trust_score = self.score
 
 
 @dataclass

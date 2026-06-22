@@ -72,6 +72,11 @@ def test_api_analyze_matches_pipeline_for_same_input(tmp_path: Path, write_file)
     assert "profile_review_focus" in api_data["summary"]
     assert api_data["result"]["analysis_scope"] == direct_result.analysis_scope
     assert len(api_data["result"]["findings"]["findings"]) == len(direct_result.findings.findings)
+    if api_data["result"]["findings"]["findings"]:
+        trust = api_data["result"]["findings"]["findings"][0]["trust"]
+        assert trust["score_kind"] == "heuristic_trust"
+        assert trust["calibrated"] is False
+        assert trust["heuristic_trust_score"] == trust["score"] == trust["estimated_precision"]
     assert isinstance(api_data["correlation_id"], str)
     assert isinstance(api_data["run_id"], str)
     assert api_output_dir == output_dir / "runs" / api_data["run_id"]

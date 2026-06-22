@@ -156,10 +156,10 @@ Every finding should be evaluated through the same trust model:
 
 - evidence strength
 - support/applicability level
-- historical rule precision
+- observed accepted, suppressed, and actioned outcomes
 - repository suppression history
 
-This should be implemented as a shared scoring layer, not separately inside each profile.
+This is a shared heuristic scoring layer, not a calibrated probability model and not statistical precision. Calibration remains blocked until the frozen holdout has independent human labels.
 
 ## Compatibility Shims
 
@@ -199,5 +199,5 @@ Keep the existing shared pipeline and evolve the product into a profile-based, c
 ## Top 3 Implementation Actions
 
 1. Add a thin profile registry above the current collectors/signals/rules pipeline and move the existing shipped behavior under `code_risk`.
-2. Add a shared trust layer for confidence and precision scoring across all findings.
+2. Add a shared heuristic trust layer across all findings; reserve precision claims for independently labeled evaluation.
 3. Add new profiles only as optional packs (`ui_flow_risk`, `business_invariant_risk`), never as separate pipelines or products.

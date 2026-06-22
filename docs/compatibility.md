@@ -46,6 +46,8 @@ That includes additive profile summary fields and compact trust metadata on top 
 Optional repo-local config such as `./.riskmap-ui.toml` may add behavior in minor releases without changing the output contract shape; command execution remains gated by environment.
 Finding-level additive metadata such as `trust` is allowed in minor releases.
 
+Trust scores are heuristic and uncalibrated. `trust.heuristic_trust_score` is the canonical machine-readable value, accompanied by `score_kind: "heuristic_trust"` and `calibrated: false`. The older `trust.score` and `trust.estimated_precision` fields remain temporary compatibility aliases with the same numeric value; `estimated_precision` does not represent measured precision and must not be interpreted as a probability. Removing either alias requires a major release.
+
 Breaking changes include:
 
 - removing required top-level fields (`nodes`, `findings`, `items`)

@@ -329,8 +329,8 @@ def render_report_md(result: PipelineResult, notes: list[str]) -> str:
             lines.append(f"- Source: `{finding.source_ref}`")
             if finding.trust is not None:
                 lines.append(
-                    f"- Trust: `{finding.trust.band}` / score=`{finding.trust.score:.2f}` / "
-                    f"precision=`{finding.trust.estimated_precision:.2f}`"
+                    f"- Trust: `{finding.trust.band}` / "
+                    f"heuristic_score=`{finding.trust.heuristic_trust_score:.2f}` / calibrated=`no`"
                 )
             lines.append(f"- Why: {finding.description}")
             lines.append(f"- Action: {finding.recommendation}")
