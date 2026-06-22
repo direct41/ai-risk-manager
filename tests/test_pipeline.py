@@ -94,7 +94,13 @@ def test_pipeline_writes_artifacts(tmp_path: Path, write_file) -> None:
     if findings_payload["findings"]:
         assert "trust" in findings_payload["findings"][0]
         assert findings_payload["findings"][0]["trust"]["band"] in {"strong", "moderate", "weak"}
+        assert findings_payload["findings"][0]["trust"]["score_kind"] == "heuristic_trust"
+        assert findings_payload["findings"][0]["trust"]["calibrated"] is False
+        assert findings_payload["findings"][0]["trust"]["heuristic_trust_score"] == findings_payload["findings"][0][
+            "trust"
+        ]["score"]
     report = (out_dir / "report.md").read_text(encoding="utf-8")
+    assert "precision=`" not in report
     assert "Graph Statistics (analysis):" in report
     assert "Graph Statistics (deterministic):" in report
     assert "graph_mode_applied:" in report

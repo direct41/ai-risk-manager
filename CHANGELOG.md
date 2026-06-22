@@ -24,6 +24,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Alpha feedback and public PR request templates now capture reviewer role, top findings, review impact, setup friction, workflow preference, repeat intent, and privacy acknowledgement.
 
 ### Changed
+- Finding trust now exposes `heuristic_trust_score`, `score_kind`, and `calibrated: false`; reports no longer present the heuristic as precision. The misleading `estimated_precision` name remains only as a deprecated compatibility alias.
 - Eval reports now name synthetic fixture metrics as forbidden-rule avoidance and required-rule recall instead of presenting them as statistical precision and recall.
 - Public PR corpus metadata now identifies its regression role explicitly; validation documentation records that no independent frozen holdout exists yet.
 - Deterministic test plans now use dependency and regression-specific assertions for generic PR delta findings instead of API response boilerplate.
