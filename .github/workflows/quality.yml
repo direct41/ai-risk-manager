@@ -43,6 +43,31 @@ jobs:
       - name: Pytest + coverage
         run: pytest --cov=ai_risk_manager --cov-fail-under=80
 
+  critical-mutation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: ./.github/actions/setup-python-env
+        with:
+          python-version: "3.13"
+
+      - name: Run critical-module mutation tests
+        run: mutmut run --max-children 4
+
+      - name: Enforce mutation score
+        run: |
+          mutmut export-cicd-stats
+          python scripts/check_mutation_score.py mutants/mutmut-cicd-stats.json --threshold 0.75
+
+      - name: Upload mutation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: critical-mutation-stats
+          path: mutants/mutmut-cicd-stats.json
+          if-no-files-found: warn
+
   release-artifacts:
     runs-on: ubuntu-latest
     steps:

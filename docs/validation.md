@@ -44,6 +44,8 @@ The lifecycle and isolation requirements for that future corpus are defined in `
 
 The synthetic eval suite reports `forbidden-rule avoidance` and `required-rule recall`. These are deterministic fixture-contract checks, not statistical precision and recall measured on an independently sampled population.
 
+Critical decision modules (`rules/policy.py`, `trust/scoring.py`, `triage/merge.py`, and `pr_scope.py`) have a pinned mutation gate. Run `make mutation`; CI requires at least 75% killed mutants and rejects untested, suspicious, timed-out, interrupted, or crashed mutants. The 2026-06-22 baseline is 674/875 killed (77.03%), with zero invalid run statuses.
+
 The benchmark records two verdict layers per PR: execution status (`pass`, `setup_fail`, `provider_fail`, `tool_fail`, `artifact_fail`, or `timeout`) and product evaluation (`passed`, `failed`, or `needs_human_review`). Treat `needs_human_review` rows as labeling work, not as product success.
 
 Inspect the labeling queue and validate corpus metadata:

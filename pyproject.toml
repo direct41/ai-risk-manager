@@ -47,6 +47,7 @@ dev = [
   "pytest-cov==7.1.0",
   "ruff==0.15.17",
   "mypy==2.1.0",
+  "mutmut==3.6.0",
   "fastapi==0.137.0",
   "httpx==0.28.1",
   "pydantic==2.13.4",
@@ -77,3 +78,20 @@ python_version = "3.11"
 warn_unused_configs = true
 ignore_missing_imports = true
 files = ["src"]
+
+[tool.mutmut]
+source_paths = ["src/ai_risk_manager"]
+only_mutate = [
+  "src/ai_risk_manager/rules/policy.py",
+  "src/ai_risk_manager/trust/scoring.py",
+  "src/ai_risk_manager/triage/merge.py",
+  "src/ai_risk_manager/pr_scope.py",
+]
+pytest_add_cli_args_test_selection = [
+  "tests/test_policy.py",
+  "tests/test_trust.py",
+  "tests/test_merge_triage.py",
+  "tests/test_pr_scope.py",
+]
+timeout_multiplier = 10.0
+timeout_constant = 1.0

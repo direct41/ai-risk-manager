@@ -69,3 +69,16 @@ def test_quality_workflow_runs_eval_isolation_with_full_history() -> None:
     assert "fetch-depth: 0" in workflow
     assert "python scripts/check_eval_isolation.py" in workflow
     assert "AIRISK_EVAL_BASE_SHA: ${{ github.event.pull_request.base.sha }}" in workflow
+
+
+def test_quality_workflow_enforces_critical_mutation_score() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert "critical-mutation:" in workflow
+    assert "mutmut run --max-children 4" in workflow
+    assert "scripts/check_mutation_score.py mutants/mutmut-cicd-stats.json --threshold 0.75" in workflow
+    assert "name: critical-mutation-stats" in workflow
+    assert 'mutmut==3.6.0' in pyproject
+    for module in ("rules/policy.py", "trust/scoring.py", "triage/merge.py", "pr_scope.py"):
+        assert f'"src/ai_risk_manager/{module}"' in pyproject
