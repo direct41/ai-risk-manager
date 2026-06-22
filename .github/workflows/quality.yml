@@ -68,6 +68,30 @@ jobs:
           path: mutants/mutmut-cicd-stats.json
           if-no-files-found: warn
 
+  performance-slo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: ./.github/actions/setup-python-env
+        with:
+          python-version: "3.13"
+
+      - name: Enforce deterministic analyzer SLOs
+        run: >-
+          python scripts/run_performance_suite.py
+          --repetitions 3
+          --enforce
+          --output performance-results.json
+
+      - name: Upload performance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: performance-slo-results
+          path: performance-results.json
+          if-no-files-found: warn
+
   release-artifacts:
     runs-on: ubuntu-latest
     steps:

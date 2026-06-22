@@ -4,7 +4,7 @@ VENV_PYTHON := $(VENV)/bin/python
 VENV_RISKMAP := $(VENV)/bin/riskmap
 VENV_RISKMAP_API := $(VENV)/bin/riskmap-api
 
-.PHONY: install install-api test mutation analyze-demo serve-api eval corpus-status
+.PHONY: install install-api test mutation performance analyze-demo serve-api eval corpus-status
 
 $(VENV_PYTHON):
 	$(PYTHON) -m venv $(VENV)
@@ -24,6 +24,9 @@ mutation: install
 	$(VENV)/bin/mutmut run --max-children 4
 	$(VENV)/bin/mutmut export-cicd-stats
 	$(VENV_PYTHON) scripts/check_mutation_score.py mutants/mutmut-cicd-stats.json --threshold 0.75
+
+performance: install
+	$(VENV_PYTHON) scripts/run_performance_suite.py --repetitions 3 --enforce
 
 analyze-demo: install
 	$(VENV_RISKMAP) analyze --sample --no-llm --analysis-engine deterministic --output-dir ./.riskmap
