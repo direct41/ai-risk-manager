@@ -36,7 +36,10 @@ def test_score_finding_prefers_supported_deterministic_verified_evidence(tmp_pat
     )
 
     assert trust.band in {"strong", "moderate"}
-    assert trust.estimated_precision >= 0.75
+    assert trust.heuristic_trust_score >= 0.75
+    assert trust.score_kind == "heuristic_trust"
+    assert trust.calibrated is False
+    assert trust.estimated_precision == trust.heuristic_trust_score
 
 
 def test_score_finding_penalizes_suppressed_history_and_missing_evidence(tmp_path: Path) -> None:
@@ -168,6 +171,7 @@ def test_score_finding_confidence_boundaries_are_exact(
     )
 
     assert trust.score == expected_score
+    assert trust.heuristic_trust_score == expected_score
     assert trust.estimated_precision == expected_score
     assert trust.band == expected_band
     assert trust.evidence_strength == "high"

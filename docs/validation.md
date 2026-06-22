@@ -44,7 +44,11 @@ The lifecycle and isolation requirements for that future corpus are defined in `
 
 The synthetic eval suite reports `forbidden-rule avoidance` and `required-rule recall`. These are deterministic fixture-contract checks, not statistical precision and recall measured on an independently sampled population.
 
+Finding trust is also heuristic: `heuristic_trust_score` combines confidence, support state, evidence verification, origin, and local outcome history. It is emitted with `score_kind: "heuristic_trust"` and `calibrated: false`; it must not be interpreted as precision or probability. The legacy `estimated_precision` alias remains only for backward compatibility.
+
 Critical decision modules (`rules/policy.py`, `trust/scoring.py`, `triage/merge.py`, and `pr_scope.py`) have a pinned mutation gate. Run `make mutation`; CI requires at least 75% killed mutants and rejects untested, suspicious, timed-out, interrupted, or crashed mutants. The 2026-06-22 baseline is 674/875 killed (77.03%), with zero invalid run statuses.
+
+The deterministic analyzer has cold-process latency and peak-memory SLOs for 50-, 250-, and 1,000-file synthetic repositories. Run `make performance`; CI executes three repetitions per workload, enforces [the versioned budgets](../performance/slo.json), and uploads the full JSON result. See [the performance baseline and measurement contract](performance.md).
 
 The benchmark records two verdict layers per PR: execution status (`pass`, `setup_fail`, `provider_fail`, `tool_fail`, `artifact_fail`, or `timeout`) and product evaluation (`passed`, `failed`, or `needs_human_review`). Treat `needs_human_review` rows as labeling work, not as product success.
 

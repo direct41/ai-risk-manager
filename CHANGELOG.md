@@ -7,6 +7,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Added a tag/version-verified release workflow with PyPI OIDC trusted publishing, distribution provenance attestations, checksums, reproducible SBOM evidence, release smoke tests, and a rollback procedure.
+- Added reproducible small/medium/large analyzer performance workloads, versioned latency and memory SLOs, and a CI evidence gate.
 - Added a pinned critical-module mutation gate with reproducible scope, CI evidence, direct PR-scope contracts, and a 75% minimum score.
 - Added deterministic holdout label merging, explicit disagreement adjudication, and hash-pinned JSON/Markdown evaluation reports with confusion, agreement, outcome, execution, and per-stack metrics.
 - Added holdout workflow tooling for regression-deduplicated case freezing, deterministic prediction packets, and prediction-blind reviewer templates.
@@ -23,6 +25,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Alpha feedback and public PR request templates now capture reviewer role, top findings, review impact, setup friction, workflow preference, repeat intent, and privacy acknowledgement.
 
 ### Changed
+- Finding trust now exposes `heuristic_trust_score`, `score_kind`, and `calibrated: false`; reports no longer present the heuristic as precision. The misleading `estimated_precision` name remains only as a deprecated compatibility alias.
 - Eval reports now name synthetic fixture metrics as forbidden-rule avoidance and required-rule recall instead of presenting them as statistical precision and recall.
 - Public PR corpus metadata now identifies its regression role explicitly; validation documentation records that no independent frozen holdout exists yet.
 - Deterministic test plans now use dependency and regression-specific assertions for generic PR delta findings instead of API response boilerplate.
