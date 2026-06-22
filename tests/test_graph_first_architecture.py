@@ -4,11 +4,13 @@ import ast
 from pathlib import Path
 
 import ai_risk_manager.rules.engine as rule_engine
-from ai_risk_manager.collectors.plugins.base import ArtifactBundle, DataStoreWriteArtifact
+from ai_risk_manager.collectors.plugins.base import ArtifactBundle, DataStoreWriteArtifact, ExternalCallArtifact
 from ai_risk_manager.graph.builder import build_graph
-from ai_risk_manager.pipeline.run import run_pipeline
+from ai_risk_manager.pipeline.run import _filter_signals_to_impacted, run_pipeline
 from ai_risk_manager.rules.architecture_policy import FROZEN_SIGNAL_ONLY_RULE_IDS, GRAPH_FIRST_RULE_IDS
+from ai_risk_manager.rules.engine import run_rules
 from ai_risk_manager.schemas.types import RunContext
+from ai_risk_manager.signals.adapters import artifact_bundle_to_signal_bundle
 
 
 def _write_flow_app(write_file, root: Path) -> None:
@@ -147,6 +149,33 @@ def test_ambiguous_handler_effect_stays_attached_to_api() -> None:
 
     write_edge = next(edge for edge in graph.edges if edge.type == "writes")
     assert write_edge.source_node_id.startswith("api:")
+
+
+def test_impacted_signal_filter_preserves_unchanged_integration_coverage() -> None:
+    signals = artifact_bundle_to_signal_bundle(
+        ArtifactBundle(
+            write_endpoints=[("app/api.py", "pay_order", "POST", "/orders/{order_id}/pay", 5, "endpoint")],
+            endpoint_models=[("app/api.py", "pay_order", "PayRequest")],
+            pydantic_models=[("app/api.py", "PayRequest")],
+            handled_transitions=[("app/api.py", "pay_order", "pending", "paid", 10, "paid", True)],
+            test_cases=[("tests/integration/test_pay.py", "test_pay_order", 5, "test")],
+            test_http_calls=[
+                ("tests/integration/test_pay.py", "test_pay_order", "POST", "/orders/42/pay", 6, "client.post")
+            ],
+            data_store_writes=[
+                DataStoreWriteArtifact("app/api.py", "pay_order", "orders_db", "assign", 12, "write")
+            ],
+            external_calls=[
+                ExternalCallArtifact("app/api.py", "pay_order", "payment_gateway", "charge", 13, "charge")
+            ],
+        )
+    )
+
+    impacted = _filter_signals_to_impacted(signals, {"app/api.py"})
+
+    assert any(signal.source_ref.startswith("tests/integration/") for signal in impacted.signals)
+    findings = run_rules(impacted)
+    assert "critical_flow_no_integration_tests" not in {finding.rule_id for finding in findings.findings}
 
 
 def test_all_rules_are_classified_by_graph_first_architecture_policy() -> None:

@@ -176,6 +176,9 @@ def _filter_signals_to_impacted(signals: SignalBundle, changed_files: set[str]) 
     changed = {_normalize_path(path) for path in changed_files}
     filtered = []
     for signal in signals.signals:
+        if signal.kind in {"test_to_endpoint_coverage", "test_to_ingress_coverage"}:
+            filtered.append(signal)
+            continue
         source_file = _source_file_ref(signal.source_ref)
         if source_file in changed:
             filtered.append(signal)
