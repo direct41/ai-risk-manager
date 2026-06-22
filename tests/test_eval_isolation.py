@@ -77,6 +77,10 @@ def _holdout_state(**overrides: object) -> dict:
         "predictions_sha256": None,
         "labels_path": None,
         "labels_sha256": None,
+        "report_json_path": None,
+        "report_json_sha256": None,
+        "report_md_path": None,
+        "report_md_sha256": None,
         "release_claim_blocked": True,
     }
     payload.update(overrides)
@@ -278,7 +282,6 @@ def test_evaluated_holdout_requires_independent_reviewer_overlap(tmp_path: Path)
             {
                 "id": case["id"],
                 "reviewer": "reviewer-a",
-                "outcome": "good_signal",
                 "expected_decision": "ready",
                 "rationale": "blind review",
                 "reviewed_at": "2026-06-20",
@@ -290,10 +293,12 @@ def test_evaluated_holdout_requires_independent_reviewer_overlap(tmp_path: Path)
     labels_sha = _write_json(
         labels_path,
         {
+            "version": 1,
             "dataset_role": "holdout_labels",
             "cases_sha256": cases_sha,
             "predictions_sha256": predictions_sha,
             "labels": labels,
+            "adjudications": [],
         },
     )
     manifest_path = _write_manifest(
@@ -319,12 +324,29 @@ def test_evaluated_holdout_requires_independent_reviewer_overlap(tmp_path: Path)
     labels_sha = _write_json(
         labels_path,
         {
+            "version": 1,
             "dataset_role": "holdout_labels",
             "cases_sha256": cases_sha,
             "predictions_sha256": predictions_sha,
             "labels": labels,
+            "adjudications": [],
         },
     )
+    report_path = tmp_path / "eval" / "holdout" / "evaluation.json"
+    report_sha = _write_json(
+        report_path,
+        {
+            "version": 1,
+            "dataset_role": "holdout_evaluation",
+            "cases_sha256": cases_sha,
+            "predictions_sha256": predictions_sha,
+            "labels_sha256": labels_sha,
+            "claim_status": "blocked_pending_policy_thresholds",
+        },
+    )
+    report_md_path = tmp_path / "eval" / "holdout" / "evaluation.md"
+    report_md_path.write_text("# Holdout evaluation\n", encoding="utf-8")
+    report_md_sha = hashlib.sha256(report_md_path.read_bytes()).hexdigest()
     manifest_path = _write_manifest(
         tmp_path,
         _holdout_state(
@@ -336,10 +358,60 @@ def test_evaluated_holdout_requires_independent_reviewer_overlap(tmp_path: Path)
             predictions_sha256=predictions_sha,
             labels_path="eval/holdout/labels.json",
             labels_sha256=labels_sha,
+            report_json_path="eval/holdout/evaluation.json",
+            report_json_sha256=report_sha,
+            report_md_path="eval/holdout/evaluation.md",
+            report_md_sha256=report_md_sha,
         ),
     )
 
     assert check_eval_isolation.validate_manifest(manifest_path, tmp_path) == []
+
+
+def test_evaluated_holdout_rejects_unadjudicated_disagreement(tmp_path: Path) -> None:
+    labels = [
+        {
+            "id": f"case-{index:02d}",
+            "reviewer": "reviewer-a",
+            "expected_decision": "ready",
+            "rationale": "blind review",
+            "reviewed_at": "2026-06-22",
+        }
+        for index in range(30)
+    ]
+    for index in range(10):
+        labels.append(
+            {
+                **labels[index],
+                "reviewer": "reviewer-b",
+                "expected_decision": "review_required" if index == 0 else "ready",
+            }
+        )
+    labels_path = tmp_path / "labels.json"
+    _write_json(
+        labels_path,
+        {
+            "version": 1,
+            "dataset_role": "holdout_labels",
+            "cases_sha256": "a" * 64,
+            "predictions_sha256": "b" * 64,
+            "labels": labels,
+            "adjudications": [],
+        },
+    )
+    errors: list[str] = []
+
+    check_eval_isolation._validate_labels(
+        labels_path,
+        case_ids={f"case-{index:02d}" for index in range(30)},
+        cases_sha256="a" * 64,
+        predictions_sha256="b" * 64,
+        minimum_labelers=2,
+        minimum_overlap_cases=10,
+        errors=errors,
+    )
+
+    assert "holdout adjudications must match disagreement cases exactly" in errors
 
 
 def test_change_isolation_rejects_holdout_and_analyzer_changes_together() -> None:

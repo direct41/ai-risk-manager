@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Added deterministic holdout label merging, explicit disagreement adjudication, and hash-pinned JSON/Markdown evaluation reports with confusion, agreement, outcome, execution, and per-stack metrics.
 - Added holdout workflow tooling for regression-deduplicated case freezing, deterministic prediction packets, and prediction-blind reviewer templates.
 - Added a machine-enforced frozen-holdout lifecycle with hash pinning, blind prediction/label phases, minimum reviewer overlap, and mixed-change leakage protection.
 - Quality CI now builds wheel and source artifacts once, verifies hashes and metadata, clean-installs both across Python 3.11-3.13, and publishes SBOM/audit evidence.

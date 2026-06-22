@@ -1,6 +1,6 @@
 # Frozen Holdout Protocol
 
-The project currently has tuning fixtures and a labeled regression corpus. It does not yet have an independent holdout, so general accuracy and calibrated precision claims remain blocked.
+The project has frozen independent holdout cases and predictions, but independent human labels are not complete. General accuracy and calibrated precision claims therefore remain blocked.
 
 ## Roles and separation
 
@@ -33,6 +33,11 @@ python3 scripts/holdout_workflow.py freeze-predictions \
 python3 scripts/holdout_workflow.py create-label-template \
   --reviewer reviewer-a \
   --output /secure/reviewer-a-labels.json
+
+python3 scripts/holdout_workflow.py freeze-labels \
+  --reviewer /secure/reviewer-a-labels.json \
+  --reviewer /secure/reviewer-b-labels.json \
+  --adjudications /secure/adjudications.json
 ```
 
 Keep candidate intake, raw result directories, and incomplete reviewer templates outside the repository. Only frozen cases, frozen predictions, and completed combined labels belong under `eval/holdout/`.
@@ -61,9 +66,9 @@ Place successful outputs under `<results-dir>/<case-id>/` with `pr_summary.json`
 
 ## Independent labeling
 
-Reviewers evaluate the PR diff and expected review action without seeing analyzer predictions. Use pseudonymous reviewer IDs. At least 10 cases receive labels from two reviewers so agreement can be reported; disagreements stay explicit and require adjudication rather than silent majority replacement.
+Reviewers evaluate the PR diff and expected review action without seeing analyzer predictions. Use pseudonymous reviewer IDs. Every case receives at least one label, and at least 10 cases receive labels from two reviewers so agreement can be reported. Each reviewer file contains exactly one reviewer. Disagreements stay explicit and require a separately bound adjudication packet rather than silent majority replacement.
 
-Labels must not enter the repository before predictions are frozen. The label file is then bound to both the case and prediction hashes.
+Labels must not enter the repository before predictions are frozen. `freeze-labels` validates reviewer coverage, overlap, hashes, duplicate pairs, complete fields, and adjudications. It then writes immutable labels plus JSON/Markdown reports and pins all artifact hashes in the manifest. Evaluation does not automatically unblock release claims; a separate accuracy policy must define acceptable thresholds first.
 
 ## Reporting
 
@@ -72,9 +77,9 @@ Report at minimum:
 - holdout size and selection period;
 - execution failure rate;
 - decision confusion matrix;
-- useful/noisy/missed-risk outcome counts;
+- derived aligned/overcalled/undercalled/execution-failure counts;
 - per-stack breakdown where sample size permits;
-- raw and adjudicated inter-rater agreement;
+- raw pairwise agreement and Cohen's kappa, plus explicit adjudication counts;
 - analyzer commit and all dataset hashes.
 
 Do not merge holdout-driven rule changes into the same evaluation result. Once results are inspected by rule authors, that holdout version becomes regression data and a new independent holdout is required for the next generalization claim.

@@ -27,6 +27,10 @@
     "predictions_sha256": "200b5f8d78dda3c2fb42d3942c6bf72d2d5ebb6d0d63bfdddd30a4d17e6a6c70",
     "labels_path": null,
     "labels_sha256": null,
+    "report_json_path": null,
+    "report_json_sha256": null,
+    "report_md_path": null,
+    "report_md_sha256": null,
     "release_claim_blocked": true
   }
 }

@@ -11,10 +11,20 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
+SCRIPT_ROOT = Path(__file__).resolve().parent
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
+if str(SCRIPT_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_ROOT))
 
 from ai_risk_manager.artifact_io import write_text_atomic, write_text_new_atomic  # noqa: E402
+from holdout_reporting import (  # noqa: E402
+    HoldoutReportingError,
+    build_report,
+    merge_reviewer_packets,
+    render_report_markdown,
+    validate_adjudications,
+)
 
 
 CASE_FIELDS = {"id", "url", "head_sha", "stack", "selected_at"}
@@ -369,7 +379,6 @@ def create_label_template(manifest_path: Path, output_path: Path, reviewer: str,
         {
             "id": case["id"],
             "reviewer": reviewer,
-            "outcome": None,
             "expected_decision": None,
             "rationale": None,
             "reviewed_at": None,
@@ -387,6 +396,140 @@ def create_label_template(manifest_path: Path, output_path: Path, reviewer: str,
             "labels": labels,
         },
     )
+
+
+def freeze_labels(
+    reviewer_paths: list[Path],
+    output_path: Path,
+    report_json_path: Path,
+    report_md_path: Path,
+    manifest_path: Path,
+    adjudications_path: Path | None = None,
+    *,
+    repo_root: Path = REPO_ROOT,
+) -> str:
+    if len(reviewer_paths) < 2:
+        raise HoldoutWorkflowError("freeze-labels requires at least two reviewer packets")
+    manifest = _read_object(manifest_path)
+    holdout = _manifest_holdout(manifest, "predictions_frozen")
+    cases_path_raw = holdout.get("cases_path")
+    predictions_path_raw = holdout.get("predictions_path")
+    cases_hash = holdout.get("cases_sha256")
+    predictions_hash = holdout.get("predictions_sha256")
+    if not all(isinstance(value, str) for value in (cases_path_raw, predictions_path_raw, cases_hash, predictions_hash)):
+        raise HoldoutWorkflowError("manifest does not reference frozen cases and predictions")
+    cases_path = repo_root / cases_path_raw
+    predictions_path = repo_root / predictions_path_raw
+    if not cases_path.is_file() or not predictions_path.is_file():
+        raise HoldoutWorkflowError("frozen cases or predictions file is missing")
+    if _sha256(cases_path) != cases_hash or _sha256(predictions_path) != predictions_hash:
+        raise HoldoutWorkflowError("frozen cases or predictions hash has drifted")
+    cases_packet = _read_object(cases_path)
+    predictions_packet = _read_object(predictions_path)
+    if cases_packet.get("dataset_role") != "holdout" or predictions_packet.get("dataset_role") != "holdout_predictions":
+        raise HoldoutWorkflowError("frozen cases or predictions has an invalid dataset role")
+    if predictions_packet.get("cases_sha256") != cases_hash:
+        raise HoldoutWorkflowError("frozen predictions are not bound to frozen cases")
+    cases = cases_packet.get("cases")
+    if not isinstance(cases, list):
+        raise HoldoutWorkflowError("frozen cases must contain a cases list")
+    case_ids = {case.get("id") for case in cases if isinstance(case, dict) and isinstance(case.get("id"), str)}
+    if len(case_ids) != len(cases):
+        raise HoldoutWorkflowError("frozen cases contain invalid or duplicate IDs")
+    predictions = predictions_packet.get("predictions")
+    if not isinstance(predictions, list):
+        raise HoldoutWorkflowError("frozen predictions must contain a predictions list")
+    prediction_ids = {
+        prediction.get("id")
+        for prediction in predictions
+        if isinstance(prediction, dict) and isinstance(prediction.get("id"), str)
+    }
+    if len(prediction_ids) != len(predictions) or prediction_ids != case_ids:
+        raise HoldoutWorkflowError("frozen prediction IDs must match frozen case IDs")
+    for prediction in predictions:
+        execution = prediction.get("execution")
+        decision = prediction.get("decision")
+        if execution not in EXECUTIONS:
+            raise HoldoutWorkflowError("frozen predictions contain an invalid execution status")
+        if execution == "pass" and decision not in DECISIONS:
+            raise HoldoutWorkflowError("successful frozen predictions require a valid decision")
+        if execution != "pass" and decision is not None:
+            raise HoldoutWorkflowError("failed frozen predictions cannot include a decision")
+    minimum_reviewers = holdout.get("minimum_independent_labelers")
+    minimum_overlap = holdout.get("minimum_overlap_cases")
+    if not isinstance(minimum_reviewers, int) or minimum_reviewers < 2:
+        raise HoldoutWorkflowError("manifest minimum_independent_labelers must be at least 2")
+    if not isinstance(minimum_overlap, int) or minimum_overlap < 1:
+        raise HoldoutWorkflowError("manifest minimum_overlap_cases must be positive")
+    packets = [_read_object(path) for path in reviewer_paths]
+    try:
+        labels = merge_reviewer_packets(
+            packets,
+            cases_sha256=cases_hash,
+            predictions_sha256=predictions_hash,
+            case_ids=case_ids,
+            minimum_reviewers=minimum_reviewers,
+            minimum_overlap_cases=minimum_overlap,
+        )
+        adjudication_packet = _read_object(adjudications_path) if adjudications_path is not None else None
+        adjudications = validate_adjudications(
+            adjudication_packet,
+            labels=labels,
+            cases_sha256=cases_hash,
+            predictions_sha256=predictions_hash,
+        )
+    except HoldoutReportingError as exc:
+        raise HoldoutWorkflowError(str(exc)) from exc
+
+    labels_payload = {
+        "version": 1,
+        "dataset_role": "holdout_labels",
+        "cases_sha256": cases_hash,
+        "predictions_sha256": predictions_hash,
+        "labels": labels,
+        "adjudications": adjudications,
+    }
+    relative_output = _relative_holdout_path(output_path, repo_root)
+    relative_report_json = _relative_holdout_path(report_json_path, repo_root)
+    relative_report_md = _relative_holdout_path(report_md_path, repo_root)
+    created_paths: list[Path] = []
+    try:
+        _write_new_json(output_path, labels_payload)
+        created_paths.append(output_path)
+        labels_hash = _sha256(output_path)
+        report = build_report(
+            cases_packet=cases_packet,
+            predictions_packet=predictions_packet,
+            labels_packet=labels_payload,
+            labels_sha256=labels_hash,
+        )
+        _write_new_json(report_json_path, report)
+        created_paths.append(report_json_path)
+        try:
+            write_text_new_atomic(report_md_path, render_report_markdown(report))
+        except FileExistsError as exc:
+            raise HoldoutWorkflowError(f"refusing to overwrite frozen artifact: {report_md_path}") from exc
+        except OSError as exc:
+            raise HoldoutWorkflowError(f"cannot create frozen artifact {report_md_path}: {exc}") from exc
+        created_paths.append(report_md_path)
+        holdout.update(
+            {
+                "status": "evaluated",
+                "labels_path": relative_output,
+                "labels_sha256": labels_hash,
+                "report_json_path": relative_report_json,
+                "report_json_sha256": _sha256(report_json_path),
+                "report_md_path": relative_report_md,
+                "report_md_sha256": _sha256(report_md_path),
+                "release_claim_blocked": True,
+            }
+        )
+        _write_json(manifest_path, manifest)
+    except Exception:
+        for created_path in created_paths:
+            created_path.unlink(missing_ok=True)
+        raise
+    return labels_hash
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -407,6 +550,17 @@ def _parser() -> argparse.ArgumentParser:
     labels = subparsers.add_parser("create-label-template")
     labels.add_argument("--output", type=Path, required=True)
     labels.add_argument("--reviewer", required=True)
+
+    freeze = subparsers.add_parser("freeze-labels")
+    freeze.add_argument("--reviewer", action="append", type=Path, required=True, dest="reviewers")
+    freeze.add_argument("--adjudications", type=Path)
+    freeze.add_argument("--output", type=Path, default=REPO_ROOT / "eval" / "holdout" / "labels.json")
+    freeze.add_argument(
+        "--report-json", type=Path, default=REPO_ROOT / "eval" / "holdout" / "evaluation.json"
+    )
+    freeze.add_argument(
+        "--report-md", type=Path, default=REPO_ROOT / "eval" / "holdout" / "evaluation.md"
+    )
     return parser
 
 
@@ -420,9 +574,19 @@ def main(argv: list[str] | None = None) -> int:
             digest = freeze_predictions(
                 args.results_dir, args.output, args.manifest, args.source_commit, repo_root=repo_root
             )
-        else:
+        elif args.command == "create-label-template":
             create_label_template(args.manifest, args.output, args.reviewer, repo_root=repo_root)
             digest = _sha256(args.output)
+        else:
+            digest = freeze_labels(
+                args.reviewers,
+                args.output,
+                args.report_json,
+                args.report_md,
+                args.manifest,
+                args.adjudications,
+                repo_root=repo_root,
+            )
     except HoldoutWorkflowError as exc:
         print(f"Holdout workflow failed: {exc}", file=sys.stderr)
         return 2

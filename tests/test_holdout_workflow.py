@@ -36,6 +36,10 @@ def _holdout_state() -> dict:
         "predictions_sha256": None,
         "labels_path": None,
         "labels_sha256": None,
+        "report_json_path": None,
+        "report_json_sha256": None,
+        "report_md_path": None,
+        "report_md_sha256": None,
         "release_claim_blocked": True,
     }
 
@@ -293,5 +297,82 @@ def test_create_label_template_contains_no_predictions(tmp_path: Path) -> None:
     assert template["dataset_role"] == "holdout_label_template"
     assert [label["id"] for label in template["labels"]] == ["case-0", "case-1"]
     assert all(label["reviewer"] == "reviewer-a" for label in template["labels"])
-    assert all(label["outcome"] is None and label["expected_decision"] is None for label in template["labels"])
+    assert all("outcome" not in label and label["expected_decision"] is None for label in template["labels"])
     assert "ready" not in template_path.read_text(encoding="utf-8")
+
+
+def test_freeze_labels_writes_reports_and_keeps_claims_blocked(tmp_path: Path) -> None:
+    manifest_path, _ = _freeze_cases(tmp_path)
+    results_dir = tmp_path / "results"
+    _write_success_result(results_dir / "case-0", decision="ready")
+    _write_success_result(
+        results_dir / "case-1",
+        decision="block_recommended",
+        head_sha="0000000000000000000000000000000000000002",
+    )
+    predictions_path = tmp_path / "eval" / "holdout" / "predictions.json"
+    holdout_workflow.freeze_predictions(
+        results_dir, predictions_path, manifest_path, "b" * 40, repo_root=tmp_path
+    )
+    cases_hash = json.loads(manifest_path.read_text(encoding="utf-8"))["holdout"]["cases_sha256"]
+    predictions_hash = hashlib.sha256(predictions_path.read_bytes()).hexdigest()
+
+    def reviewer_packet(reviewer: str, case_ids: list[str]) -> dict:
+        return {
+            "version": 1,
+            "dataset_role": "holdout_label_template",
+            "cases_sha256": cases_hash,
+            "predictions_sha256": predictions_hash,
+            "labels": [
+                {
+                    "id": case_id,
+                    "reviewer": reviewer,
+                    "expected_decision": "ready",
+                    "rationale": "blind review",
+                    "reviewed_at": "2026-06-22",
+                }
+                for case_id in case_ids
+            ],
+        }
+
+    reviewer_a = tmp_path / "reviewer-a.json"
+    reviewer_b = tmp_path / "reviewer-b.json"
+    _write_json(reviewer_a, reviewer_packet("reviewer-a", ["case-0", "case-1"]))
+    _write_json(reviewer_b, reviewer_packet("reviewer-b", ["case-0"]))
+    labels_path = tmp_path / "eval" / "holdout" / "labels.json"
+    report_json_path = tmp_path / "eval" / "holdout" / "evaluation.json"
+    report_md_path = tmp_path / "eval" / "holdout" / "evaluation.md"
+
+    _write_json(report_json_path, {"existing": True})
+    with pytest.raises(holdout_workflow.HoldoutWorkflowError, match="refusing to overwrite"):
+        holdout_workflow.freeze_labels(
+            [reviewer_a, reviewer_b],
+            labels_path,
+            report_json_path,
+            report_md_path,
+            manifest_path,
+            repo_root=tmp_path,
+        )
+    assert not labels_path.exists()
+    assert json.loads(report_json_path.read_text(encoding="utf-8")) == {"existing": True}
+    report_json_path.unlink()
+
+    digest = holdout_workflow.freeze_labels(
+        [reviewer_a, reviewer_b],
+        labels_path,
+        report_json_path,
+        report_md_path,
+        manifest_path,
+        repo_root=tmp_path,
+    )
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))["holdout"]
+    report = json.loads(report_json_path.read_text(encoding="utf-8"))
+    assert digest == hashlib.sha256(labels_path.read_bytes()).hexdigest()
+    assert manifest["status"] == "evaluated"
+    assert manifest["release_claim_blocked"] is True
+    assert manifest["report_json_sha256"] == hashlib.sha256(report_json_path.read_bytes()).hexdigest()
+    assert manifest["report_md_sha256"] == hashlib.sha256(report_md_path.read_bytes()).hexdigest()
+    assert report["decision"]["exact_match_rate"] == 0.5
+    assert report["agreement"]["pairwise_comparisons"] == 1
+    assert "Independent Holdout Evaluation" in report_md_path.read_text(encoding="utf-8")

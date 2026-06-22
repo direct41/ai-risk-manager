@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess  # nosec B404
 from typing import Any
+from datetime import date
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +21,7 @@ ANALYZER_EXACT_PATHS = {
     ".github/workflows/quality.yml",
     "eval/public_prs.json",
     "scripts/check_eval_isolation.py",
+    "scripts/holdout_reporting.py",
     "scripts/holdout_workflow.py",
     "scripts/run_eval_suite.py",
 }
@@ -38,10 +40,18 @@ SELECTION_POLICY_ALLOWED_FIELDS = {
     "selected_at",
 }
 PREDICTION_ALLOWED_FIELDS = {"id", "execution", "decision", "top_rules", "finding_count", "artifact_hash"}
-LABEL_ALLOWED_FIELDS = {"id", "reviewer", "outcome", "expected_decision", "rationale", "reviewed_at"}
+LABEL_ALLOWED_FIELDS = {"id", "reviewer", "expected_decision", "rationale", "reviewed_at"}
+LABEL_PACKET_ALLOWED_FIELDS = {
+    "version",
+    "dataset_role",
+    "cases_sha256",
+    "predictions_sha256",
+    "labels",
+    "adjudications",
+}
+ADJUDICATION_ALLOWED_FIELDS = {"id", "adjudicator", "expected_decision", "rationale", "reviewed_at"}
 PREDICTION_EXECUTIONS = {"pass", "setup_fail", "provider_fail", "tool_fail", "artifact_fail", "timeout"}
 MERGE_DECISIONS = {"ready", "review_required", "block_recommended"}
-LABEL_OUTCOMES = {"good_signal", "noisy", "false_positive", "missed_risk"}
 
 
 def _read_json(path: Path) -> Any:
@@ -54,6 +64,16 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: file_handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _is_iso_date(value: object) -> bool:
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        return False
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
 
 
 def _safe_repo_file(repo_root: Path, raw_path: object, *, label: str, errors: list[str]) -> Path | None:
@@ -250,21 +270,23 @@ def _validate_labels(
     minimum_labelers: int,
     minimum_overlap_cases: int,
     errors: list[str],
-) -> None:
+) -> dict[str, Any] | None:
     try:
         payload = _read_json(path)
     except (OSError, json.JSONDecodeError) as exc:
         errors.append(f"holdout labels are unreadable: {exc}")
-        return
+        return None
     if not isinstance(payload, dict) or payload.get("dataset_role") != "holdout_labels":
         errors.append("holdout labels must have dataset_role=holdout_labels")
-        return
+        return None
+    if payload.get("version") != 1 or set(payload) != LABEL_PACKET_ALLOWED_FIELDS:
+        errors.append("holdout labels packet has invalid version or fields")
     if payload.get("cases_sha256") != cases_sha256 or payload.get("predictions_sha256") != predictions_sha256:
         errors.append("holdout labels must be bound to frozen cases and predictions SHA-256 values")
     labels = payload.get("labels")
     if not isinstance(labels, list):
         errors.append("holdout labels must contain a labels list")
-        return
+        return None
     reviewers: set[str] = set()
     reviewers_by_case: dict[str, set[str]] = {}
     seen_pairs: set[tuple[str, str]] = set()
@@ -289,15 +311,83 @@ def _validate_labels(
         seen_pairs.add(pair)
         reviewers.add(reviewer)
         reviewers_by_case.setdefault(case_id, set()).add(reviewer)
-        if label.get("outcome") not in LABEL_OUTCOMES:
-            errors.append(f"holdout label {index} has an invalid outcome")
         if label.get("expected_decision") not in MERGE_DECISIONS:
             errors.append(f"holdout label {index} has an invalid expected_decision")
+        if not isinstance(label.get("rationale"), str) or not label["rationale"].strip():
+            errors.append(f"holdout label {index} requires rationale")
+        if not _is_iso_date(label.get("reviewed_at")):
+            errors.append(f"holdout label {index} requires reviewed_at as an ISO date")
+    missing_cases = case_ids - set(reviewers_by_case)
+    if missing_cases:
+        errors.append(f"every holdout case requires a label; missing {len(missing_cases)}")
     if len(reviewers) < minimum_labelers:
         errors.append(f"holdout labels require at least {minimum_labelers} independent reviewers")
     overlap = sum(1 for case_reviewers in reviewers_by_case.values() if len(case_reviewers) >= 2)
     if overlap < minimum_overlap_cases:
         errors.append(f"holdout labels require at least {minimum_overlap_cases} double-reviewed cases; found {overlap}")
+    values_by_case: dict[str, set[object]] = {}
+    for label in labels:
+        if isinstance(label, dict) and isinstance(label.get("id"), str):
+            values_by_case.setdefault(label["id"], set()).add(label.get("expected_decision"))
+    disagreement_ids = {case_id for case_id, values in values_by_case.items() if len(values) > 1}
+    reviewers_for_case: dict[str, set[str]] = {}
+    for label in labels:
+        if isinstance(label, dict) and isinstance(label.get("id"), str) and isinstance(label.get("reviewer"), str):
+            reviewers_for_case.setdefault(label["id"], set()).add(label["reviewer"])
+    adjudications = payload.get("adjudications")
+    if not isinstance(adjudications, list):
+        errors.append("holdout labels must contain an adjudications list")
+        return payload
+    adjudication_ids: set[str] = set()
+    for index, adjudication in enumerate(adjudications):
+        if not isinstance(adjudication, dict) or set(adjudication) != ADJUDICATION_ALLOWED_FIELDS:
+            errors.append(f"holdout adjudication {index} has invalid fields")
+            continue
+        case_id = adjudication.get("id")
+        if not isinstance(case_id, str) or case_id not in disagreement_ids or case_id in adjudication_ids:
+            errors.append(f"holdout adjudication {index} must reference one unique disagreement case")
+            continue
+        adjudication_ids.add(case_id)
+        if adjudication.get("expected_decision") not in MERGE_DECISIONS:
+            errors.append(f"holdout adjudication {index} has an invalid expected_decision")
+        for field in ("adjudicator", "rationale"):
+            if not isinstance(adjudication.get(field), str) or not adjudication[field].strip():
+                errors.append(f"holdout adjudication {index} requires {field}")
+        if adjudication.get("adjudicator") in reviewers_for_case.get(case_id, set()):
+            errors.append(f"holdout adjudication {index} requires a third-party adjudicator")
+        if not _is_iso_date(adjudication.get("reviewed_at")):
+            errors.append(f"holdout adjudication {index} requires reviewed_at as an ISO date")
+    if adjudication_ids != disagreement_ids:
+        errors.append("holdout adjudications must match disagreement cases exactly")
+    return payload
+
+
+def _validate_report(
+    path: Path,
+    *,
+    cases_sha256: str,
+    predictions_sha256: str,
+    labels_sha256: str,
+    errors: list[str],
+) -> None:
+    try:
+        payload = _read_json(path)
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"holdout evaluation report is unreadable: {exc}")
+        return
+    if not isinstance(payload, dict) or payload.get("version") != 1:
+        errors.append("holdout evaluation report must be an object with version=1")
+        return
+    if payload.get("dataset_role") != "holdout_evaluation":
+        errors.append("holdout evaluation report must have dataset_role=holdout_evaluation")
+    if (
+        payload.get("cases_sha256") != cases_sha256
+        or payload.get("predictions_sha256") != predictions_sha256
+        or payload.get("labels_sha256") != labels_sha256
+    ):
+        errors.append("holdout evaluation report must bind frozen cases, predictions, and labels")
+    if payload.get("claim_status") != "blocked_pending_policy_thresholds":
+        errors.append("holdout evaluation report must keep claims blocked pending policy thresholds")
 
 
 def validate_manifest(manifest_path: Path = MANIFEST_PATH, repo_root: Path = REPO_ROOT) -> list[str]:
@@ -364,7 +454,16 @@ def validate_manifest(manifest_path: Path = MANIFEST_PATH, repo_root: Path = REP
     if errors:
         return errors
 
-    artifact_fields = ("cases_path", "cases_sha256", "predictions_path", "predictions_sha256", "labels_path", "labels_sha256")
+    report_fields = ("report_json_path", "report_json_sha256", "report_md_path", "report_md_sha256")
+    artifact_fields = (
+        "cases_path",
+        "cases_sha256",
+        "predictions_path",
+        "predictions_sha256",
+        "labels_path",
+        "labels_sha256",
+        *report_fields,
+    )
     if status == "not_established":
         if any(holdout.get(field) is not None for field in artifact_fields):
             errors.append("not_established holdout cannot reference cases, predictions, labels, or hashes")
@@ -376,8 +475,8 @@ def validate_manifest(manifest_path: Path = MANIFEST_PATH, repo_root: Path = REP
 
     if holdout.get("frozen") is not True:
         errors.append("established holdout phases require frozen=true")
-    if status != "evaluated" and holdout.get("release_claim_blocked") is not True:
-        errors.append("release claims remain blocked until holdout status is evaluated")
+    if holdout.get("release_claim_blocked") is not True:
+        errors.append("release claims remain blocked until an explicit accuracy policy is approved")
 
     cases_path = _safe_repo_file(repo_root, holdout.get("cases_path"), label="cases_path", errors=errors)
     cases_sha = holdout.get("cases_sha256")
@@ -415,8 +514,25 @@ def validate_manifest(manifest_path: Path = MANIFEST_PATH, repo_root: Path = REP
                 minimum_overlap_cases=minimum_overlap,
                 errors=errors,
             )
-    elif any(holdout.get(field) is not None for field in ("labels_path", "labels_sha256")):
-        errors.append("holdout labels cannot enter the repository before prediction freeze and evaluation")
+        report_json_path = _safe_repo_file(
+            repo_root, holdout.get("report_json_path"), label="report_json_path", errors=errors
+        )
+        report_md_path = _safe_repo_file(repo_root, holdout.get("report_md_path"), label="report_md_path", errors=errors)
+        if report_json_path is not None:
+            _validate_hash(
+                report_json_path, holdout.get("report_json_sha256"), label="report_json_sha256", errors=errors
+            )
+            _validate_report(
+                report_json_path,
+                cases_sha256=str(cases_sha),
+                predictions_sha256=str(predictions_sha),
+                labels_sha256=str(holdout.get("labels_sha256")),
+                errors=errors,
+            )
+        if report_md_path is not None:
+            _validate_hash(report_md_path, holdout.get("report_md_sha256"), label="report_md_sha256", errors=errors)
+    elif any(holdout.get(field) is not None for field in ("labels_path", "labels_sha256", *report_fields)):
+        errors.append("holdout labels and reports cannot enter the repository before evaluation")
     return errors
 
 
