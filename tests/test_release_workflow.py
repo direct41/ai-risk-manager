@@ -27,6 +27,18 @@ def test_quality_workflow_pins_external_actions_to_commit_shas() -> None:
         assert re.fullmatch(r"[0-9a-f]{40}", revision), action
 
 
+def test_workflows_use_approved_artifact_action_majors() -> None:
+    workflow = "\n".join(
+        path.read_text(encoding="utf-8") for path in (WORKFLOW_PATH, PUBLISH_WORKFLOW_PATH)
+    )
+
+    assert "actions/upload-artifact@" in workflow
+    assert "actions/download-artifact@" in workflow
+    assert not re.search(r"actions/(?:upload|download)-artifact@[0-9a-f]{40} # v4(?:\b|\.)", workflow)
+    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1" in workflow
+    assert "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1" in workflow
+
+
 def test_release_toolchain_is_fully_pinned() -> None:
     requirements = RELEASE_REQUIREMENTS_PATH.read_text(encoding="utf-8").splitlines()
 
