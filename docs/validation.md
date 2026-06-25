@@ -192,7 +192,7 @@ Track one row per external PR.
 Use `docs/validation-results.md` as the public-safe template. Keep the working copy private until every row has been checked for secrets, customer names, private repository names, and personal contact data.
 
 | Field | Example |
-|---|---|
+| --- | --- |
 | PR URL | `https://github.com/org/repo/pull/123` |
 | Stack | FastAPI, Django/DRF, Express, unknown |
 | User role | backend engineer, tech lead, QA |

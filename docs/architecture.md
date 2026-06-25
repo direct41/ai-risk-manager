@@ -150,7 +150,7 @@ The product should describe support per profile, not only per repository.
 Example:
 
 | Repository type | `code_risk` | `ui_flow_risk` | `business_invariant_risk` |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | API-only service | supported | not_applicable | partial or not_applicable |
 | SaaS web app | supported | partial/supported | partial |
 | Worker/ETL repo | partial | not_applicable | not_applicable |

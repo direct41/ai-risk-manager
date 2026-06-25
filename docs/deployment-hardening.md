@@ -32,6 +32,7 @@ AIRISK_API_AUDIT_LOG=/var/log/ai-risk-manager/api-audit.jsonl
 ```
 
 Security notes:
+
 - Keep `AIRISK_API_TOKEN` in a secret manager, never in Git.
 - Keep analyzed repositories under `AIRISK_API_WORKSPACE_ROOTS`; request paths outside those roots are rejected.
 - Keep artifact output under `AIRISK_API_OUTPUT_ROOTS`, or omit it to restrict output to the analyzed repository.
@@ -56,6 +57,7 @@ Security notes:
 ## Failure Diagnostics Playbook
 
 For `500` responses:
+
 1. Capture `correlation_id` and `diagnostic_id` from response payload.
 2. Find matching event in `AIRISK_API_AUDIT_LOG` (or `api_audit.json` in run output dir).
 3. Inspect `error_type` and `error_detail` in audit event.

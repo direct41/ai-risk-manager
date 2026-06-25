@@ -98,7 +98,7 @@ The next implementation step is enforcing additional declared invariant sections
 Two repository-owned specifications were exercised end to end:
 
 | Pilot | Stack/layout | Declared flow | Verified behavior |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `examples/business-invariants/pilots/checkout-service` | FastAPI-style Python service | `checkout` | Implementation-only changes produce one focused finding; a matching integration-test delta clears it; unrelated changes stay clean. |
 | `examples/business-invariants/pilots/support-console` | Express-style JavaScript service | `account-recovery` | Snake-case spec terms match camelCase implementation paths and kebab-case e2e paths; matching checks clear the finding. |
 

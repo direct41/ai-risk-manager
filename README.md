@@ -45,7 +45,7 @@ AI Risk Manager is built for that review moment. It gives engineering and QA tea
 ## At a Glance
 
 | Capability | What it does |
-|---|---|
+| --- | --- |
 | PR risk triage | Ranks risky changed areas before merge. |
 | Deterministic-first analysis | Runs locally without sending repository snippets to an LLM by default. |
 | Architecture graph | Connects APIs, entities, state transitions, data stores, external systems, and tests. |
@@ -185,7 +185,7 @@ The baseline directory must contain both `graph.json` and `findings.json`.
 ## Quick Paths
 
 | Goal | Start here |
-|---|---|
+| --- | --- |
 | Try the product quickly | Run `riskmap analyze --sample --no-llm --analysis-engine deterministic`. |
 | Review a public GitHub PR by URL | Use `riskmap review-pr https://github.com/OWNER/REPO/pull/123`. |
 | Review a PR locally | Use `riskmap analyze --mode pr --base main --only-new`. |

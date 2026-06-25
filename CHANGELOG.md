@@ -2,11 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
-The format is based on Keep a Changelog, and this project follows Semantic Versioning.
-
 ## [Unreleased]
 
-### Added
+### Added (Unreleased)
+
 - Added a graph-first FastAPI write-flow slice connecting APIs, entities, handled state transitions, data stores, external systems, and test coverage.
 - Added `critical_flow_no_integration_tests` for complete write flows without integration or E2E coverage.
 - Added generated `entity-relationships.mmd` and `state-transitions.mmd` architecture review artifacts.
@@ -28,7 +27,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added two end-to-end `business_invariant_risk` pilot repositories covering Python checkout and JavaScript account-recovery flows.
 - Alpha feedback and public PR request templates now capture reviewer role, top findings, review impact, setup friction, workflow preference, repeat intent, and privacy acknowledgement.
 
-### Changed
+### Changed (Unreleased)
+
 - Finding trust now exposes `heuristic_trust_score`, `score_kind`, and `calibrated: false`; reports no longer present the heuristic as precision. The misleading `estimated_precision` name remains only as a deprecated compatibility alias.
 - Eval reports now name synthetic fixture metrics as forbidden-rule avoidance and required-rule recall instead of presenting them as statistical precision and recall.
 - Public PR corpus metadata now identifies its regression role explicitly; validation documentation records that no independent frozen holdout exists yet.
@@ -37,7 +37,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Positive boundary regression tests named for empty, blank, null, default, or content-type behavior no longer receive unrelated missing-negative-path findings.
 - Public PR corpus labels are pinned to the exact reviewed head SHA, with all 49 current cases refreshed and two changed open PRs re-reviewed as clean controls.
 
-### Fixed
+### Fixed (Unreleased)
+
 - Holdout prediction freezing now verifies and hashes review metadata so each successful result is bound to the frozen PR head SHA.
 - Frozen holdout case packets now retain validated selection provenance and the exact excluded regression-corpus hash.
 - API audit records now use validated request defaults, and JSON/Markdown artifacts are replaced atomically.
@@ -50,9 +51,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Declared UI smoke selection now includes affected shared components as well as route files, preserving the changed component as failure evidence.
 - Public PR benchmark failures now distinguish stale open-PR expectations from product regressions by reporting reviewed-versus-observed head SHA drift.
 
-## [0.2.0] - 2026-06-11
+### Added (0.2.0)- 2026-06-11
 
-### Added
 - Added PR diff detection for dynamic Python gettext message identifiers that cannot be extracted reliably.
 - Added PR diff detection for newly introduced 4xx branches without matching negative-path test assertions.
 - Added PR diff detection for documented mapping-key renames that leave stale public contracts.
@@ -69,7 +69,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added a CI public-artifact gate and PR release-manager checklist to prevent accidental publication of local notes, generated outputs, secrets, or unreviewed public docs.
 - Added a GitLab CI merge-request review example for advisory risk analysis.
 
-### Changed
+### Changed (0.2.0)
+
 - Exact source-only `trimRight` to `trimEnd` and `trimLeft` to `trimStart` rewrites no longer trigger a disproportionate generic missing-test reminder when `package.json` proves Node 10+ compatibility; mixed changes or unknown runtimes remain review-required.
 - Public PR corpus manual review is complete with all 23 cases carrying evidence-backed product outcomes.
 - Public PR corpus now includes independent controls for exact JavaScript alias rewrites, mixed host-extraction changes, and dynamic gettext messages.
@@ -88,19 +89,20 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Package license metadata now uses SPDX-style `MIT` metadata with explicit license-file declaration.
 
 ### Removed
+
 - Removed stale `docs/legacy-review.md` from the repository.
 - Removed the empty root `.gitkeep` placeholder.
 
-### Fixed
+### Fixed (0.2.0)
+
 - PR comment delivery failures no longer mark an otherwise successful AI Risk Analysis workflow as failed.
 - Kept Gemini external-judge tool isolation compatible with Gemini CLI 0.46.0.
 - Full-fallback PR summaries now hide unscoped new high-severity repo-wide findings from top risks and test-first actions.
 - PR summaries now stay aligned with merge triage test-first actions, and full-fallback PR analysis hides repo-wide unchanged noise from merge triage scoring.
 - GitHub Actions example now installs from the GitHub repository while the package is not published on PyPI.
 
-## [0.1.1] - 2026-04-21
+### Added (0.1.1) - 2026-04-21
 
-### Added
 - Dependabot configuration for Python dependencies and GitHub Actions.
 - Alpha feedback issue template for public alpha onboarding.
 - Public alpha onboarding prompts and local usage steps.
@@ -133,7 +135,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added `ready|review_required|block_recommended` merge decision packaging with a 10-minute test-first order.
 - Declared UI smoke examples and explicit business critical-flow documentation for alpha validation.
 
-### Changed
+### Changed (0.1.1)
+
 - README and Russian quickstart now prioritize the external self-serve path before deeper architecture details.
 - GitHub metadata links, security reporting entrypoint, and CI matrix were hardened for public alpha readiness.
 - CLI/API analysis defaults now stay deterministic/no-LLM unless AI enrichment is explicitly requested.
@@ -156,7 +159,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Reports and PR summaries now surface merge triage decision, release-risk score, and top test-first actions.
 - Root-level planning docs were removed in favor of `README.md` and focused user/operator docs.
 
-### Fixed
+### Fixed (0.1.1)
+
 - Packaged the deterministic sample repository so `riskmap analyze --sample` works after a normal wheel/GitHub install, not only from a source checkout.
 - No-finding runs now report perfect precision/actionability proxies and zero triage time instead of misleading `0%` quality metrics.
 - Pipeline/report consistency: `effective_ci_mode` and CI/fail notes are now computed before markdown artifact generation.
@@ -166,12 +170,14 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - LLM and GitHub outbound API clients now reject non-HTTP(S) API base URLs before opening connections.
 
 ### Refactored
+
 - Removed unused `risk_agent` layer.
 - Unified bundled sample repository resolution for both CLI and API via shared helper (`sample_repo.py`).
 
 ## [0.1.0] - 2026-02-19
 
 ### Added
+
 - Core `run_pipeline` flow for deterministic analysis + optional LLM enrichment.
 - CLI adapter (`riskmap analyze`) with full and PR modes.
 - API adapter (`riskmap-api`, `/healthz`, `/v1/analyze`) over the same pipeline.

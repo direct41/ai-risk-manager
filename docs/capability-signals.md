@@ -33,7 +33,7 @@ negative-path coverage, and nondeterministic dependency checks remain active for
 ## Current `code_risk` Signals
 
 | Signal | Meaning | Current extraction source | Graph expression | Rule coverage | Status |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | `ingress_surface` | Unified sink contract for mutating ingress points across families (`http`, `webhook`, `job`, `cli_task`, `event_consumer`) | Derived in `signals.adapters` from plugin artifacts; current extraction is HTTP/webhook global with Express-first `job`, `cli_task`, and `event_consumer` heuristics | None yet | foundation only | implemented |
 | `http_write_surface` | Mutating HTTP operations (`POST/PUT/PATCH/DELETE`) | `ArtifactBundle.write_endpoints` from `fastapi_artifacts.py` and `django_artifacts.py` | `Node(type=\"API\")` with `details.method/details.path` | `critical_path_no_tests` baseline scope | implemented |
 | `test_to_ingress_coverage` | Test evidence mapped to normalized ingress families | Derived in `signals.adapters` from `test_http_calls`, test-case fallback, and Express-first `runJob`/`runCli`/`emitEvent` heuristics | None yet | foundation only | implemented |
@@ -54,7 +54,7 @@ negative-path coverage, and nondeterministic dependency checks remain active for
 ## Rule-to-Signal Dependency
 
 | Deterministic rule | Required signals |
-|---|---|
+| --- | --- |
 | `critical_path_no_tests` | `http_write_surface`, `test_to_endpoint_coverage` |
 | `critical_flow_no_integration_tests` | graph path containing API, Entity, Transition, DataStore, ExternalSystem, and integration/E2E `covered_by` evidence |
 | `missing_transition_handler` | `state_transition_declared`, `state_transition_handled_guarded` |
