@@ -8,11 +8,18 @@ import pytest
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "holdout_reporting.py"
-SPEC = importlib.util.spec_from_file_location("holdout_reporting_test_module", MODULE_PATH)
+MODULE_NAME = "holdout_reporting"
+SPEC = importlib.util.spec_from_file_location(MODULE_NAME, MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 holdout_reporting = importlib.util.module_from_spec(SPEC)
-sys.modules[SPEC.name] = holdout_reporting
+sys.modules[MODULE_NAME] = holdout_reporting
 SPEC.loader.exec_module(holdout_reporting)
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_sys_modules() -> None:
+    yield
+    sys.modules.pop(MODULE_NAME, None)
 
 
 def _label(case_id: str, reviewer: str, *, decision: str = "ready") -> dict:

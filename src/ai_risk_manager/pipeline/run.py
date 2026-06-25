@@ -185,7 +185,7 @@ def _filter_signals_to_impacted(signals: SignalBundle, changed_files: set[str]) 
             continue
         if any(_source_file_ref(ref) in changed for ref in signal.evidence_refs):
             filtered.append(signal)
-    return SignalBundle(signals=filtered, supported_kinds=set(signals.supported_kinds))
+    return SignalBundle(signals=filtered, supported_kinds={s.kind for s in filtered})
 
 
 def _max_severity(findings_count: list[str]) -> str | None:

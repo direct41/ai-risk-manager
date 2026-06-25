@@ -129,7 +129,7 @@ def _budgeted_actions(findings: list[Finding], test_plan: TestPlan) -> list[Merg
     for rank, finding in enumerate(_rank_findings(findings), start=1):
         item = recommendations.get(finding.id)
         action = _action_for_finding(finding, item, rank=rank)
-        if actions and spent + action.estimated_minutes > TRIAGE_BUDGET_MINUTES:
+        if spent + action.estimated_minutes > TRIAGE_BUDGET_MINUTES:
             continue
         actions.append(action)
         spent += action.estimated_minutes

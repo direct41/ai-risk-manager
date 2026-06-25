@@ -145,8 +145,8 @@ def load_public_pr_dataset_role(path: Path) -> DatasetRole:
     if not isinstance(payload, dict):
         return "unspecified"
     role = payload.get("dataset_role", "unspecified")
-    if role not in {"tuning", "regression", "holdout"}:
-        raise ValueError(f"{path}: dataset_role must be one of ['holdout', 'regression', 'tuning']")
+    if role not in {"tuning", "regression", "holdout", "unspecified"}:
+        raise ValueError(f"{path}: dataset_role must be one of ['holdout', 'regression', 'tuning', 'unspecified']")
     return cast(DatasetRole, role)
 
 
@@ -465,7 +465,7 @@ def _evaluate_case_result(case: PublicPRCase, result: PublicPRCaseResult) -> Non
     if result.execution_status != expected.execution:
         result.errors.append(f"expected execution `{expected.execution}`, got `{result.execution_status}`")
 
-    if result.execution_status == "pass":
+    if result.execution_status == "pass" and result.execution_status == expected.execution:
         if case.head_sha and result.observed_head_sha != case.head_sha:
             result.errors.append(
                 f"expected reviewed head SHA `{case.head_sha}`, got `{result.observed_head_sha or 'missing'}`"
