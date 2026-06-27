@@ -56,8 +56,6 @@ def _resolve_repository_support_state(
 ) -> RepositorySupportState:
     if support_level_applied == "l0":
         return "partial"
-    if plugin is None:
-        return "unsupported"
     return "supported"
 
 

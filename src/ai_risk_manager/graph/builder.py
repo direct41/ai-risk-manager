@@ -232,7 +232,7 @@ def _artifact_bundle_from_signals(signals: SignalBundle) -> ArtifactBundle:
                     dep_name,
                     spec,
                     line,
-                    str(attrs.get("policy_violation", "")) or None,
+                    attrs.get("policy_violation") or None,
                     scope,
                 )
             )

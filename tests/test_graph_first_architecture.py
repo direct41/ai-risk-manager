@@ -181,7 +181,7 @@ def test_impacted_signal_filter_preserves_unchanged_integration_coverage() -> No
 def test_all_rules_are_classified_by_graph_first_architecture_policy() -> None:
     engine_path = Path(rule_engine.__file__)
     tree = ast.parse(engine_path.read_text(encoding="utf-8"))
-    implemented_rule_ids = {
+    keyword_ids = {
         keyword.value.value
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
@@ -190,5 +190,15 @@ def test_all_rules_are_classified_by_graph_first_architecture_policy() -> None:
         and isinstance(keyword.value, ast.Constant)
         and isinstance(keyword.value.value, str)
     }
+    assign_ids = {
+        node.value.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "rule_id"
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    }
+    implemented_rule_ids = keyword_ids | assign_ids
 
     assert implemented_rule_ids == GRAPH_FIRST_RULE_IDS | FROZEN_SIGNAL_ONLY_RULE_IDS

@@ -38,7 +38,7 @@ def legacy_fingerprint(base: str) -> str:
 
 def ensure_fingerprint(finding: Finding) -> Finding:
     if finding.fingerprint:
-        return finding
+        return replace(finding)
     base = fingerprint_base(
         rule_id=finding.rule_id,
         source_ref=finding.source_ref,

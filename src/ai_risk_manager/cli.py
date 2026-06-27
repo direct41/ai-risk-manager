@@ -37,7 +37,7 @@ def _build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--provider", choices=["auto", "api", "cli"], default="auto", help="LLM provider")
     analyze.add_argument("--baseline-graph", default=None, help="Path to baseline graph.json for pr mode")
     analyze.add_argument("--output-dir", default=".riskmap", help="Output directory")
-    analyze.add_argument("--format", choices=["md", "json", "both"], default="both", help="Output artifact format")
+    analyze.add_argument("--format", dest="output_format", choices=["md", "json", "both"], default="both", help="Output artifact format")
     analyze.add_argument(
         "--analysis-engine",
         choices=["deterministic", "hybrid", "ai-first"],
@@ -105,6 +105,7 @@ def _build_parser() -> argparse.ArgumentParser:
     review_pr.add_argument("--output-dir", default=None, help="Output directory for review artifacts")
     review_pr.add_argument(
         "--format",
+        dest="output_format",
         choices=["md", "json", "both"],
         default="both",
         help="Output artifact format",
@@ -333,7 +334,7 @@ def _run_analyze(args: argparse.Namespace) -> int:
         output_dir=output_dir,
         provider=args.provider,
         no_llm=args.no_llm,
-        output_format=args.format,
+        output_format=args.output_format,
         fail_on_severity=args.fail_on_severity,
         suppress_file=suppress_file,
         baseline_graph=baseline_graph,
@@ -444,7 +445,7 @@ def _run_review_pr(args: argparse.Namespace) -> int:
                 output_dir=output_dir,
                 provider=args.provider,
                 no_llm=not args.enable_llm,
-                output_format=args.format,
+                output_format=args.output_format,
                 baseline_graph=baseline_graph,
                 analysis_engine=normalize_cli_choice(args.analysis_engine),
                 only_new=args.only_new,

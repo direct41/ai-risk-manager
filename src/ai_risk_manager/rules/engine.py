@@ -1174,7 +1174,7 @@ def _run_pr_change_risk_rule(signals: SignalBundle) -> list[Finding]:
             continue
 
         if issue_type == "new_4xx_branch_without_negative_test_delta":
-            new_4xx_changed_test_count = str(signal.attributes.get("changed_test_count", "0")).strip() or "0"
+            new_4xx_changed_test_count = str(signal.attributes.get("changed_test_count") or "0").strip()
             finding_id = f"pr_new_4xx_branch_without_negative_test_delta:{signal.source_ref}:{signal.id}"
             findings.append(
                 Finding(
@@ -1206,7 +1206,7 @@ def _run_pr_change_risk_rule(signals: SignalBundle) -> list[Finding]:
 
         if issue_type == "query_array_limit_without_indexed_compat_test":
             query_array_limit = str(signal.attributes.get("array_limit", "")).strip() or "changed"
-            query_changed_test_count = str(signal.attributes.get("changed_test_count", "0")).strip() or "0"
+            query_changed_test_count = str(signal.attributes.get("changed_test_count") or "0").strip()
             finding_id = f"pr_query_array_limit_without_indexed_compat_test:{signal.source_ref}:{signal.id}"
             findings.append(
                 Finding(
@@ -1238,7 +1238,7 @@ def _run_pr_change_risk_rule(signals: SignalBundle) -> list[Finding]:
 
         if issue_type == "strict_field_datetime_parse_without_empty_test":
             parser_methods = str(signal.attributes.get("parser_methods", "")).strip() or "datetime parser"
-            parser_changed_test_count = str(signal.attributes.get("changed_test_count", "0")).strip() or "0"
+            parser_changed_test_count = str(signal.attributes.get("changed_test_count") or "0").strip()
             finding_id = f"pr_strict_field_datetime_parse_without_empty_test:{signal.source_ref}:{signal.id}"
             findings.append(
                 Finding(
@@ -1426,8 +1426,8 @@ def _run_pr_change_risk_rule(signals: SignalBundle) -> list[Finding]:
             "payment_sensitive_path_change_requires_review",
             "admin_sensitive_path_change_requires_review",
         }:
-            changed_sensitive_count = str(signal.attributes.get("changed_sensitive_count", "")).strip() or "1"
-            changed_test_count = int(str(signal.attributes.get("changed_test_count", "")).strip() or "0")
+            changed_sensitive_count = str(signal.attributes.get("changed_sensitive_count") or "1").strip()
+            changed_test_count = int(str(signal.attributes.get("changed_test_count") or "0").strip())
             area = issue_type.split("_", 1)[0]
             if area == "auth":
                 rule_id = "pr_auth_boundary_change_requires_review"

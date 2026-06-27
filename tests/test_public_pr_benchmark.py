@@ -145,6 +145,9 @@ def test_public_pr_corpus_requires_explicit_valid_dataset_role(tmp_path: Path) -
     else:
         raise AssertionError("Expected ValueError")
 
+    corpus.write_text('{"version":1,"cases":[]}', encoding="utf-8")
+    assert load_public_pr_dataset_role(corpus) == "unspecified"
+
 
 def test_inspect_public_pr_corpus_renders_labeling_queue(tmp_path: Path) -> None:
     corpus = tmp_path / "public_prs.json"
